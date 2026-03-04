@@ -86,7 +86,8 @@ func _spawn_player(peer_id: int) -> void:
 
 	var player := PLAYER_SCENE.instantiate()
 	player.name = str(peer_id)
-	# Stagger starting positions so players don't overlap
-	var offset := Vector2(100.0 + peer_id * 120.0, 360.0)
+	# Fixed spawn slots: host on left, guest on right.
+	# Cannot use peer_id directly — ENet client IDs are large random numbers.
+	var offset := Vector2(300.0, 360.0) if peer_id == 1 else Vector2(500.0, 360.0)
 	player.position = offset
 	players_node.add_child(player)
