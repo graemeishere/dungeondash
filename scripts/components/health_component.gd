@@ -20,6 +20,8 @@ func take_damage(amount: int) -> void:
 		died.emit()
 
 func heal(amount: int) -> void:
+	if is_dead():
+		return
 	current_hp = mini(max_hp, current_hp + amount)
 	health_changed.emit(current_hp, max_hp)
 
@@ -27,4 +29,6 @@ func is_dead() -> bool:
 	return current_hp <= 0
 
 func get_ratio() -> float:
+	if max_hp <= 0:
+		return 0.0
 	return float(current_hp) / float(max_hp)
