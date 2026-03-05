@@ -25,6 +25,11 @@ func heal(amount: int) -> void:
 	current_hp = mini(max_hp, current_hp + amount)
 	health_changed.emit(current_hp, max_hp)
 
+func revive(amount: int) -> void:
+	# Restore HP from dead/downed state — bypasses the is_dead() guard
+	current_hp = mini(max_hp, maxi(1, amount))
+	health_changed.emit(current_hp, max_hp)
+
 func is_dead() -> bool:
 	return current_hp <= 0
 

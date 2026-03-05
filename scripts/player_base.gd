@@ -129,7 +129,7 @@ func _request_revive(downed_peer_id: int) -> void:
 func _do_revive() -> void:
 	state = State.IDLE
 	var revive_hp := max_hp / 2
-	health.heal(revive_hp)
+	health.revive(revive_hp)
 	current_hp = health.current_hp
 	_restore_alive_visuals()  # restore colour only, do not reset HP
 
