@@ -2,7 +2,7 @@
 extends Node2D
 
 signal room_cleared
-signal all_players_downed
+signal all_players_downed  # stub -- emitted by game.gd when all players are downed
 
 const SKELETON_SCENE = preload("res://scenes/enemies/skeleton.tscn")
 
@@ -25,7 +25,7 @@ func _spawn_skeleton(index: int, spawn_pos: Vector2) -> void:
 	$Enemies.add_child(sk)
 	if multiplayer.is_server():
 		_enemies_alive += 1
-		sk.tree_exited.connect(_on_enemy_removed)
+		sk.enemy_defeated.connect(_on_enemy_removed)
 
 func _on_enemy_removed() -> void:
 	if not multiplayer.is_server():

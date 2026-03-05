@@ -11,6 +11,8 @@ const HURT_TIME := 0.2
 
 enum State { IDLE, CHASE, TELEGRAPH, ATTACK, COOLDOWN, HURT, DEAD }
 
+signal enemy_defeated
+
 # Synced to guest
 var state: int = State.IDLE
 
@@ -112,6 +114,7 @@ func _on_died() -> void:
 	state = State.DEAD
 	sprite.color = Color(0.2, 0.2, 0.2, 0.5)
 	set_physics_process(false)
+	enemy_defeated.emit()
 	await get_tree().create_timer(0.5).timeout
 	queue_free()
 
