@@ -13,8 +13,7 @@ func _setup_class_visuals() -> void:
 
 func _do_attack() -> void:
 	state = State.ATTACK
-	_attack_timer = 0.25  # attack animation duration
-	# Enable hitbox for one physics frame via deferred call
+	# Enable hitbox for brief window
 	var hitbox := $AttackHitbox as Area2D
 	hitbox.monitoring = true
 	# Check overlapping areas immediately (areas already in range)
