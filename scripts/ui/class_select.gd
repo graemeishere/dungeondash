@@ -22,6 +22,7 @@ func _on_mage_button_pressed() -> void:
 
 func _pick_class(class_name: String) -> void:
 	_my_selection = class_name
+	class_selected.emit(multiplayer.get_unique_id(), class_name)
 	warrior_btn.disabled = true
 	mage_btn.disabled = true
 	status_label.text = "Picked: %s" % class_name.capitalize()
@@ -47,5 +48,5 @@ func _submit_class(peer_id: int, chosen_class: String) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _start_game() -> void:
-	# Notify game.gd to begin
+	# TODO: begin_run() is implemented in Task 11 (game.gd M1 rewire)
 	get_tree().get_root().get_node("Game").begin_run()
