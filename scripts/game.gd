@@ -1,11 +1,20 @@
+# scripts/game.gd
 extends Node
 
 const PORT = 7777
-const MAX_PEERS = 1  # One guest + host = 2 players total
-const PLAYER_SCENE = preload("res://scenes/characters/player.tscn")
+const MAX_PEERS = 1
+const WARRIOR_SCENE = preload("res://scenes/characters/warrior.tscn")
+const MAGE_SCENE    = preload("res://scenes/characters/mage.tscn")
+const ROOM_SCENE    = preload("res://scenes/rooms/combat_room.tscn")
 
-@onready var players_node: Node2D = $World/Players
-@onready var main_menu: Control = $UI/MainMenu
+@onready var players_node: Node2D  = $World/Players
+@onready var world_node: Node2D    = $World
+@onready var main_menu: Control    = $UI/MainMenu
+@onready var class_select: Control = $UI/ClassSelect
+@onready var hud: CanvasLayer      = $HUD
+
+var _room: Node2D = null
+var _downed_players: Array[int] = []
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -13,7 +22,7 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 
-# ── Hosting ──────────────────────────────────────────────────────────────────
+# ── Hosting / Joining ─────────────────────────────────────────────────────────
 
 func host_game() -> void:
 	var peer := ENetMultiplayerPeer.new()
@@ -21,23 +30,9 @@ func host_game() -> void:
 	if error != OK:
 		main_menu.set_status("Failed to create server (error %d)" % error)
 		return
-
 	multiplayer.multiplayer_peer = peer
-	GameState.connected_players.append(1)  # Host is always peer ID 1
-	_spawn_player(1)
-	main_menu.set_status("Hosting on port %d — waiting for guest..." % PORT)
-	_show_local_ip()
-
-func _show_local_ip() -> void:
-	# Display the local IP so the guest knows what to type
-	var ips := IP.get_local_addresses()
-	for ip in ips:
-		# Filter for typical LAN IPv4 addresses
-		if ip.begins_with("192.168.") or ip.begins_with("10."):
-			main_menu.set_status("Hosting — your IP: %s" % ip)
-			return
-
-# ── Joining ───────────────────────────────────────────────────────────────────
+	GameState.connected_players.append(1)
+	_show_class_select()
 
 func join_game(ip: String) -> void:
 	var peer := ENetMultiplayerPeer.new()
@@ -47,47 +42,128 @@ func join_game(ip: String) -> void:
 		return
 	multiplayer.multiplayer_peer = peer
 
+func _show_class_select() -> void:
+	main_menu.visible = false
+	class_select.visible = true
+
 # ── Multiplayer Callbacks ─────────────────────────────────────────────────────
 
 func _on_peer_connected(id: int) -> void:
-	# Called on HOST when a new guest connects
 	if not multiplayer.is_server():
 		return
 	GameState.connected_players.append(id)
-	# Spawn the new guest's player on all peers
-	_spawn_player.rpc(id)
-	# Tell the new guest about the host player too
-	_spawn_player.rpc_id(id, 1)
-	main_menu.set_status("Guest connected!")
+	# Tell the newly-connected guest to show class select
+	_show_class_select_guest.rpc_id(id)
 
 func _on_peer_disconnected(id: int) -> void:
 	GameState.connected_players.erase(id)
-	# Remove the disconnected player's node
 	var player := players_node.get_node_or_null(str(id))
 	if player:
 		player.queue_free()
-	main_menu.set_status("Guest disconnected. Continuing solo.")
 
 func _on_connected_to_server() -> void:
-	# Called on CLIENT when connection succeeds
-	# Server will call _spawn_player RPC for us — nothing to do here
-	main_menu.set_status("Connected!")
+	# Guest shows its own class select immediately after connecting
+	_show_class_select()
 
 func _on_connection_failed() -> void:
 	main_menu.set_status("Connection failed. Check the IP and try again.")
 
-# ── Spawning ──────────────────────────────────────────────────────────────────
+# Tells a specific remote peer to show the class select screen.
+# Only called by the host (authority).
+@rpc("authority", "call_remote", "reliable")
+func _show_class_select_guest() -> void:
+	_show_class_select()
+
+# ── Run Lifecycle ─────────────────────────────────────────────────────────────
+
+func begin_run() -> void:
+	# Called by ClassSelect._start_game() on all peers after all classes chosen
+	class_select.visible = false
+	# Only the host broadcasts the load — guests' calls would be rejected by Godot
+	if multiplayer.is_server():
+		_load_room.rpc()
 
 @rpc("authority", "call_local", "reliable")
+func _load_room() -> void:
+	if _room != null:
+		_room.queue_free()
+	_room = ROOM_SCENE.instantiate()
+	world_node.add_child(_room)
+	if multiplayer.is_server():
+		_room.room_cleared.connect(_on_room_cleared)
+	# Spawn players
+	for pid in GameState.connected_players:
+		_spawn_player(pid)
+
 func _spawn_player(peer_id: int) -> void:
-	# Don't double-spawn
 	if players_node.get_node_or_null(str(peer_id)) != null:
 		return
-
-	var player := PLAYER_SCENE.instantiate()
+	var chosen := GameState.player_classes.get(peer_id, "warrior")
+	var player := WARRIOR_SCENE.instantiate() if chosen == "warrior" else MAGE_SCENE.instantiate()
 	player.name = str(peer_id)
-	# Fixed spawn slots: host on left, guest on right.
-	# Cannot use peer_id directly — ENet client IDs are large random numbers.
-	var offset := Vector2(300.0, 360.0) if peer_id == 1 else Vector2(500.0, 360.0)
-	player.position = offset
+	player.position = Vector2(300.0, 360.0) if peer_id == 1 else Vector2(500.0, 360.0)
 	players_node.add_child(player)
+	# Wire health updates to HUD
+	player.get_node("HealthComponent").health_changed.connect(
+		func(hp: int, mx: int) -> void: hud.update_hp(peer_id, hp, mx)
+	)
+	# Watch for downed state (host only — host tracks run-over condition)
+	if multiplayer.is_server():
+		player.downed.connect(_on_player_downed.bind(peer_id), CONNECT_ONE_SHOT)
+
+func _on_room_cleared() -> void:
+	_show_win.rpc()
+
+@rpc("authority", "call_local", "reliable")
+func _show_win() -> void:
+	hud.show_win()
+
+func _on_player_downed(peer_id: int) -> void:
+	if not _downed_players.has(peer_id):
+		_downed_players.append(peer_id)
+	# Re-connect for future downed events (in case they get revived and downed again)
+	var player := players_node.get_node_or_null(str(peer_id))
+	if player:
+		player.downed.connect(_on_player_downed.bind(peer_id), CONNECT_ONE_SHOT)
+	# Check if ALL current players are downed
+	var all_down := true
+	for pid in GameState.connected_players:
+		var p := players_node.get_node_or_null(str(pid)) as PlayerBase
+		if p != null and p.state != PlayerBase.State.DOWNED:
+			all_down = false
+			break
+	if all_down:
+		_game_over.rpc()
+
+@rpc("authority", "call_local", "reliable")
+func _game_over() -> void:
+	hud.show_lose()
+
+func restart_run() -> void:
+	# Only the host drives the restart (it owns the authority RPCs needed)
+	if not multiplayer.is_server():
+		return
+	for child in players_node.get_children():
+		child.queue_free()
+	if _room != null:
+		_room.queue_free()
+		_room = null
+	_downed_players.clear()
+	# Snapshot peers before reset_run() clears connected_players
+	var peers := GameState.connected_players.duplicate()
+	GameState.reset_run()
+	# Re-populate connected_players since reset_run() clears it
+	for pid in peers:
+		GameState.connected_players.append(pid)
+	_reset_to_class_select.rpc()
+
+@rpc("authority", "call_local", "reliable")
+func _reset_to_class_select() -> void:
+	hud.win_overlay.visible = false
+	hud.lose_overlay.visible = false
+	class_select.visible = true
+	class_select._my_selection = ""
+	class_select.warrior_btn.disabled = false
+	class_select.mage_btn.disabled = false
+	class_select.waiting_label.visible = false
+	class_select.status_label.text = "Choose your class:"
