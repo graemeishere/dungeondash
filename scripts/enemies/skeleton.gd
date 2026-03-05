@@ -22,9 +22,8 @@ var _target: Node2D = null
 @onready var hitbox: Area2D = $AttackHitbox
 
 func _ready() -> void:
-	health.max_hp = 40
-	health.current_hp = 40
 	health.died.connect(_on_died)
+	hitbox.body_entered.connect(_on_hitbox_body_entered)
 	if not multiplayer.is_server():
 		set_physics_process(false)
 
@@ -38,20 +37,16 @@ func _physics_process(delta: float) -> void:
 		State.CHASE:
 			_chase_target()
 		State.TELEGRAPH:
-			sprite.color = Color.RED
 			if _state_timer <= 0.0:
 				_enter_attack()
 		State.ATTACK:
 			if _state_timer <= 0.0:
 				_exit_attack()
 		State.COOLDOWN:
-			sprite.color = Color(0.8, 0.6, 0.4)
 			if _state_timer <= 0.0:
 				state = State.CHASE
 		State.HURT:
-			sprite.color = Color.WHITE
 			if _state_timer <= 0.0:
-				sprite.color = Color(0.8, 0.6, 0.4)
 				state = State.CHASE
 
 func _find_target() -> void:
@@ -76,27 +71,42 @@ func _chase_target() -> void:
 		var dir := (_target.global_position - global_position).normalized()
 		velocity = dir * SPEED
 		move_and_slide()
-		sprite.color = Color(0.8, 0.6, 0.4)
 
 func _enter_telegraph() -> void:
 	state = State.TELEGRAPH
 	_state_timer = TELEGRAPH_TIME
 	velocity = Vector2.ZERO
+	sprite.color = Color.RED
 
 func _enter_attack() -> void:
 	state = State.ATTACK
 	_state_timer = ATTACK_DURATION
 	hitbox.monitoring = true
 	sprite.color = Color.DARK_RED
-	# Damage any player currently overlapping the hitbox
+	# Check existing overlaps on the next physics frame (monitoring just enabled)
+	call_deferred("_apply_attack_damage")
+
+func _apply_attack_damage() -> void:
+	if state != State.ATTACK:
+		return
 	for body in hitbox.get_overlapping_bodies():
-		if body.has_method("receive_damage"):
-			body.receive_damage.rpc(ATTACK_DAMAGE)
+		_damage_body(body)
+
+func _on_hitbox_body_entered(body: Node2D) -> void:
+	# Fires when a body enters the hitbox during the active attack window
+	if state != State.ATTACK:
+		return
+	_damage_body(body)
+
+func _damage_body(body: Node2D) -> void:
+	if body.has_method("receive_damage"):
+		body.receive_damage.rpc(ATTACK_DAMAGE)
 
 func _exit_attack() -> void:
 	hitbox.monitoring = false
 	state = State.COOLDOWN
 	_state_timer = COOLDOWN_TIME
+	sprite.color = Color(0.8, 0.6, 0.4)
 
 func _on_died() -> void:
 	state = State.DEAD
@@ -110,7 +120,10 @@ func _on_died() -> void:
 func receive_damage_rpc(amount: int) -> void:
 	if not multiplayer.is_server():
 		return
+	if state == State.DEAD:
+		return
 	health.take_damage(amount)
 	if state != State.DEAD:
 		state = State.HURT
 		_state_timer = HURT_TIME
+		sprite.color = Color.WHITE
