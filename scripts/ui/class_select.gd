@@ -31,6 +31,13 @@ func _pick_class(class_name: String) -> void:
 	# Send selection to host (or process locally if solo/host)
 	_submit_class.rpc_id(1, multiplayer.get_unique_id(), class_name)
 
+func reset() -> void:
+	_my_selection = ""
+	warrior_btn.disabled = false
+	mage_btn.disabled = false
+	waiting_label.visible = false
+	status_label.text = "Choose your class:"
+
 @rpc("any_peer", "call_local", "reliable")
 func _submit_class(peer_id: int, chosen_class: String) -> void:
 	# Only host processes this

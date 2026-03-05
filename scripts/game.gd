@@ -14,7 +14,6 @@ const ROOM_SCENE    = preload("res://scenes/rooms/combat_room.tscn")
 @onready var hud: CanvasLayer      = $HUD
 
 var _room: Node2D = null
-var _downed_players: Array[int] = []
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -119,8 +118,6 @@ func _show_win() -> void:
 	hud.show_win()
 
 func _on_player_downed(peer_id: int) -> void:
-	if not _downed_players.has(peer_id):
-		_downed_players.append(peer_id)
 	# Re-connect for future downed events (in case they get revived and downed again)
 	var player := players_node.get_node_or_null(str(peer_id))
 	if player:
@@ -148,7 +145,6 @@ func restart_run() -> void:
 	if _room != null:
 		_room.queue_free()
 		_room = null
-	_downed_players.clear()
 	# Snapshot peers before reset_run() clears connected_players
 	var peers := GameState.connected_players.duplicate()
 	GameState.reset_run()
@@ -162,8 +158,4 @@ func _reset_to_class_select() -> void:
 	hud.win_overlay.visible = false
 	hud.lose_overlay.visible = false
 	class_select.visible = true
-	class_select._my_selection = ""
-	class_select.warrior_btn.disabled = false
-	class_select.mage_btn.disabled = false
-	class_select.waiting_label.visible = false
-	class_select.status_label.text = "Choose your class:"
+	class_select.reset()

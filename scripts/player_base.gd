@@ -106,6 +106,15 @@ func _on_health_depleted() -> void:
 
 func _on_health_changed(new_hp: int, _max: int) -> void:
 	current_hp = new_hp
+	# Owning peer broadcasts to all remote peers so their HUDs update
+	if is_multiplayer_authority():
+		_sync_health.rpc(new_hp, health.max_hp)
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_health(hp: int, max_hp: int) -> void:
+	# Remote peers: update local state and re-emit so HUD lambda fires
+	current_hp = hp
+	health.health_changed.emit(hp, max_hp)
 
 # ── RPC calls ────────────────────────────────────────────────────────────────
 
