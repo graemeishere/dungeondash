@@ -55,6 +55,8 @@ func _physics_process(delta: float) -> void:
 				state = State.IDLE
 		State.DOWNED:
 			_revive_progress = 0.0
+		State.HURT:
+			pass  # Placeholder; subclasses or future tasks add hurt animation
 
 func _handle_movement() -> void:
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -104,7 +106,7 @@ func _on_health_changed(new_hp: int, _max: int) -> void:
 
 # ── RPC calls ────────────────────────────────────────────────────────────────
 
-@rpc("any_peer", "call_local", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _set_downed() -> void:
 	state = State.DOWNED
 	sprite.color = Color(0.35, 0.35, 0.35, 0.8)
@@ -129,7 +131,7 @@ func _do_revive() -> void:
 	_setup_class_visuals()  # restore colour
 
 # Called by host when an enemy hitbox overlaps this player's hurtbox
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func receive_damage(amount: int) -> void:
 	if not is_multiplayer_authority():
 		return
