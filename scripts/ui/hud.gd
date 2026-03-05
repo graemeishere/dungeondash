@@ -24,7 +24,9 @@ func show_lose() -> void:
 	lose_overlay.visible = true
 
 func _on_play_again_pressed() -> void:
+	# TODO: restart_run() is implemented in Task 11 (game.gd M1 rewire)
 	get_tree().get_root().get_node("Game").restart_run()
 
 func _on_try_again_pressed() -> void:
+	# TODO: restart_run() is implemented in Task 11 (game.gd M1 rewire)
 	get_tree().get_root().get_node("Game").restart_run()
