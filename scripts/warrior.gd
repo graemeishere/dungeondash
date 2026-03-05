@@ -28,3 +28,6 @@ func _try_damage_enemy(area: Area2D) -> void:
 	if enemy.has_method("receive_damage_rpc"):
 		# Send damage to host
 		enemy.receive_damage_rpc.rpc_id(1, attack_damage)
+
+func _restore_alive_visuals() -> void:
+	sprite.color = Color.CORNFLOWER_BLUE

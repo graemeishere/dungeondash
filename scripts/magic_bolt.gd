@@ -13,8 +13,7 @@ func _ready() -> void:
 	pass
 
 func _physics_process(delta: float) -> void:
-	velocity = direction * SPEED
-	var collision := move_and_collide(velocity * delta)
+	var collision := move_and_collide(direction * SPEED * delta)
 	_distance_travelled += SPEED * delta
 
 	if collision:

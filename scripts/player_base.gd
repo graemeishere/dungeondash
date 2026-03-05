@@ -41,6 +41,9 @@ func _ready() -> void:
 func _setup_class_visuals() -> void:
 	pass  # Overridden by Warrior / Mage
 
+func _restore_alive_visuals() -> void:
+	pass  # Overridden by subclass to restore color after revive
+
 func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority():
 		return
@@ -128,7 +131,7 @@ func _do_revive() -> void:
 	var revive_hp := max_hp / 2
 	health.heal(revive_hp)
 	current_hp = health.current_hp
-	_setup_class_visuals()  # restore colour
+	_restore_alive_visuals()  # restore colour only, do not reset HP
 
 # Called by host when an enemy hitbox overlaps this player's hurtbox
 @rpc("any_peer", "call_local", "reliable")

@@ -33,3 +33,6 @@ func _do_attack() -> void:
 	bolt.position = global_position + _last_direction * 30.0
 	# Add bolt to the same parent as players (World/Players node's parent)
 	get_parent().get_parent().add_child(bolt)
+
+func _restore_alive_visuals() -> void:
+	sprite.color = Color(0.6, 0.2, 0.8)
