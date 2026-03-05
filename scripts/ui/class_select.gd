@@ -1,6 +1,8 @@
 # scripts/ui/class_select.gd
 extends Control
 
+signal class_selected(peer_id: int, class_name: String)
+
 @onready var warrior_btn: Button = $VBox/WarriorButton
 @onready var mage_btn: Button = $VBox/MageButton
 @onready var status_label: Label = $VBox/StatusLabel
