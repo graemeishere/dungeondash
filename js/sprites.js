@@ -1,0 +1,237 @@
+"use strict";
+// Procedurally generated pixel-art assets. Every sprite is drawn onto an
+// offscreen canvas at boot, so the game needs no image files at all.
+(function (DD) {
+  const PX = 4;      // screen pixels per art pixel
+  const GRID = 16;   // character sprites are authored on a 16x16 grid
+
+  function makeCanvas(w, h) {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    return c;
+  }
+
+  // A 16x16 pixel surface with a plot helper. p(x, y, color, w, h)
+  function surface(grid = GRID) {
+    const canvas = makeCanvas(grid * PX, grid * PX);
+    const ctx = canvas.getContext("2d");
+    const p = (x, y, color, w = 1, h = 1) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.round(x * PX), Math.round(y * PX), Math.round(w * PX), Math.round(h * PX));
+    };
+    return { canvas, ctx, p };
+  }
+
+  const SKIN = "#f2c09a";
+  const SKIN_SHADE = "#d49a72";
+  const DARK = "#241f33";
+
+  // Chibi hero: head rows 2-8, body rows 9-12, feet rows 13-14, hat rows 0-4.
+  // frame 1 bobs the head/hat down one pixel and swaps the feet.
+  function drawHero(p, opts, frame) {
+    const bob = frame === 1 ? 1 : 0;
+
+    // feet
+    if (frame === 0) {
+      p(5, 13, opts.boot, 2, 2);
+      p(9, 13, opts.boot, 2, 2);
+    } else {
+      p(4, 13, opts.boot, 2, 2);
+      p(9, 14, opts.boot, 2, 1);
+    }
+
+    // body + arms
+    p(5, 9, opts.body, 6, 4);
+    p(4, 9, opts.sleeve, 1, 3);
+    p(11, 9, opts.sleeve, 1, 3);
+    p(5, 12, opts.belt, 6, 1);
+    if (opts.emblem) p(7, 10, opts.emblem, 2, 1);
+
+    // head
+    p(4, 2 + bob, SKIN, 8, 7);
+    p(4, 7 + bob, SKIN_SHADE, 8, 1); // chin shading
+    p(6, 5 + bob, DARK, 1, 2);       // eyes
+    p(9, 5 + bob, DARK, 1, 2);
+
+    // headgear
+    switch (opts.hat) {
+      case "helmet":
+        p(3, 1 + bob, opts.hatColor, 10, 4);
+        p(3, 1 + bob, "#dde6f2", 10, 1);     // shine
+        p(7, 0 + bob, opts.accent, 2, 2);     // plume
+        break;
+      case "wizard":
+        p(7, 0 + bob, opts.hatColor, 2, 1);
+        p(6, 1 + bob, opts.hatColor, 4, 1);
+        p(5, 2 + bob, opts.hatColor, 6, 1);
+        p(5, 3 + bob, opts.accent, 6, 1);     // hat band
+        p(3, 4 + bob, opts.hatColor, 10, 1);  // brim
+        break;
+      case "hood":
+        p(3, 1 + bob, opts.hatColor, 10, 3);
+        p(3, 4 + bob, opts.hatColor, 1, 4);
+        p(12, 4 + bob, opts.hatColor, 1, 4);
+        break;
+      case "cap":
+        p(3, 1 + bob, opts.hatColor, 10, 2);
+        p(12, 0 + bob, opts.accent, 1, 3);    // feather
+        break;
+    }
+  }
+
+  function drawSkeleton(p, frame) {
+    const bob = frame === 1 ? 1 : 0;
+    const BONE = "#e9e6da";
+    const BONE_SHADE = "#b9b4a4";
+
+    // feet
+    if (frame === 0) {
+      p(5, 13, BONE, 2, 2);
+      p(9, 13, BONE, 2, 2);
+    } else {
+      p(4, 13, BONE, 2, 2);
+      p(9, 14, BONE, 2, 1);
+    }
+
+    // ribcage torso
+    p(5, 9, "#34304a", 6, 4);
+    p(5, 9, BONE, 6, 1);
+    p(5, 11, BONE, 6, 1);
+    p(4, 9, BONE_SHADE, 1, 3); // arms
+    p(11, 9, BONE_SHADE, 1, 3);
+
+    // skull
+    p(4, 1 + bob, BONE, 8, 7);
+    p(3, 2 + bob, BONE, 10, 4);
+    p(5, 3 + bob, "#1a1626", 2, 2);  // sockets
+    p(9, 3 + bob, "#1a1626", 2, 2);
+    p(7, 5 + bob, "#1a1626", 1, 1);  // nose
+    p(5, 7 + bob, "#1a1626", 1, 1);  // grin gaps
+    p(7, 7 + bob, "#1a1626", 1, 1);
+    p(9, 7 + bob, "#1a1626", 1, 1);
+  }
+
+  function makeFrames(drawFn) {
+    return [0, 1].map((frame) => {
+      const s = surface();
+      drawFn(s.p, frame);
+      return s.canvas;
+    });
+  }
+
+  // ---- tiles (drawn at native TILE resolution) ----
+
+  function makeFloorTile(variant) {
+    const t = makeCanvas(DD.TILE, DD.TILE);
+    const ctx = t.getContext("2d");
+    ctx.fillStyle = "#46415c";
+    ctx.fillRect(0, 0, DD.TILE, DD.TILE);
+    ctx.fillStyle = "#3c3750";
+    ctx.fillRect(0, 0, DD.TILE, 2);
+    ctx.fillRect(0, 0, 2, DD.TILE);
+    // speckle
+    const speckles = ["#514b6b", "#3a3550", "#554f72"];
+    for (let i = 0; i < 7 + variant * 2; i++) {
+      ctx.fillStyle = DD.choice(speckles);
+      ctx.fillRect(DD.randi(2, 28), DD.randi(2, 28), DD.randi(2, 4), DD.randi(2, 3));
+    }
+    if (variant === 3) { // cracked variant
+      ctx.strokeStyle = "#322e45";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(6, 24);
+      ctx.lineTo(14, 16);
+      ctx.lineTo(13, 9);
+      ctx.stroke();
+    }
+    return t;
+  }
+
+  function makeWallTile() {
+    const t = makeCanvas(DD.TILE, DD.TILE);
+    const ctx = t.getContext("2d");
+    ctx.fillStyle = "#231f33";
+    ctx.fillRect(0, 0, DD.TILE, DD.TILE);
+    ctx.fillStyle = "#312c46";
+    // two rows of offset bricks
+    ctx.fillRect(1, 1, 14, 13);
+    ctx.fillRect(17, 1, 14, 13);
+    ctx.fillRect(1, 17, 6, 13);
+    ctx.fillRect(9, 17, 14, 13);
+    ctx.fillRect(25, 17, 6, 13);
+    ctx.fillStyle = "#3e3857";
+    ctx.fillRect(1, 1, 14, 2);
+    ctx.fillRect(17, 1, 14, 2);
+    return t;
+  }
+
+  function makeDoorTile(open) {
+    const t = makeCanvas(DD.TILE, DD.TILE);
+    const ctx = t.getContext("2d");
+    ctx.drawImage(DD.sprites.wallTile, 0, 0);
+    ctx.fillStyle = open ? "#15121f" : "#0d0b14";
+    ctx.fillRect(4, 6, 24, 26);
+    if (open) {
+      ctx.fillStyle = "#ffd95e";
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(4, 6, 24, 26);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = "#6b6481";
+      for (let x = 7; x <= 25; x += 6) ctx.fillRect(x, 6, 3, 26);
+      ctx.fillRect(4, 14, 24, 3);
+    }
+    ctx.fillStyle = "#3e3857";
+    ctx.fillRect(2, 4, 28, 3);
+    return t;
+  }
+
+  // ---- pickups (8x8 art) ----
+
+  function makeHeart() {
+    const s = surface(8);
+    const R = "#e8484f", D = "#a32630", L = "#ff8c91";
+    s.p(1, 0, R, 2, 1); s.p(5, 0, R, 2, 1);
+    s.p(0, 1, R, 8, 2);
+    s.p(1, 3, R, 6, 1);
+    s.p(2, 4, D, 4, 1);
+    s.p(3, 5, D, 2, 1);
+    s.p(1, 1, L, 1, 1);
+    return s.canvas;
+  }
+
+  function makeCoin() {
+    const s = surface(8);
+    const G = "#ffd14a", D = "#c2912a", L = "#fff3b8";
+    s.p(2, 0, G, 4, 1);
+    s.p(1, 1, G, 6, 6);
+    s.p(2, 7, G, 4, 1);
+    s.p(0, 2, G, 8, 4);
+    s.p(3, 2, D, 2, 4); // stamped slot
+    s.p(2, 1, L, 1, 2); // shine
+    return s.canvas;
+  }
+
+  DD.sprites = {
+    init() {
+      const heroDefs = {
+        warrior: { hat: "helmet", hatColor: "#aeb9cd", accent: "#d33a3a", body: "#7e8aa3", sleeve: "#5d6880", belt: "#4a3826", boot: "#4a3826", emblem: "#d33a3a" },
+        rogue:   { hat: "hood",   hatColor: "#2f5e3d", accent: "#2f5e3d", body: "#3d7a4f", sleeve: "#2f5e3d", belt: "#26211a", boot: "#26211a" },
+        mage:    { hat: "wizard", hatColor: "#6f44c4", accent: "#ffd95e", body: "#8657d8", sleeve: "#6f44c4", belt: "#ffd95e", boot: "#34284f" },
+        ranger:  { hat: "cap",    hatColor: "#6e4a23", accent: "#e8d44d", body: "#8a5e2e", sleeve: "#56682f", belt: "#3c2c14", boot: "#3c2c14" },
+      };
+      this.players = {};
+      for (const key of Object.keys(heroDefs)) {
+        this.players[key] = makeFrames((p, f) => drawHero(p, heroDefs[key], f));
+      }
+      this.skeleton = makeFrames((p, f) => drawSkeleton(p, f));
+      this.floorTiles = [0, 1, 2, 3].map(makeFloorTile);
+      this.wallTile = makeWallTile();
+      this.doorClosed = makeDoorTile(false);
+      this.doorOpen = makeDoorTile(true);
+      this.heart = makeHeart();
+      this.coin = makeCoin();
+    },
+  };
+})(window.DD);

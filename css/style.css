@@ -1,0 +1,132 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: #14111c;
+  color: #f2ecdd;
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#wrap {
+  position: relative;
+  width: min(96vw, calc(96vh * 960 / 576));
+  aspect-ratio: 960 / 576;
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  border-radius: 8px;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(14, 11, 22, 0.88);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.overlay.hidden { display: none; }
+
+.overlay h1 {
+  font-size: clamp(28px, 6vw, 52px);
+  letter-spacing: 6px;
+  color: #ffd95e;
+  text-shadow: 3px 3px 0 #5a3210, 6px 6px 0 rgba(0, 0, 0, 0.5);
+}
+
+.tagline { color: #bdb3d6; font-size: clamp(13px, 1.8vw, 18px); }
+
+#class-cards {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.class-card {
+  width: 148px;
+  padding: 14px 10px 12px;
+  background: #221d33;
+  border: 2px solid #443a63;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s, background 0.12s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  color: inherit;
+}
+
+.class-card:hover, .class-card:focus-visible {
+  transform: translateY(-5px) scale(1.04);
+  border-color: #ffd95e;
+  background: #2c2545;
+  outline: none;
+}
+
+.class-card img {
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+}
+
+.class-card .cname {
+  font-size: 17px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.class-card .cdesc {
+  font-size: 11.5px;
+  color: #a99cc9;
+  line-height: 1.35;
+  min-height: 32px;
+}
+
+.class-card .cstats { font-size: 11px; color: #7fc78f; }
+
+.hint { font-size: 12px; color: #8b80a8; }
+
+.buttons { display: flex; gap: 14px; }
+
+.buttons button {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: #1c1428;
+  background: #ffd95e;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 22px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #b08820;
+  transition: transform 0.1s;
+}
+
+.buttons button:hover { transform: translateY(-2px); }
+.buttons button:active { transform: translateY(2px); box-shadow: 0 1px 0 #b08820; }
+
+#btn-class { background: #b9aee0; box-shadow: 0 4px 0 #6c5f97; }
+
+#result-stats { font-size: 17px; color: #d8cfee; line-height: 1.6; }

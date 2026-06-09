@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Dash</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="960" height="576"></canvas>
+
+    <div id="menu" class="overlay">
+      <h1>DUNGEON&nbsp;DASH</h1>
+      <p class="tagline">Pick a class and clear the room</p>
+      <div id="class-cards"></div>
+      <p class="hint">Move: WASD / Arrows &nbsp;&bull;&nbsp; Attack: Click or Space (aim with mouse) &nbsp;&bull;&nbsp; Rogue dash: Shift</p>
+    </div>
+
+    <div id="result" class="overlay hidden">
+      <h1 id="result-title"></h1>
+      <p id="result-stats"></p>
+      <div class="buttons">
+        <button id="btn-again">Play Again</button>
+        <button id="btn-class">Change Class</button>
+      </div>
+      <p class="hint">Enter: play again &nbsp;&bull;&nbsp; Esc: change class</p>
+    </div>
+  </div>
+
+  <script src="js/util.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/room.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
