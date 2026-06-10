@@ -105,6 +105,22 @@ body {
 
 .class-card .cstats { font-size: 11px; color: #7fc78f; }
 
+#upgrade-cards { display: flex; gap: 14px; justify-content: center; }
+
+.upgrade-card { width: 168px; padding: 18px 12px; }
+.upgrade-card .ckey {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #443a63;
+  color: #ffd95e;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 22px;
+}
+.upgrade-card .cname { color: #ffd95e; }
+
+.overlay h1.small { font-size: clamp(22px, 4vw, 36px); }
+
 .hint { font-size: 12px; color: #8b80a8; }
 
 .buttons { display: flex; gap: 14px; }

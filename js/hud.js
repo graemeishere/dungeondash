@@ -8,7 +8,7 @@
       // --- HP bar ---
       const bx = 16, by = 14, bw = 190, bh = 18;
       ctx.fillStyle = "rgba(10,8,18,0.7)";
-      ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 30);
+      ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 40);
       ctx.fillStyle = "#1a1626";
       ctx.fillRect(bx, by, bw, bh);
       const frac = DD.clamp(pl.hp / pl.maxHp, 0, 1);
@@ -24,29 +24,64 @@
       ctx.textAlign = "center";
       ctx.fillText(`${pl.hp} / ${pl.maxHp}`, bx + bw / 2, by + 13);
 
-      // class name + gold + kills
+      // --- XP bar ---
+      ctx.fillStyle = "#1a1626";
+      ctx.fillRect(bx, by + bh + 4, bw, 7);
+      ctx.fillStyle = "#a06ce8";
+      ctx.fillRect(bx, by + bh + 4, bw * DD.clamp(game.xp / game.xpNext(), 0, 1), 7);
+
+      // class + level + gold + kills
       ctx.textAlign = "left";
       ctx.font = `bold 13px ${font}`;
       ctx.fillStyle = "#bdb3d6";
-      ctx.fillText(pl.cfg.name, bx, by + bh + 16);
-      ctx.drawImage(DD.sprites.coin, bx + 84, by + bh + 4, 14, 14);
+      ctx.fillText(`${pl.cfg.name} Lv ${game.level}`, bx, by + bh + 26);
+      ctx.drawImage(DD.sprites.coin, bx + 102, by + bh + 14, 14, 14);
       ctx.fillStyle = "#ffd14a";
-      ctx.fillText(`${game.gold}`, bx + 102, by + bh + 16);
+      ctx.fillText(`${game.gold}`, bx + 120, by + bh + 26);
       ctx.fillStyle = "#9b90b8";
-      ctx.fillText(`Kills ${game.kills}`, bx + 134, by + bh + 16);
+      ctx.fillText(`Kills ${game.kills}`, bx + 150, by + bh + 26);
 
-      // --- enemies remaining (top right) ---
-      const remaining = game.skeletons.filter((s) => !s.dead).length + game.spawnQueue.length;
+      // --- room progress (top center) ---
+      ctx.textAlign = "center";
+      ctx.font = `bold 13px ${font}`;
+      ctx.fillStyle = "rgba(10,8,18,0.7)";
+      ctx.fillRect(DD.WIDTH / 2 - 60, 44, 120, 22);
+      ctx.fillStyle = "#bdb3d6";
+      const typeLabel = { combat: "Combat", treasure: "Treasure", boss: "BOSS" }[game.roomType];
+      ctx.fillText(`Room ${game.roomIndex + 1}/5 — ${typeLabel}`, DD.WIDTH / 2, 59);
+
+      // --- objective (top right) ---
       ctx.textAlign = "right";
       ctx.font = `bold 15px ${font}`;
-      if (remaining > 0) {
+      const boss = game.skeletons.find((s) => s instanceof DD.Boss);
+      if (boss) {
+        // boss HP bar, top center
+        const bbw = 320, bbx = DD.WIDTH / 2 - bbw / 2, bby = 16;
         ctx.fillStyle = "rgba(10,8,18,0.7)";
-        ctx.fillRect(DD.WIDTH - 168, 12, 152, 26);
+        ctx.fillRect(bbx - 4, bby - 4, bbw + 8, 22);
+        ctx.fillStyle = "#1a1626";
+        ctx.fillRect(bbx, bby, bbw, 14);
+        ctx.fillStyle = "#e8484f";
+        ctx.fillRect(bbx, bby, bbw * DD.clamp(boss.hp / boss.maxHp, 0, 1), 14);
+        ctx.textAlign = "center";
+        ctx.font = `bold 11px ${font}`;
         ctx.fillStyle = "#f2ecdd";
-        ctx.fillText(`Skeletons: ${remaining}`, DD.WIDTH - 26, 31);
-      } else if (game.state === "play") {
-        ctx.fillStyle = "#ffd95e";
-        ctx.fillText("Room cleared! Door is open.", DD.WIDTH - 26, 31);
+        ctx.fillText("SKELETON KING", DD.WIDTH / 2, bby + 11);
+      } else {
+        const remaining = game.skeletons.filter((s) => !s.dead).length + game.spawnQueue.length;
+        const chestsLeft = game.chests.filter((c) => !c.opened).length;
+        ctx.fillStyle = "rgba(10,8,18,0.7)";
+        ctx.fillRect(DD.WIDTH - 250, 12, 234, 26);
+        if (game.roomType === "treasure" && chestsLeft > 0) {
+          ctx.fillStyle = "#ffd14a";
+          ctx.fillText(`Open the chests! ${chestsLeft} left`, DD.WIDTH - 26, 31);
+        } else if (remaining > 0) {
+          ctx.fillStyle = "#f2ecdd";
+          ctx.fillText(`Skeletons: ${remaining}`, DD.WIDTH - 26, 31);
+        } else if (game.roomCleared && game.state === "play") {
+          ctx.fillStyle = "#ffd95e";
+          ctx.fillText("Cleared! Exit through the door ▲", DD.WIDTH - 26, 31);
+        }
       }
       ctx.textAlign = "left";
 

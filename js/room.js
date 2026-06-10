@@ -49,7 +49,15 @@
 
     isSolid(tx, ty) {
       const t = tileAt(tx, ty);
-      return t === WALL || t === DOOR; // the door stays shut during combat
+      if (t === DOOR) return !this.doorOpen; // door unlocks when the room is cleared
+      return t === WALL;
+    },
+
+    // Is this world-space point standing in the doorway?
+    inDoorway(x, y) {
+      const tx = Math.floor(x / DD.TILE);
+      return tileAt(tx, Math.floor(y / DD.TILE)) === DOOR ||
+             ((tx === 14 || tx === 15) && y < DD.TILE * 1.6);
     },
 
     // Does an axis-aligned box (in world px) overlap any solid tile?

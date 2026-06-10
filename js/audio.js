@@ -65,6 +65,14 @@
     spawn()  { tone({ freq: 90, end: 220, type: "sawtooth", dur: 0.3, vol: 0.06 }); },
     coin()   { tone({ freq: 920, type: "square", dur: 0.06, vol: 0.07 }); tone({ freq: 1380, type: "square", dur: 0.12, vol: 0.07, delay: 0.06 }); },
     heal()   { tone({ freq: 520, end: 780, type: "sine", dur: 0.2, vol: 0.12 }); },
+    door() {
+      [392, 523].forEach((f, i) => tone({ freq: f, type: "triangle", dur: 0.18, vol: 0.1, delay: i * 0.1 }));
+    },
+    chest()  { tone({ freq: 440, end: 880, type: "triangle", dur: 0.2, vol: 0.12 }); },
+    levelup() {
+      [440, 554, 659, 880].forEach((f, i) => tone({ freq: f, type: "triangle", dur: 0.14, vol: 0.11, delay: i * 0.09 }));
+    },
+    slam()   { noise({ dur: 0.3, vol: 0.2 }); tone({ freq: 70, end: 30, type: "sawtooth", dur: 0.35, vol: 0.2 }); },
     win() {
       [523, 659, 784, 1047].forEach((f, i) => tone({ freq: f, type: "square", dur: 0.16, vol: 0.1, delay: i * 0.13 }));
     },

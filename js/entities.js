@@ -27,6 +27,39 @@
     },
   };
 
+  // Level-up choices. apply() mutates the player's per-run stats copy.
+  DD.UPGRADES = [
+    {
+      id: "dmg", name: "Sharpened Edge", desc: "+30% damage",
+      apply: (pl) => { pl.stats.dmg *= 1.3; },
+    },
+    {
+      id: "speed", name: "Swift Boots", desc: "+15% move speed",
+      apply: (pl) => { pl.stats.speed *= 1.15; },
+    },
+    {
+      id: "hp", name: "Tough Hide", desc: "+3 max HP, heal 3",
+      apply: (pl) => { pl.maxHp += 3; pl.hp = Math.min(pl.maxHp, pl.hp + 3); },
+    },
+    {
+      id: "cd", name: "Quick Hands", desc: "Attack 20% faster",
+      apply: (pl) => { pl.stats.cooldown = Math.max(0.08, pl.stats.cooldown * 0.8); },
+    },
+    {
+      id: "reach", name: "Heavy Impact", desc: "Bigger attacks",
+      apply: (pl) => {
+        const s = pl.stats;
+        if (s.attack === "melee") { s.range *= 1.25; s.arc *= 1.12; }
+        else if (s.attack === "bolt") { s.splash *= 1.35; s.projSpeed *= 1.1; }
+        else { s.pierce += 1; s.projSpeed *= 1.1; }
+      },
+    },
+    {
+      id: "siphon", name: "Soul Siphon", desc: "30% chance to heal 1 HP on kill",
+      apply: (pl) => { pl.killHeal = (pl.killHeal || 0) + 0.3; },
+    },
+  ];
+
   const SPRITE_DRAW = 48; // on-screen size of a 16px character sprite
 
   function drawShadow(ctx, x, y, w) {
@@ -38,11 +71,12 @@
 
   // Draw a two-frame walking sprite anchored at the entity's feet.
   function drawSprite(ctx, frames, ent, moving) {
+    const d = ent.drawSize || SPRITE_DRAW;
     const frame = moving ? frames[Math.floor(ent.animT * 8) % 2] : frames[0];
     ctx.save();
     ctx.translate(ent.x, ent.y);
     if (ent.flip) ctx.scale(-1, 1);
-    ctx.drawImage(frame, -SPRITE_DRAW / 2, -SPRITE_DRAW + 10, SPRITE_DRAW, SPRITE_DRAW);
+    ctx.drawImage(frame, -d / 2, -d + 10, d, d);
     ctx.restore();
   }
 
@@ -53,11 +87,13 @@
       const c = DD.CLASSES[classKey];
       this.classKey = classKey;
       this.cfg = c;
+      this.stats = { ...c }; // per-run copy that upgrades mutate
       this.x = x;
       this.y = y;
       this.r = 10;
       this.hp = c.hp;
       this.maxHp = c.hp;
+      this.killHeal = 0;
       this.aim = 0;
       this.flip = false;
       this.animT = 0;
@@ -70,6 +106,17 @@
       this.dashT = 0;
       this.dashDir = { x: 1, y: 0 };
       this.dead = false;
+    }
+
+    effDmg() {
+      return Math.max(1, Math.round(this.stats.dmg));
+    }
+
+    onKill() {
+      if (this.killHeal && Math.random() < this.killHeal && this.hp < this.maxHp) {
+        this.hp += 1;
+        DD.particles.text(this.x, this.y - 44, "+1 HP", "#ff8c91");
+      }
     }
 
     update(dt, game) {
@@ -86,8 +133,7 @@
       this.moving = dx !== 0 || dy !== 0;
       if (this.moving) this.animT += dt;
 
-      let speed = this.cfg.speed;
-      if (this.cfg.dash && input.dashing() && this.dashCd <= 0 && this.dashT <= 0) {
+      if (this.stats.dash && input.dashing() && this.dashCd <= 0 && this.dashT <= 0) {
         this.dashT = 0.16;
         this.dashCd = 1.6;
         this.iframes = Math.max(this.iframes, 0.3);
@@ -99,27 +145,27 @@
         DD.room.moveEntity(this, this.dashDir.x * 620 * dt, this.dashDir.y * 620 * dt);
         DD.particles.burst(this.x, this.y, { count: 2, colors: ["#bfe8c8", "#ffffff"], speed: 20, life: 0.3, size: 4 });
       } else {
-        DD.room.moveEntity(this, dx * speed * dt, dy * speed * dt);
+        DD.room.moveEntity(this, dx * this.stats.speed * dt, dy * this.stats.speed * dt);
       }
 
       if (input.attacking() && this.attackCd <= 0) this.performAttack(game);
     }
 
     performAttack(game) {
-      const c = this.cfg;
+      const c = this.stats;
       this.attackCd = c.cooldown;
       if (c.attack === "melee") {
         this.swingT = 0.14;
         this.swingAngle = this.aim;
         DD.audio.swing();
         let hitAny = false;
-        for (const sk of game.skeletons) {
+        for (const sk of game.enemies()) {
           if (sk.state === "spawn" || sk.dead) continue;
           const d = DD.dist(this.x, this.y, sk.x, sk.y);
           if (d > c.range + sk.r) continue;
           const da = Math.abs(DD.angleDiff(this.aim, DD.angleTo(this.x, this.y, sk.x, sk.y)));
           if (da > c.arc / 2 + 0.35) continue;
-          sk.damage(c.dmg, this.x, this.y, game);
+          sk.damage(this.effDmg(), this.x, this.y, game);
           hitAny = true;
         }
         if (hitAny) DD.audio.hit();
@@ -130,7 +176,7 @@
           y: this.y - 12 + Math.sin(this.aim) * 14,
           vx: Math.cos(this.aim) * speed,
           vy: Math.sin(this.aim) * speed,
-          dmg: c.dmg,
+          dmg: this.effDmg(),
           kind: c.attack,
           pierce: c.pierce || 0,
           splash: c.splash || 0,
@@ -168,7 +214,7 @@
 
     drawSwing(ctx) {
       const t = 1 - this.swingT / 0.14; // 0 -> 1
-      const c = this.cfg;
+      const c = this.stats;
       ctx.save();
       ctx.translate(this.x, this.y - 12);
       ctx.rotate(this.swingAngle);
@@ -208,7 +254,7 @@
         DD.particles.burst(this.x, this.y, { count: 1, colors: ["#b48cff", "#7a4fd0"], speed: 14, life: 0.25, size: 3 });
       }
 
-      for (const sk of game.skeletons) {
+      for (const sk of game.enemies()) {
         if (sk.dead || sk.state === "spawn" || this.hitList.has(sk)) continue;
         if (DD.dist(this.x, this.y, sk.x, sk.y - 12) < sk.r + 6) {
           sk.damage(this.dmg, this.x - this.vx, this.y - this.vy, game);
@@ -230,7 +276,7 @@
         DD.audio.splash();
         game.shake = Math.max(game.shake, 3);
         DD.particles.burst(this.x, this.y, { count: 18, colors: ["#b48cff", "#8657d8", "#fff"], speed: 150, life: 0.4 });
-        for (const sk of game.skeletons) {
+        for (const sk of game.enemies()) {
           if (sk.dead || sk.state === "spawn" || this.hitList.has(sk)) continue;
           if (DD.dist(this.x, this.y, sk.x, sk.y - 12) < this.splash + sk.r) {
             sk.damage(this.dmg, this.x, this.y, game);
@@ -274,16 +320,21 @@
     }
   }
 
-  // ---------------- Skeleton ----------------
+  // ---------------- Skeleton (and brute variant) ----------------
 
   class Skeleton {
-    constructor(x, y) {
+    constructor(x, y, opts = {}) {
       this.x = x;
       this.y = y;
-      this.r = 10;
-      this.hp = 6;
-      this.maxHp = 6;
-      this.speed = DD.rand(52, 78);
+      this.big = !!opts.big;
+      this.r = this.big ? 14 : 10;
+      this.drawSize = this.big ? 68 : SPRITE_DRAW;
+      this.hp = opts.hp ?? (this.big ? 16 : 6);
+      this.maxHp = this.hp;
+      this.speed = opts.speed ?? (this.big ? DD.rand(38, 48) : DD.rand(52, 78));
+      this.dmg = opts.dmg ?? (this.big ? 2 : 1);
+      this.xpValue = opts.xpValue ?? (this.big ? 12 : 5);
+      this.coinDrop = opts.coinDrop ?? (this.big ? [2, 4] : [1, 3]);
       this.state = "spawn"; // spawn -> chase -> windup -> recover
       this.stateT = 1.0;
       this.animT = Math.random() * 10;
@@ -300,9 +351,10 @@
       this.flash -= dt;
       this.animT += dt;
 
-      // knockback decays quickly
+      // knockback decays quickly (brutes barely budge)
       if (Math.abs(this.kbx) > 1 || Math.abs(this.kby) > 1) {
-        DD.room.moveEntity(this, this.kbx * dt, this.kby * dt);
+        const kbScale = this.big ? 0.4 : 1;
+        DD.room.moveEntity(this, this.kbx * kbScale * dt, this.kby * kbScale * dt);
         this.kbx *= Math.pow(0.0001, dt);
         this.kby *= Math.pow(0.0001, dt);
       }
@@ -330,27 +382,27 @@
           let mx = Math.cos(a) * this.speed;
           let my = Math.sin(a) * this.speed;
           // gently push away from other skeletons so they don't stack
-          for (const other of game.skeletons) {
+          for (const other of game.enemies()) {
             if (other === this || other.dead) continue;
             const od = DD.dist(this.x, this.y, other.x, other.y);
-            if (od < 22 && od > 0.01) {
+            if (od < this.r + other.r + 2 && od > 0.01) {
               mx += ((this.x - other.x) / od) * 40;
               my += ((this.y - other.y) / od) * 40;
             }
           }
           this.flip = mx < 0;
           DD.room.moveEntity(this, mx * dt, my * dt);
-          if (d < 30 && !pl.dead) {
+          if (d < this.r + 20 && !pl.dead) {
             this.state = "windup";
-            this.stateT = 0.38;
+            this.stateT = this.big ? 0.5 : 0.38;
           }
           break;
         }
 
         case "windup":
           if (this.stateT <= 0) {
-            if (!pl.dead && DD.dist(this.x, this.y, pl.x, pl.y) < 40) {
-              pl.damage(1, this.x, this.y, game);
+            if (!pl.dead && DD.dist(this.x, this.y, pl.x, pl.y) < this.r + 30) {
+              pl.damage(this.dmg, this.x, this.y, game);
             }
             this.state = "recover";
             this.stateT = 0.9;
@@ -370,7 +422,7 @@
       const a = DD.angleTo(fromX, fromY, this.x, this.y);
       this.kbx = Math.cos(a) * 220;
       this.kby = Math.sin(a) * 220;
-      DD.particles.text(this.x, this.y - 44, `${n}`, "#ffd95e");
+      DD.particles.text(this.x, this.y - this.drawSize + 4, `${n}`, "#ffd95e");
       DD.particles.burst(this.x, this.y - 14, { count: 6, colors: ["#e9e6da", "#b9b4a4"], speed: 90, life: 0.35 });
       if (this.hp <= 0) this.die(game);
     }
@@ -378,11 +430,13 @@
     die(game) {
       this.dead = true;
       game.kills++;
+      game.addXP(this.xpValue);
+      game.player.onKill();
       DD.audio.bones();
       DD.particles.burst(this.x, this.y - 14, {
-        count: 16, colors: ["#e9e6da", "#b9b4a4", "#fff"], speed: 140, life: 0.6, gravity: 260,
+        count: this.big ? 24 : 16, colors: ["#e9e6da", "#b9b4a4", "#fff"], speed: 140, life: 0.6, gravity: 260,
       });
-      const coins = DD.randi(1, 3);
+      const coins = DD.randi(this.coinDrop[0], this.coinDrop[1]);
       for (let i = 0; i < coins; i++) {
         game.pickups.push(new Pickup("coin", this.x + DD.rand(-8, 8), this.y + DD.rand(-8, 8)));
       }
@@ -392,19 +446,20 @@
     }
 
     draw(ctx) {
+      const d = this.drawSize;
       if (this.state === "spawn") {
         // rising out of the floor
         const t = DD.clamp(1 - this.stateT / 1.0, 0, 1);
         ctx.save();
         ctx.globalAlpha = t;
         drawShadow(ctx, this.x, this.y, this.r * t + 2);
-        const h = Math.floor(SPRITE_DRAW * t);
+        const h = Math.floor(d * t);
         if (h > 2) {
           const frame = DD.sprites.skeleton[0];
           ctx.drawImage(
             frame,
             0, 0, frame.width, frame.height * t,
-            this.x - SPRITE_DRAW / 2, this.y + 10 - h, SPRITE_DRAW, h
+            this.x - d / 2, this.y + 10 - h, d, h
           );
         }
         ctx.restore();
@@ -419,18 +474,148 @@
         ctx.translate(this.x, this.y);
         if (this.flip) ctx.scale(-1, 1);
         ctx.filter = "brightness(3)";
-        ctx.drawImage(DD.sprites.skeleton[0], -SPRITE_DRAW / 2, -SPRITE_DRAW + 10, SPRITE_DRAW, SPRITE_DRAW);
+        ctx.drawImage(DD.sprites.skeleton[0], -d / 2, -d + 10, d, d);
         ctx.restore();
       } else {
         drawSprite(ctx, DD.sprites.skeleton, this, this.state === "chase");
+      }
+
+      if (this.big && this.maxHp > this.hp) {
+        // small HP bar over brutes
+        ctx.fillStyle = "#1a1626";
+        ctx.fillRect(this.x - 16, this.y - d + 2, 32, 4);
+        ctx.fillStyle = "#e8484f";
+        ctx.fillRect(this.x - 16, this.y - d + 2, 32 * (this.hp / this.maxHp), 4);
       }
 
       if (this.state === "windup") {
         ctx.fillStyle = "#ff5252";
         ctx.font = "bold 18px 'Trebuchet MS', Verdana, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("!", this.x, this.y - 44);
+        ctx.fillText("!", this.x, this.y - d + 4);
         ctx.textAlign = "left";
+      }
+    }
+  }
+
+  // ---------------- Boss: the Skeleton King ----------------
+
+  class Boss extends Skeleton {
+    constructor(x, y) {
+      super(x, y, { big: true, hp: 70, speed: 55, dmg: 2, xpValue: 40, coinDrop: [12, 18] });
+      this.r = 18;
+      this.drawSize = 96;
+      this.slamCd = 4.5;
+      this.summonCd = 7;
+      this.slamT = 0;     // active slam windup
+      this.stateT = 1.4;  // longer rise
+    }
+
+    update(dt, game) {
+      const pl = game.player;
+      this.slamCd -= dt;
+      this.summonCd -= dt;
+      const enraged = this.hp < this.maxHp * 0.3;
+      this.speed = enraged ? 85 : 55;
+
+      // slam: telegraphed AoE around the king
+      if (this.slamT > 0) {
+        this.slamT -= dt;
+        this.flash = 0; // don't mix flash with telegraph
+        this.animT += dt;
+        if (this.slamT <= 0) {
+          DD.audio.slam();
+          game.shake = Math.max(game.shake, 10);
+          DD.particles.burst(this.x, this.y, { count: 30, colors: ["#e9e6da", "#8b80a8", "#fff"], speed: 220, life: 0.5 });
+          if (!pl.dead && DD.dist(this.x, this.y, pl.x, pl.y) < 105) {
+            pl.damage(2, this.x, this.y, game);
+          }
+          this.state = "recover";
+          this.stateT = 0.7;
+        }
+        return;
+      }
+
+      if (this.state !== "spawn" && !pl.dead) {
+        if (this.slamCd <= 0 && DD.dist(this.x, this.y, pl.x, pl.y) < 150) {
+          this.slamT = 0.85;
+          this.slamCd = enraged ? 3.2 : 5.0;
+          return;
+        }
+        if (this.summonCd <= 0 && game.skeletons.filter((s) => !s.dead && !(s instanceof Boss)).length < 5) {
+          this.summonCd = enraged ? 6 : 9;
+          for (let i = 0; i < 2; i++) {
+            const pos = DD.room.randomFloorPos(pl.x, pl.y, 120);
+            game.skeletons.push(new Skeleton(pos.x, pos.y));
+            DD.audio.spawn();
+          }
+        }
+      }
+
+      super.update(dt, game);
+    }
+
+    die(game) {
+      super.die(game);
+      game.bossDefeated = true;
+      game.shake = 12;
+      DD.particles.burst(this.x, this.y - 20, { count: 50, colors: ["#ffd14a", "#e9e6da", "#fff"], speed: 260, life: 1.0, gravity: 200 });
+    }
+
+    draw(ctx) {
+      // slam telegraph circle
+      if (this.slamT > 0) {
+        ctx.strokeStyle = `rgba(255, 82, 82, ${0.4 + 0.5 * Math.sin(this.slamT * 30)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 105, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      super.draw(ctx);
+      if (this.state !== "spawn") {
+        // crown
+        const bob = Math.floor(this.animT * 8) % 2;
+        ctx.drawImage(DD.sprites.crown, this.x - 14, this.y - this.drawSize + 6 + bob * 2, 28, 14);
+      }
+    }
+  }
+
+  // ---------------- Chest ----------------
+
+  class Chest {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.r = 12;
+      this.opened = false;
+    }
+
+    open(game) {
+      if (this.opened) return;
+      this.opened = true;
+      DD.audio.chest();
+      DD.particles.burst(this.x, this.y - 14, { count: 14, colors: ["#ffd14a", "#fff3b8"], speed: 120, life: 0.5, gravity: -40 });
+      const coins = DD.randi(4, 7);
+      for (let i = 0; i < coins; i++) {
+        game.pickups.push(new Pickup("coin", this.x + DD.rand(-10, 10), this.y + DD.rand(-6, 10)));
+      }
+      if (Math.random() < 0.5) {
+        game.pickups.push(new Pickup("heart", this.x, this.y + 6));
+      }
+      game.addXP(4);
+    }
+
+    draw(ctx) {
+      drawShadow(ctx, this.x, this.y, 13);
+      const img = this.opened ? DD.sprites.chestOpen : DD.sprites.chestClosed;
+      ctx.drawImage(img, this.x - 16, this.y - 24, 32, 32);
+      if (!this.opened) {
+        // sparkle so it reads as interactive
+        const t = performance.now() / 300;
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t);
+        ctx.fillStyle = "#fff3b8";
+        ctx.fillRect(this.x + 8, this.y - 26, 3, 3);
+        ctx.globalAlpha = 1;
       }
     }
   }
@@ -492,6 +677,8 @@
 
   DD.Player = Player;
   DD.Skeleton = Skeleton;
+  DD.Boss = Boss;
+  DD.Chest = Chest;
   DD.Projectile = Projectile;
   DD.Pickup = Pickup;
 })(window.DD);

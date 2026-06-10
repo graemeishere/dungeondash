@@ -201,6 +201,41 @@
     return s.canvas;
   }
 
+  function makeChest(open) {
+    const s = surface(16);
+    const WOOD = "#7a4f26", WOOD_D = "#5a3a1a", GOLD = "#ffd14a", DARKI = "#241f33";
+    if (open) {
+      s.p(3, 0, WOOD_D, 10, 1);
+      s.p(2, 1, WOOD_D, 12, 3);   // lid flipped up
+      s.p(7, 1, GOLD, 2, 3);
+      s.p(2, 6, WOOD, 12, 8);     // body
+      s.p(3, 6, DARKI, 10, 3);    // dark interior
+      s.p(4, 7, GOLD, 2, 1);      // glints
+      s.p(9, 8, GOLD, 2, 1);
+      s.p(2, 13, WOOD_D, 12, 1);
+    } else {
+      s.p(3, 3, WOOD_D, 10, 1);
+      s.p(2, 4, WOOD_D, 12, 3);   // lid
+      s.p(2, 7, WOOD, 12, 7);     // body
+      s.p(2, 13, WOOD_D, 12, 1);
+      s.p(7, 3, GOLD, 2, 11);     // band
+      s.p(6, 8, GOLD, 4, 3);      // lock
+      s.p(7, 9, DARKI, 1, 1);
+    }
+    return s.canvas;
+  }
+
+  function makeCrown() {
+    const s = surface(8);
+    const G = "#ffd14a", R = "#e8484f";
+    s.p(0, 0, G, 1, 2);
+    s.p(3, 0, G, 2, 2);
+    s.p(7, 0, G, 1, 2);
+    s.p(0, 2, G, 8, 2);
+    s.p(3, 2, R, 2, 1);
+    return s.canvas;
+  }
+
   function makeCoin() {
     const s = surface(8);
     const G = "#ffd14a", D = "#c2912a", L = "#fff3b8";
@@ -232,6 +267,9 @@
       this.doorOpen = makeDoorTile(true);
       this.heart = makeHeart();
       this.coin = makeCoin();
+      this.chestClosed = makeChest(false);
+      this.chestOpen = makeChest(true);
+      this.crown = makeCrown();
     },
   };
 })(window.DD);
