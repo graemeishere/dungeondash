@@ -126,14 +126,14 @@
       this.swingT -= dt;
       this.dashCd -= dt;
 
-      this.aim = DD.angleTo(this.x, this.y, input.mouse.x, input.mouse.y);
+      this.aim = input.aimAngle(this);
       this.flip = Math.cos(this.aim) < 0;
 
       const { dx, dy } = input.moveVector();
       this.moving = dx !== 0 || dy !== 0;
       if (this.moving) this.animT += dt;
 
-      if (this.stats.dash && input.dashing() && this.dashCd <= 0 && this.dashT <= 0) {
+      if (this.stats.dash && (input.dashing() || input.consumeDashTap()) && this.dashCd <= 0 && this.dashT <= 0) {
         this.dashT = 0.16;
         this.dashCd = 1.6;
         this.iframes = Math.max(this.iframes, 0.3);

@@ -41,22 +41,32 @@
       ctx.fillStyle = "#9b90b8";
       ctx.fillText(`Kills ${game.kills}`, bx + 150, by + bh + 26);
 
-      // --- room progress (top center) ---
-      ctx.textAlign = "center";
-      ctx.font = `bold 13px ${font}`;
-      ctx.fillStyle = "rgba(10,8,18,0.7)";
-      ctx.fillRect(DD.WIDTH / 2 - 60, 44, 120, 22);
-      ctx.fillStyle = "#bdb3d6";
+      const narrow = DD.WIDTH < 720;
       const typeLabel = { combat: "Combat", treasure: "Treasure", boss: "BOSS" }[game.roomType];
-      ctx.fillText(`Room ${game.roomIndex + 1}/5 — ${typeLabel}`, DD.WIDTH / 2, 59);
+
+      // --- room progress ---
+      ctx.font = `bold 13px ${font}`;
+      if (narrow) {
+        // stack under the HP block so nothing overlaps on phones
+        ctx.fillStyle = "#bdb3d6";
+        ctx.fillText(`Room ${game.roomIndex + 1}/5 — ${typeLabel}`, bx, by + bh + 44);
+      } else {
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(10,8,18,0.7)";
+        ctx.fillRect(DD.WIDTH / 2 - 60, 44, 120, 22);
+        ctx.fillStyle = "#bdb3d6";
+        ctx.fillText(`Room ${game.roomIndex + 1}/5 — ${typeLabel}`, DD.WIDTH / 2, 59);
+      }
 
       // --- objective (top right) ---
       ctx.textAlign = "right";
       ctx.font = `bold 15px ${font}`;
       const boss = game.skeletons.find((s) => s instanceof DD.Boss);
       if (boss) {
-        // boss HP bar, top center
-        const bbw = 320, bbx = DD.WIDTH / 2 - bbw / 2, bby = 16;
+        // boss HP bar, top center (under the player HUD on phones)
+        const bbw = Math.min(320, DD.WIDTH - 48);
+        const bbx = DD.WIDTH / 2 - bbw / 2;
+        const bby = narrow ? 70 : 16;
         ctx.fillStyle = "rgba(10,8,18,0.7)";
         ctx.fillRect(bbx - 4, bby - 4, bbw + 8, 22);
         ctx.fillStyle = "#1a1626";
@@ -70,17 +80,18 @@
       } else {
         const remaining = game.skeletons.filter((s) => !s.dead).length + game.spawnQueue.length;
         const chestsLeft = game.chests.filter((c) => !c.opened).length;
+        const boxW = narrow ? 130 : 234;
         ctx.fillStyle = "rgba(10,8,18,0.7)";
-        ctx.fillRect(DD.WIDTH - 250, 12, 234, 26);
+        ctx.fillRect(DD.WIDTH - boxW - 16, 12, boxW, 26);
         if (game.roomType === "treasure" && chestsLeft > 0) {
           ctx.fillStyle = "#ffd14a";
-          ctx.fillText(`Open the chests! ${chestsLeft} left`, DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? `Chests: ${chestsLeft}` : `Open the chests! ${chestsLeft} left`, DD.WIDTH - 26, 31);
         } else if (remaining > 0) {
           ctx.fillStyle = "#f2ecdd";
-          ctx.fillText(`Skeletons: ${remaining}`, DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? `Foes: ${remaining}` : `Skeletons: ${remaining}`, DD.WIDTH - 26, 31);
         } else if (game.roomCleared && game.state === "play") {
           ctx.fillStyle = "#ffd95e";
-          ctx.fillText("Cleared! Exit through the door ▲", DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? "Exit ▲" : "Cleared! Exit through the door ▲", DD.WIDTH - 26, 31);
         }
       }
       ctx.textAlign = "left";
@@ -90,8 +101,10 @@
         ctx.globalAlpha = DD.clamp(game.hintT, 0, 1);
         ctx.font = `12px ${font}`;
         ctx.fillStyle = "#bdb3d6";
-        let hint = "WASD move • click / space attack • aim with mouse";
-        if (pl.cfg.dash) hint += " • shift dash";
+        let hint = DD.input.touchSeen
+          ? "left thumb: move • right thumb: aim & attack"
+          : "WASD move • click / space attack • aim with mouse";
+        if (pl.cfg.dash && !DD.input.touchSeen) hint += " • shift dash";
         ctx.fillText(hint, 16, DD.HEIGHT - 14);
         ctx.globalAlpha = 1;
       }
@@ -102,6 +115,43 @@
         ctx.beginPath();
         ctx.arc(bx + bw + 18, by + 9, 7, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // --- touch controls ---
+      if (DD.input.touchSeen) {
+        const R = DD.input.STICK_RADIUS;
+        for (const stick of [DD.input.touch.move, DD.input.touch.aim]) {
+          if (!stick.active) continue;
+          ctx.globalAlpha = 0.22;
+          ctx.fillStyle = "#f2ecdd";
+          ctx.beginPath();
+          ctx.arc(stick.ox, stick.oy, R, 0, Math.PI * 2);
+          ctx.fill();
+          // knob clamped to the stick radius
+          let kx = stick.x - stick.ox, ky = stick.y - stick.oy;
+          const len = Math.hypot(kx, ky);
+          if (len > R) { kx = (kx / len) * R; ky = (ky / len) * R; }
+          ctx.globalAlpha = 0.45;
+          ctx.beginPath();
+          ctx.arc(stick.ox + kx, stick.oy + ky, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        if (pl.cfg.dash) {
+          const btn = DD.input.dashBtn();
+          ctx.globalAlpha = pl.dashCd <= 0 ? 0.55 : 0.25;
+          ctx.fillStyle = "#7fd6ff";
+          ctx.beginPath();
+          ctx.arc(btn.x, btn.y, btn.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = "#0e1b24";
+          ctx.font = `bold 12px ${font}`;
+          ctx.textAlign = "center";
+          ctx.fillText("DASH", btn.x, btn.y + 4);
+          ctx.textAlign = "left";
+          ctx.globalAlpha = 1;
+        }
       }
     },
   };

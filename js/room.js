@@ -11,6 +11,7 @@
 
   DD.room = {
     doorOpen: false,
+    doorCols: [14, 15],
 
     generate() {
       this.doorOpen = false;
@@ -27,19 +28,20 @@
       }
 
       // exit door, top wall center
-      tiles[14] = DOOR;
-      tiles[15] = DOOR;
+      this.doorCols = [Math.floor(DD.ROOM_W / 2) - 1, Math.floor(DD.ROOM_W / 2)];
+      for (const c of this.doorCols) tiles[c] = DOOR;
 
       // 2x2 pillars near the room quarters, with jitter, keeping center open
-      const quarters = [
-        [8, 5], [21, 5], [8, 12], [21, 12],
-      ];
-      for (const [qx, qy] of quarters) {
-        const px = qx + DD.randi(-1, 1);
-        const py = qy + DD.randi(-1, 1);
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            tiles[(py + dy) * DD.ROOM_W + (px + dx)] = WALL;
+      const qxs = [Math.round(DD.ROOM_W * 0.27), Math.round(DD.ROOM_W * 0.66)];
+      const qys = [Math.round(DD.ROOM_H * 0.28), Math.round(DD.ROOM_H * 0.62)];
+      for (const qx of qxs) {
+        for (const qy of qys) {
+          const px = DD.clamp(qx + DD.randi(-1, 1), 2, DD.ROOM_W - 4);
+          const py = DD.clamp(qy + DD.randi(-1, 1), 3, DD.ROOM_H - 4);
+          for (let dy = 0; dy < 2; dy++) {
+            for (let dx = 0; dx < 2; dx++) {
+              tiles[(py + dy) * DD.ROOM_W + (px + dx)] = WALL;
+            }
           }
         }
       }
@@ -57,7 +59,7 @@
     inDoorway(x, y) {
       const tx = Math.floor(x / DD.TILE);
       return tileAt(tx, Math.floor(y / DD.TILE)) === DOOR ||
-             ((tx === 14 || tx === 15) && y < DD.TILE * 1.6);
+             (this.doorCols.includes(tx) && y < DD.TILE * 1.6);
     },
 
     // Does an axis-aligned box (in world px) overlap any solid tile?
@@ -122,8 +124,7 @@
     draw(ctx) {
       ctx.drawImage(floorCanvas, 0, 0);
       if (this.doorOpen) {
-        ctx.drawImage(DD.sprites.doorOpen, 14 * DD.TILE, 0);
-        ctx.drawImage(DD.sprites.doorOpen, 15 * DD.TILE, 0);
+        for (const c of this.doorCols) ctx.drawImage(DD.sprites.doorOpen, c * DD.TILE, 0);
       }
     },
   };

@@ -16,8 +16,9 @@ body {
 
 #wrap {
   position: relative;
-  width: min(96vw, calc(96vh * 960 / 576));
-  aspect-ratio: 960 / 576;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
 }
 
 #game {
@@ -25,8 +26,7 @@ body {
   height: 100%;
   display: block;
   image-rendering: pixelated;
-  border-radius: 8px;
-  box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+  touch-action: none;
 }
 
 .overlay {
@@ -38,8 +38,9 @@ body {
   justify-content: center;
   gap: 14px;
   background: rgba(14, 11, 22, 0.88);
-  border-radius: 8px;
   text-align: center;
+  overflow-y: auto;
+  padding: 16px;
 }
 
 .overlay.hidden { display: none; }

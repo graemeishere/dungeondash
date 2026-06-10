@@ -2,7 +2,18 @@
 (function (DD) {
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingEnabled = false;
+
+  function fitCanvas() {
+    canvas.width = Math.max(320, window.innerWidth);
+    canvas.height = Math.max(320, window.innerHeight);
+    ctx.imageSmoothingEnabled = false; // resets on resize
+    DD.updateView(canvas);
+  }
+
+  function sizeRoomToCanvas() {
+    const d = DD.roomSizeForCanvas(canvas);
+    DD.setRoomSize(d.tw, d.th);
+  }
 
   const menuEl = document.getElementById("menu");
   const resultEl = document.getElementById("result");
@@ -76,7 +87,9 @@
     game.roomIndex = index;
     game.roomType = FLOOR_PLAN[index];
     game.roomCleared = false;
+    sizeRoomToCanvas(); // each room is generated to fill the current screen
     DD.room.generate();
+    DD.updateView(canvas);
     game.skeletons = [];
     game.projectiles = [];
     game.pickups = [];
@@ -90,27 +103,31 @@
     pl.x = DD.WIDTH / 2;
     pl.y = DD.HEIGHT - DD.TILE * 2.5;
 
+    const spawnDist = Math.min(170, DD.WIDTH * 0.35);
     if (game.roomType === "combat") {
-      // difficulty scales with how many combat rooms came before this one
+      // difficulty scales with how many combat rooms came before this one,
+      // and the wave size scales with the room's area so phones aren't swamped
       const tier = FLOOR_PLAN.slice(0, index).filter((t) => t === "combat").length;
-      const count = 7 + tier * 3;
+      const areaScale = (DD.ROOM_W * DD.ROOM_H) / (30 * 18);
+      const count = Math.max(5, Math.round((7 + tier * 3) * Math.min(1, areaScale + 0.25)));
       for (let i = 0; i < count; i++) {
-        const pos = DD.room.randomFloorPos(pl.x, pl.y, 170);
+        const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false });
       }
       for (let i = 0; i < tier; i++) {
-        const pos = DD.room.randomFloorPos(pl.x, pl.y, 200);
+        const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true });
       }
     } else if (game.roomType === "treasure") {
       const spots = [];
+      const spacing = Math.min(110, DD.WIDTH * 0.25);
       for (let i = 0; i < 3; i++) {
         let pos;
         let tries = 0;
         do {
-          pos = DD.room.randomFloorPos(pl.x, pl.y, 140);
+          pos = DD.room.randomFloorPos(pl.x, pl.y, spacing);
           tries++;
-        } while (tries < 30 && spots.some((s) => DD.dist(s.x, s.y, pos.x, pos.y) < 110));
+        } while (tries < 30 && spots.some((s) => DD.dist(s.x, s.y, pos.x, pos.y) < spacing));
         spots.push(pos);
         game.chests.push(new DD.Chest(pos.x, pos.y));
       }
@@ -288,12 +305,23 @@
   // ---- draw ----
 
   function draw() {
-    ctx.clearRect(0, 0, DD.WIDTH, DD.HEIGHT);
+    ctx.fillStyle = "#0e0b16";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(DD.view.ox, DD.view.oy);
+    ctx.scale(DD.view.scale, DD.view.scale);
+
     if (game.state === "menu") {
       // dim empty room behind the class-select overlay
-      if (!DD.room.prerendered) DD.room.generate();
+      if (!DD.room.prerendered) {
+        sizeRoomToCanvas();
+        DD.room.generate();
+        DD.updateView(canvas);
+      }
       DD.room.prerendered = true;
       DD.room.draw(ctx);
+      ctx.restore();
       return;
     }
 
@@ -317,13 +345,14 @@
     DD.particles.draw(ctx);
     DD.hud.draw(ctx, game);
 
-    ctx.restore();
+    ctx.restore(); // shake
+    ctx.restore(); // view transform
 
-    // room transition fade
+    // room transition fade covers the whole screen
     if (game.state === "transition") {
       const a = game.transitionPhase === "out" ? game.transitionT : 1 - game.transitionT;
       ctx.fillStyle = `rgba(10, 8, 18, ${DD.clamp(a, 0, 1)})`;
-      ctx.fillRect(0, 0, DD.WIDTH, DD.HEIGHT);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
   }
 
@@ -382,8 +411,16 @@
   // ---- boot ----
 
   DD.sprites.init();
+  fitCanvas();
   DD.input.init(canvas);
   buildClassCards();
+
+  window.addEventListener("resize", () => {
+    fitCanvas();
+    // regenerate the backdrop room to fill the new shape; mid-run rooms keep
+    // their layout and letterbox until the next room loads
+    if (game.state === "menu") DD.room.prerendered = false;
+  });
 
   let last = performance.now();
   function frame(now) {

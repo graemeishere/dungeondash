@@ -2,10 +2,35 @@
 window.DD = window.DD || {};
 (function (DD) {
   DD.TILE = 32;
+
+  // Room dimensions are recomputed per room so the dungeon fills any screen,
+  // portrait or landscape. These are just the boot defaults.
   DD.ROOM_W = 30;
   DD.ROOM_H = 18;
   DD.WIDTH = DD.TILE * DD.ROOM_W;
   DD.HEIGHT = DD.TILE * DD.ROOM_H;
+
+  // Letterbox transform used when the window changes size mid-room.
+  DD.view = { scale: 1, ox: 0, oy: 0 };
+
+  DD.setRoomSize = (tw, th) => {
+    DD.ROOM_W = tw;
+    DD.ROOM_H = th;
+    DD.WIDTH = DD.TILE * tw;
+    DD.HEIGHT = DD.TILE * th;
+  };
+
+  DD.roomSizeForCanvas = (canvas) => ({
+    tw: DD.clamp(Math.floor(canvas.width / DD.TILE), 12, 44),
+    th: DD.clamp(Math.floor(canvas.height / DD.TILE), 11, 30),
+  });
+
+  DD.updateView = (canvas) => {
+    const s = Math.min(1, canvas.width / DD.WIDTH, canvas.height / DD.HEIGHT);
+    DD.view.scale = s;
+    DD.view.ox = (canvas.width - DD.WIDTH * s) / 2;
+    DD.view.oy = (canvas.height - DD.HEIGHT * s) / 2;
+  };
 
   DD.clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   DD.rand = (a, b) => a + Math.random() * (b - a);

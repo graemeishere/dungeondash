@@ -1,9 +1,14 @@
 # Dungeon Dash
 
-A cartoon hack & slash roguelike for the web. This is the first playable slice:
-pick a class, fight a room full of skeletons, clear it (or die trying).
+A cartoon hack & slash roguelike for the web — desktop and mobile. Pick a class
+and fight through a five-room dungeon floor: three combat rooms, a treasure
+room, and the Skeleton King.
 
 See [DungeonDash_DesignBrief.md](DungeonDash_DesignBrief.md) for the full game design.
+
+The game fills whatever screen it runs on: each room's tile grid is generated
+to fit the viewport, so a phone in portrait gets a tall narrow dungeon and a
+desktop gets a wide one. On touch screens it plays twin-stick style.
 
 ## Play it
 
@@ -19,13 +24,13 @@ No build step, no dependencies. Either:
 
 ## Controls
 
-| Action | Input |
-|---|---|
-| Move | WASD or arrow keys |
-| Aim | Mouse |
-| Attack | Left click or Space |
-| Dash (Rogue only) | Shift |
-| Play again / change class | Enter / Esc on the result screen |
+| Action | Keyboard / mouse | Touch |
+|---|---|---|
+| Move | WASD or arrow keys | Drag on the left half (virtual stick) |
+| Aim | Mouse | Drag on the right half |
+| Attack | Left click or Space | Hold the right-side stick |
+| Dash (Rogue only) | Shift | DASH button, bottom right |
+| Play again / change class | Enter / Esc on the result screen | On-screen buttons |
 
 ## Classes
 
@@ -34,13 +39,18 @@ No build step, no dependencies. Either:
 - **Mage** — 6 HP, magic bolts that explode for area damage
 - **Ranger** — 8 HP, fast arrows that pierce through enemies
 
-## What's in this slice
+## What's in the game so far
 
-- One procedurally laid-out combat room (border walls, randomized pillars, exit door)
-- 8 skeletons that rise from the floor in a staggered wave, chase you, telegraph
-  their attacks, and drop gold coins (and the occasional heart) on death
-- Coin/heart pickups with magnet collection, HP bar HUD, kill and gold counters
-- Win flow (room cleared, door opens) and lose flow (you died), with instant restart
+- A five-room floor: combat → combat → treasure → combat → boss, connected by
+  doors that open when each room is cleared
+- Skeletons rise from the floor in staggered waves, chase you, telegraph their
+  attacks, and drop gold (and the occasional heart); later rooms add tanky brutes
+- XP and level-ups: each level pauses the action with a choice of 3 random
+  upgrades (damage, speed, max HP, attack speed, reach, lifesteal-on-kill)
+- A treasure room full of chests, and the Skeleton King boss with a telegraphed
+  AoE slam, skeleton summons, and an enrage phase
+- Coin/heart pickups with magnet collection, HP/XP bars, boss HP bar
+- Responsive rooms that fill any screen, with twin-stick touch controls on mobile
 - Hit feedback: knockback, hit-flash, damage numbers, particles, screen shake
 - Synthesized sound effects via the Web Audio API
 
@@ -68,8 +78,8 @@ js/game.js      state machine, main loop, wiring
 
 ## Next steps (toward the design brief)
 
-- More room types (treasure, trap gauntlet, elite, shop) and room-to-room flow
-- Floor boss + multi-floor runs with XP/level-up upgrade choices
+- Multi-floor runs with rising difficulty and run saves
+- More room types (trap gauntlet, elite, shop) and more enemy/boss variety
 - Gear drops and inventory
 - Second player (the brief calls for local co-op; on the web this would map
   naturally to WebRTC peer-to-peer)
