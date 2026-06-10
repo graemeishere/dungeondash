@@ -1,0 +1,16 @@
+# Godot-specific ignores
+.godot/
+*.uid
+
+# Imported assets (Godot re-imports on open)
+.import/
+*.import
+
+# Mono/C# specific
+.mono/
+data_*/
+mono_crash.*.json
+
+# OS generated
+.DS_Store
+Thumbs.db

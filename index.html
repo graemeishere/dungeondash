@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Dungeon Dash</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="960" height="576"></canvas>
+
+    <div id="menu" class="overlay">
+      <h1>DUNGEON&nbsp;DASH</h1>
+      <p class="tagline">Pick a class and conquer the dungeon</p>
+      <button id="btn-continue" class="continue-btn hidden"></button>
+      <div id="class-cards"></div>
+      <p id="menu-mode-hint" class="hint hidden"></p>
+      <div class="coop-row">
+        <button id="btn-host" class="small-btn">Host Co-op</button>
+        <button id="btn-join" class="small-btn">Join Co-op</button>
+      </div>
+      <p class="hint">Keyboard: WASD move &nbsp;&bull;&nbsp; click/space attack, aim with mouse &nbsp;&bull;&nbsp; Shift dash<br>
+      Touch: left thumb moves &nbsp;&bull;&nbsp; right thumb aims &amp; attacks</p>
+    </div>
+
+    <div id="lobby" class="overlay hidden">
+      <h1 class="small">LOCAL CO-OP</h1>
+      <p id="lobby-status" class="tagline"></p>
+      <div id="lobby-out" class="code-wrap hidden">
+        <textarea id="code-out" readonly></textarea>
+        <button id="btn-copy" class="small-btn">Copy code</button>
+      </div>
+      <div id="lobby-in" class="code-wrap hidden">
+        <textarea id="code-in" placeholder="paste the code here"></textarea>
+        <button id="btn-accept" class="small-btn">Accept code</button>
+      </div>
+      <button id="btn-lobby-back" class="small-btn back">Back</button>
+    </div>
+
+    <div id="levelup" class="overlay hidden">
+      <h1 class="small">LEVEL UP!</h1>
+      <p class="tagline">Choose an upgrade (or press 1 / 2 / 3)</p>
+      <div id="upgrade-cards"></div>
+    </div>
+
+    <div id="result" class="overlay hidden">
+      <h1 id="result-title"></h1>
+      <p id="result-stats"></p>
+      <div class="buttons">
+        <button id="btn-again">Play Again</button>
+        <button id="btn-class">Change Class</button>
+      </div>
+      <p class="hint">Enter: play again &nbsp;&bull;&nbsp; Esc: change class</p>
+    </div>
+  </div>
+
+  <script src="js/util.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/room.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
