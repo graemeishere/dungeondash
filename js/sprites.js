@@ -80,7 +80,7 @@
     }
   }
 
-  function drawSkeleton(p, frame) {
+  function drawSkeleton(p, frame, variant) {
     const bob = frame === 1 ? 1 : 0;
     const BONE = "#e9e6da";
     const BONE_SHADE = "#b9b4a4";
@@ -101,15 +101,34 @@
     p(4, 9, BONE_SHADE, 1, 3); // arms
     p(11, 9, BONE_SHADE, 1, 3);
 
+    if (variant === "bomber") {
+      // round black bomb strapped to the ribcage
+      p(4, 9, "#1c1a24", 8, 4);
+      p(5, 8, "#1c1a24", 6, 1);
+      p(7, 7, "#ff9234", 2, 1); // fuse spark
+      p(5, 9, "#3a3750", 2, 1); // highlight
+    }
+
     // skull
     p(4, 1 + bob, BONE, 8, 7);
     p(3, 2 + bob, BONE, 10, 4);
-    p(5, 3 + bob, "#1a1626", 2, 2);  // sockets
-    p(9, 3 + bob, "#1a1626", 2, 2);
+    const socket = variant === "bomber" ? "#c93232" : "#1a1626";
+    p(5, 3 + bob, socket, 2, 2);  // sockets
+    p(9, 3 + bob, socket, 2, 2);
     p(7, 5 + bob, "#1a1626", 1, 1);  // nose
     p(5, 7 + bob, "#1a1626", 1, 1);  // grin gaps
     p(7, 7 + bob, "#1a1626", 1, 1);
     p(9, 7 + bob, "#1a1626", 1, 1);
+
+    if (variant === "archer") {
+      // mossy hood + a bow at the side
+      p(3, 0 + bob, "#3a5e3d", 10, 3);
+      p(3, 3 + bob, "#3a5e3d", 1, 4);
+      p(12, 3 + bob, "#3a5e3d", 1, 4);
+      p(13, 8, "#8a5e2e", 1, 5); // bow stave
+      p(12, 7, "#8a5e2e", 1, 1);
+      p(12, 13, "#8a5e2e", 1, 1);
+    }
   }
 
   function makeFrames(drawFn) {
@@ -236,6 +255,43 @@
     return s.canvas;
   }
 
+  // ---- spike trap tile (3 stages: hidden, warning tips, fully up) ----
+  function makeSpike(stage) {
+    const t = makeCanvas(DD.TILE, DD.TILE);
+    const ctx = t.getContext("2d");
+    // base plate with holes
+    ctx.fillStyle = "#2e2a40";
+    ctx.fillRect(2, 2, 28, 28);
+    ctx.fillStyle = "#241f33";
+    for (const [hx, hy] of [[8, 10], [20, 10], [14, 20]]) {
+      ctx.fillRect(hx - 2, hy - 1, 6, 4);
+    }
+    if (stage >= 1) {
+      const h = stage === 1 ? 6 : 14;
+      ctx.fillStyle = stage === 1 ? "#8b80a8" : "#d8d4e6";
+      for (const [hx, hy] of [[9, 12], [21, 12], [15, 22]]) {
+        ctx.beginPath();
+        ctx.moveTo(hx - 4, hy);
+        ctx.lineTo(hx, hy - h);
+        ctx.lineTo(hx + 4, hy);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    return t;
+  }
+
+  function makeScroll() {
+    const s = surface(8);
+    const P = "#e8dcb8", D = "#b8a878", R = "#8a5e2e";
+    s.p(0, 1, R, 1, 6);
+    s.p(7, 1, R, 1, 6);
+    s.p(1, 1, P, 6, 6);
+    s.p(2, 2, D, 4, 1);
+    s.p(2, 4, D, 4, 1);
+    return s.canvas;
+  }
+
   function makeCoin() {
     const s = surface(8);
     const G = "#ffd14a", D = "#c2912a", L = "#fff3b8";
@@ -261,6 +317,12 @@
         this.players[key] = makeFrames((p, f) => drawHero(p, heroDefs[key], f));
       }
       this.skeleton = makeFrames((p, f) => drawSkeleton(p, f));
+      this.skeletonArcher = makeFrames((p, f) => drawSkeleton(p, f, "archer"));
+      this.skeletonBomber = makeFrames((p, f) => drawSkeleton(p, f, "bomber"));
+      this.shopkeeper = makeFrames((p, f) => drawHero(p, {
+        hat: "hood", hatColor: "#6e4a23", accent: "#6e4a23",
+        body: "#8a6a3a", sleeve: "#6e4a23", belt: "#3c2c14", boot: "#3c2c14",
+      }, f));
       this.floorTiles = [0, 1, 2, 3].map(makeFloorTile);
       this.wallTile = makeWallTile();
       this.doorClosed = makeDoorTile(false);
@@ -270,6 +332,8 @@
       this.chestClosed = makeChest(false);
       this.chestOpen = makeChest(true);
       this.crown = makeCrown();
+      this.spikes = [0, 1, 2].map(makeSpike);
+      this.scroll = makeScroll();
     },
   };
 })(window.DD);

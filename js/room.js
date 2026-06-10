@@ -9,12 +9,17 @@
     return tiles[ty * DD.ROOM_W + tx];
   }
 
+  // Spike traps cycle: safe -> warning tips -> up (damaging).
+  const SPIKE_PERIOD = 2.2;
+
   DD.room = {
     doorOpen: false,
     doorCols: [14, 15],
+    spikes: [], // [{tx, ty, offset}]
 
-    generate() {
+    generate(opts = {}) {
       this.doorOpen = false;
+      this.spikes = [];
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
 
       // border walls
@@ -46,7 +51,36 @@
         }
       }
 
+      if (opts.spikes) {
+        // horizontal spike bands across the room with random safe gaps,
+        // each band on its own timing offset
+        const bandYs = [0.3, 0.5, 0.7].map((f) => Math.round(DD.ROOM_H * f));
+        bandYs.forEach((ty, band) => {
+          const gaps = new Set();
+          while (gaps.size < Math.max(2, Math.round(DD.ROOM_W / 10))) {
+            gaps.add(DD.randi(1, DD.ROOM_W - 2));
+          }
+          for (let tx = 1; tx < DD.ROOM_W - 1; tx++) {
+            if (gaps.has(tx) || tileAt(tx, ty) !== FLOOR) continue;
+            this.spikes.push({ tx, ty, offset: band * 0.7 });
+          }
+        });
+      }
+
       this.prerender();
+    },
+
+    // 0 = safe, 1 = warning tips, 2 = spikes up
+    spikeStage(spike, time) {
+      const t = (time + spike.offset) % SPIKE_PERIOD;
+      if (t > SPIKE_PERIOD - 0.55) return 2;
+      if (t > SPIKE_PERIOD - 0.95) return 1;
+      return 0;
+    },
+
+    spikeUpAt(x, y, time) {
+      const tx = Math.floor(x / DD.TILE), ty = Math.floor(y / DD.TILE);
+      return this.spikes.some((s) => s.tx === tx && s.ty === ty && this.spikeStage(s, time) === 2);
     },
 
     isSolid(tx, ty) {
@@ -125,6 +159,10 @@
       ctx.drawImage(floorCanvas, 0, 0);
       if (this.doorOpen) {
         for (const c of this.doorCols) ctx.drawImage(DD.sprites.doorOpen, c * DD.TILE, 0);
+      }
+      const time = (DD.game && DD.game.time) || 0;
+      for (const s of this.spikes) {
+        ctx.drawImage(DD.sprites.spikes[this.spikeStage(s, time)], s.tx * DD.TILE, s.ty * DD.TILE);
       }
     },
   };

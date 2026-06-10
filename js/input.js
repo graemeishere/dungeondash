@@ -77,7 +77,7 @@
         DD.audio.unlock();
         for (const t of e.changedTouches) {
           const p = toWorld(canvas, t.clientX, t.clientY);
-          const pl = DD.game && DD.game.player;
+          const pl = DD.game && DD.game.localPlayer;
           const btn = this.dashBtn();
           if (pl && pl.cfg.dash && DD.dist(p.x, p.y, btn.x, btn.y) < btn.r + 12) {
             dashTap = true;

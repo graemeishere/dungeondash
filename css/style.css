@@ -106,6 +106,21 @@ body {
 
 .class-card .cstats { font-size: 11px; color: #7fc78f; }
 
+.continue-btn {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: bold;
+  color: #1c1428;
+  background: #7fc78f;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #3f7d4e;
+}
+.continue-btn:hover { transform: translateY(-2px); }
+.continue-btn.hidden { display: none; }
+
 #upgrade-cards { display: flex; gap: 14px; justify-content: center; }
 
 .upgrade-card { width: 168px; padding: 18px 12px; }

@@ -2,7 +2,8 @@
 (function (DD) {
   DD.hud = {
     draw(ctx, game) {
-      const pl = game.player;
+      const pl = game.localPlayer;
+      if (!pl) return;
       const font = "'Trebuchet MS', Verdana, sans-serif";
 
       // --- HP bar ---
@@ -42,21 +43,42 @@
       ctx.fillText(`Kills ${game.kills}`, bx + 150, by + bh + 26);
 
       const narrow = DD.WIDTH < 720;
-      const typeLabel = { combat: "Combat", treasure: "Treasure", boss: "BOSS" }[game.roomType];
+      const typeLabel = {
+        combat: "Combat", treasure: "Treasure", boss: "BOSS",
+        trap: "Trap Gauntlet", elite: "Elite", shop: "Shop",
+      }[game.roomType];
+      const roomLabel = `Floor ${game.floor + 1} · Room ${game.roomIndex + 1}/${game.plan().length} — ${typeLabel}`;
 
       // --- room progress ---
       ctx.font = `bold 13px ${font}`;
       if (narrow) {
         // stack under the HP block so nothing overlaps on phones
         ctx.fillStyle = "#bdb3d6";
-        ctx.fillText(`Room ${game.roomIndex + 1}/5 — ${typeLabel}`, bx, by + bh + 44);
+        ctx.fillText(roomLabel, bx, by + bh + 44);
       } else {
         ctx.textAlign = "center";
         ctx.fillStyle = "rgba(10,8,18,0.7)";
-        ctx.fillRect(DD.WIDTH / 2 - 60, 44, 120, 22);
+        ctx.fillRect(DD.WIDTH / 2 - 95, 44, 190, 22);
         ctx.fillStyle = "#bdb3d6";
-        ctx.fillText(`Room ${game.roomIndex + 1}/5 — ${typeLabel}`, DD.WIDTH / 2, 59);
+        ctx.fillText(roomLabel, DD.WIDTH / 2, 59);
       }
+
+      // --- teammate HP (co-op) ---
+      game.players.forEach((mate, i) => {
+        if (mate === pl) return;
+        const my = by + bh + (narrow ? 56 : 36) + i * 18;
+        ctx.font = `bold 11px ${font}`;
+        ctx.fillStyle = "#9b90b8";
+        ctx.fillText(`P${i + 1} ${mate.cfg.name}`, bx, my + 9);
+        ctx.fillStyle = "#1a1626";
+        ctx.fillRect(bx + 78, my, 80, 9);
+        ctx.fillStyle = mate.downed ? "#ff6b70" : "#6fce6f";
+        ctx.fillRect(bx + 78, my, 80 * DD.clamp(mate.hp / mate.maxHp, 0, 1), 9);
+        if (mate.downed) {
+          ctx.fillStyle = "#ff6b70";
+          ctx.fillText("DOWN!", bx + 164, my + 9);
+        }
+      });
 
       // --- objective (top right) ---
       ctx.textAlign = "right";
@@ -89,6 +111,12 @@
         } else if (remaining > 0) {
           ctx.fillStyle = "#f2ecdd";
           ctx.fillText(narrow ? `Foes: ${remaining}` : `Skeletons: ${remaining}`, DD.WIDTH - 26, 31);
+        } else if (game.roomType === "shop") {
+          ctx.fillStyle = "#ffd95e";
+          ctx.fillText(narrow ? "Shop · Exit ▲" : "Spend your gold, then exit ▲", DD.WIDTH - 26, 31);
+        } else if (game.roomType === "trap") {
+          ctx.fillStyle = "#ff9234";
+          ctx.fillText(narrow ? "Spikes! ▲" : "Mind the spikes! Exit ▲", DD.WIDTH - 26, 31);
         } else if (game.roomCleared && game.state === "play") {
           ctx.fillStyle = "#ffd95e";
           ctx.fillText(narrow ? "Exit ▲" : "Cleared! Exit through the door ▲", DD.WIDTH - 26, 31);
