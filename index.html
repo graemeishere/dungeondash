@@ -16,8 +16,27 @@
       <p class="tagline">Pick a class and conquer the dungeon</p>
       <button id="btn-continue" class="continue-btn hidden"></button>
       <div id="class-cards"></div>
+      <p id="menu-mode-hint" class="hint hidden"></p>
+      <div class="coop-row">
+        <button id="btn-host" class="small-btn">Host Co-op</button>
+        <button id="btn-join" class="small-btn">Join Co-op</button>
+      </div>
       <p class="hint">Keyboard: WASD move &nbsp;&bull;&nbsp; click/space attack, aim with mouse &nbsp;&bull;&nbsp; Shift dash<br>
       Touch: left thumb moves &nbsp;&bull;&nbsp; right thumb aims &amp; attacks</p>
+    </div>
+
+    <div id="lobby" class="overlay hidden">
+      <h1 class="small">LOCAL CO-OP</h1>
+      <p id="lobby-status" class="tagline"></p>
+      <div id="lobby-out" class="code-wrap hidden">
+        <textarea id="code-out" readonly></textarea>
+        <button id="btn-copy" class="small-btn">Copy code</button>
+      </div>
+      <div id="lobby-in" class="code-wrap hidden">
+        <textarea id="code-in" placeholder="paste the code here"></textarea>
+        <button id="btn-accept" class="small-btn">Accept code</button>
+      </div>
+      <button id="btn-lobby-back" class="small-btn back">Back</button>
     </div>
 
     <div id="levelup" class="overlay hidden">
@@ -42,6 +61,7 @@
   <script src="js/audio.js"></script>
   <script src="js/input.js"></script>
   <script src="js/particles.js"></script>
+  <script src="js/net.js"></script>
   <script src="js/room.js"></script>
   <script src="js/entities.js"></script>
   <script src="js/hud.js"></script>

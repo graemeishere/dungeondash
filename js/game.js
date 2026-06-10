@@ -198,6 +198,7 @@
     game.shake = 0;
     game.endT = 0;
     DD.particles.clear();
+    sendRoomToGuest();
 
     // everyone enters at the bottom, side by side
     game.players.forEach((p, i) => {
@@ -273,13 +274,7 @@
         new DD.ShopItem("maxhp", DD.WIDTH / 2, cy, 20, "+3 Max HP"),
         new DD.ShopItem("upgrade", DD.WIDTH / 2 + gap, cy, 28, upgrade.name, upgrade),
       ];
-      game.shopkeeper = {
-        x: DD.WIDTH / 2, y: cy - DD.TILE * 2, animT: 0,
-        draw(c) {
-          c.drawImage(DD.sprites.shopkeeper[Math.floor(performance.now() / 600) % 2],
-            this.x - 24, this.y - 38, 48, 48);
-        },
-      };
+      game.shopkeeper = DD.makeShopkeeper(DD.WIDTH / 2, cy - DD.TILE * 2);
     }
   }
 
@@ -341,6 +336,12 @@
     } else {
       DD.audio.lose();
     }
+    if (DD.net.role === "host" && DD.net.connected) {
+      DD.net.send({
+        t: "end", won,
+        stats: { level: game.level, floor: game.floor, ri: game.roomIndex, kills: game.kills, gold: game.gold, time: game.time },
+      });
+    }
   }
 
   function showResult() {
@@ -359,21 +360,23 @@
     resultEl.classList.add("hidden");
     menuEl.classList.remove("hidden");
     refreshContinueButton();
+    setMenuMode(null, "");
     game.state = "menu";
     DD.room.prerendered = false;
   }
 
   // ---- level-up overlay ----
+  // In co-op both players pick an upgrade for themselves before play resumes.
 
-  function openLevelUp() {
-    game.state = "levelup";
-    DD.audio.levelup();
+  let lvlHostDone = false;
+  let lvlGuestDone = false;
+
+  function coopActive() {
+    return DD.net.role === "host" && DD.net.connected && game.players.length > 1;
+  }
+
+  function buildUpgradeCards(picks, onPick) {
     upgradeCardsEl.innerHTML = "";
-    const pool = [...DD.UPGRADES];
-    const picks = [];
-    for (let i = 0; i < 3 && pool.length; i++) {
-      picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-    }
     picks.forEach((up, i) => {
       const card = document.createElement("button");
       card.className = "class-card upgrade-card";
@@ -381,27 +384,62 @@
         `<div class="ckey">${i + 1}</div>` +
         `<div class="cname">${up.name}</div>` +
         `<div class="cdesc">${up.desc}</div>`;
-      card.addEventListener("click", () => chooseUpgrade(up));
+      card.addEventListener("click", () => onPick(up));
       upgradeCardsEl.appendChild(card);
     });
     game.levelUpPicks = picks;
+    game.lvlOnPick = onPick;
     levelupEl.classList.remove("hidden");
   }
 
-  function chooseUpgrade(up) {
-    const pl = game.localPlayer;
-    up.apply(pl);
+  function openLevelUp() {
+    game.state = "levelup";
+    DD.audio.levelup();
+    const pool = [...DD.UPGRADES];
+    const picks = [];
+    for (let i = 0; i < 3 && pool.length; i++) {
+      picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    lvlHostDone = false;
+    lvlGuestDone = !coopActive();
+    if (coopActive()) DD.net.send({ t: "lvl", ids: picks.map((u) => u.id) });
+    buildUpgradeCards(picks, chooseUpgrade);
+  }
+
+  function finishLevelUp() {
     game.pendingLevelUps--;
     levelupEl.classList.add("hidden");
     game.state = "play";
+    if (coopActive()) DD.net.send({ t: "lvldone" });
+  }
+
+  function maybeFinishLevelUp() {
+    if (lvlHostDone && (lvlGuestDone || !coopActive())) finishLevelUp();
+  }
+
+  function chooseUpgrade(up) {
+    if (lvlHostDone) return; // already picked this level
+    const pl = game.players[0];
+    up.apply(pl);
     DD.particles.burst(pl.x, pl.y - 20, {
       count: 16, colors: ["#ffd95e", "#fff3b8"], speed: 100, life: 0.6, gravity: -60,
     });
+    lvlHostDone = true;
+    if (!lvlGuestDone && coopActive()) {
+      upgradeCardsEl.innerHTML = `<p class="tagline">Waiting for your teammate's pick...</p>`;
+    }
+    maybeFinishLevelUp();
   }
 
   // ---- update ----
 
   function update(dt) {
+    // co-op guests don't simulate: they render host snapshots
+    if (DD.net.role === "guest") {
+      if (guestInGame) DD.particles.update(dt);
+      return;
+    }
+
     if (game.state === "menu" || game.state === "levelup") return;
 
     if (game.state === "transition") {
@@ -587,16 +625,240 @@
       card.append(img, name, desc, stats);
       card.addEventListener("click", () => {
         DD.audio.unlock();
-        startRun(key);
+        if (coopMode === "host-pick") hostWithClass(key);
+        else if (coopMode === "join-pick") joinWithClass(key);
+        else startRun(key);
       });
       holder.appendChild(card);
     }
   }
 
+  // ---- co-op lobby & networking ----
+
+  let coopMode = null;     // null | 'host-pick' | 'join-pick'
+  let lobbyStep = null;    // 'host-wait-answer' | 'join-wait-offer'
+  let guestClass = "warrior";
+  let guestInGame = false;
+
+  const lobbyEl = document.getElementById("lobby");
+  const lobbyStatus = document.getElementById("lobby-status");
+  const lobbyOut = document.getElementById("lobby-out");
+  const lobbyIn = document.getElementById("lobby-in");
+  const codeOut = document.getElementById("code-out");
+  const codeIn = document.getElementById("code-in");
+  const modeHint = document.getElementById("menu-mode-hint");
+
+  function showLobby(status, { out = false, input = false } = {}) {
+    lobbyStatus.textContent = status;
+    lobbyOut.classList.toggle("hidden", !out);
+    lobbyIn.classList.toggle("hidden", !input);
+    lobbyEl.classList.remove("hidden");
+    menuEl.classList.add("hidden");
+  }
+
+  function setMenuMode(mode, hint) {
+    coopMode = mode;
+    modeHint.textContent = hint || "";
+    modeHint.classList.toggle("hidden", !hint);
+  }
+
+  function sendRoomToGuest() {
+    if (DD.net.role === "host" && DD.net.connected) {
+      DD.net.send({ t: "room", room: DD.room.getData(), floor: game.floor, ri: game.roomIndex, rt: game.roomType });
+    }
+  }
+
+  async function hostWithClass(classKey) {
+    game.classKey = classKey;
+    showLobby("Generating invite code...");
+    try {
+      const code = await DD.net.host();
+      codeOut.value = code;
+      codeIn.value = "";
+      lobbyStep = "host-wait-answer";
+      showLobby("1) Send this code to your friend.  2) Paste their reply below.", { out: true, input: true });
+    } catch (e) {
+      showLobby("Could not start a connection: " + e.message);
+    }
+  }
+
+  async function joinWithClass(classKey) {
+    guestClass = classKey;
+    game.classKey = classKey;
+    codeIn.value = "";
+    lobbyStep = "join-wait-offer";
+    showLobby("Paste the host's invite code below.", { input: true });
+  }
+
+  document.getElementById("btn-host").addEventListener("click", () => {
+    DD.audio.unlock();
+    setMenuMode("host-pick", "HOSTING CO-OP — pick your class to create an invite code");
+  });
+  document.getElementById("btn-join").addEventListener("click", () => {
+    DD.audio.unlock();
+    setMenuMode("join-pick", "JOINING CO-OP — pick your class first");
+  });
+  document.getElementById("btn-copy").addEventListener("click", async () => {
+    codeOut.select();
+    try { await navigator.clipboard.writeText(codeOut.value); } catch (e) { document.execCommand("copy"); }
+  });
+  document.getElementById("btn-lobby-back").addEventListener("click", () => {
+    DD.net.reset();
+    lobbyStep = null;
+    setMenuMode(null, "");
+    lobbyEl.classList.add("hidden");
+    menuEl.classList.remove("hidden");
+  });
+  document.getElementById("btn-accept").addEventListener("click", async () => {
+    const code = codeIn.value.trim();
+    if (!code) return;
+    try {
+      if (lobbyStep === "host-wait-answer") {
+        await DD.net.hostAccept(code);
+        lobbyStatus.textContent = "Connecting...";
+      } else if (lobbyStep === "join-wait-offer") {
+        lobbyStatus.textContent = "Generating reply code...";
+        const answer = await DD.net.join(code);
+        codeOut.value = answer;
+        showLobby("Send this reply code back to the host. Connecting...", { out: true });
+      }
+    } catch (e) {
+      lobbyStatus.textContent = "That code didn't work — check it and try again.";
+    }
+  });
+
+  function startCoopRun(guestClassKey) {
+    clearSave();
+    game.players = [
+      new DD.Player(game.classKey, 0, 0, DD.input),
+      new DD.Player(guestClassKey, 0, 0, new DD.RemoteInput()),
+    ];
+    game.localIndex = 0;
+    game.floor = 0;
+    game.xp = 0;
+    game.level = 1;
+    game.gold = 0;
+    game.kills = 0;
+    game.time = 0;
+    loadRoom(0);
+    lobbyEl.classList.add("hidden");
+    setMenuMode(null, "");
+    freshGameState();
+  }
+
+  DD.net.onOpen(() => {
+    if (DD.net.role === "guest") {
+      DD.net.send({ t: "join", cls: guestClass });
+      lobbyStatus.textContent = "Connected! Waiting for the host to start...";
+    } else {
+      lobbyStatus.textContent = "Friend connected! Starting...";
+    }
+  });
+
+  DD.net.onClose(() => {
+    if (DD.net.role === "host") {
+      if (game.players.length > 1) {
+        game.players.splice(1);
+        if (game.localPlayer) {
+          DD.particles.text(game.localPlayer.x, game.localPlayer.y - 50, "Friend disconnected — going solo", "#ff9234");
+        }
+        lvlGuestDone = true;
+        maybeFinishLevelUp();
+      }
+      DD.net.reset();
+    } else if (DD.net.role === "guest") {
+      DD.net.reset();
+      guestInGame = false;
+      lobbyEl.classList.add("hidden");
+      levelupEl.classList.add("hidden");
+      backToMenu();
+      setMenuMode(null, "Disconnected from the host.");
+    }
+  });
+
+  DD.net.onMessage((m) => {
+    if (DD.net.role === "host") {
+      if (m.t === "join") {
+        startCoopRun(DD.CLASSES[m.cls] ? m.cls : "warrior");
+      } else if (m.t === "i" && game.players[1]) {
+        const inp = game.players[1].input;
+        inp.state = { mv: m.mv || { dx: 0, dy: 0 }, aim: m.aim || 0, atk: !!m.atk, dash: !!m.dash };
+        if (m.dt) inp._dashTap = true;
+      } else if (m.t === "pick") {
+        const up = DD.UPGRADES.find((u) => u.id === m.id);
+        if (up && game.players[1] && !lvlGuestDone) up.apply(game.players[1]);
+        lvlGuestDone = true;
+        maybeFinishLevelUp();
+      }
+      return;
+    }
+
+    // guest side
+    if (m.t === "room") {
+      DD.room.setData(m.room);
+      DD.updateView(canvas);
+      game.floor = m.floor;
+      game.roomIndex = m.ri;
+      game.roomType = m.rt;
+      game.localIndex = 1;
+      guestInGame = true;
+      DD.particles.clear();
+      lobbyEl.classList.add("hidden");
+      menuEl.classList.add("hidden");
+      resultEl.classList.add("hidden");
+      game.state = "play";
+      game.hintT = 6;
+    } else if (m.t === "s" && guestInGame) {
+      DD.netSync.applySnapshot(game, m);
+    } else if (m.t === "lvl") {
+      game.state = "levelup";
+      DD.audio.levelup();
+      let picked = false;
+      const picks = m.ids.map((id) => DD.UPGRADES.find((u) => u.id === id)).filter(Boolean);
+      buildUpgradeCards(picks, (up) => {
+        if (picked) return;
+        picked = true;
+        DD.net.send({ t: "pick", id: up.id });
+        upgradeCardsEl.innerHTML = `<p class="tagline">Waiting for your teammate's pick...</p>`;
+      });
+    } else if (m.t === "lvldone") {
+      levelupEl.classList.add("hidden");
+      game.state = "play";
+    } else if (m.t === "end") {
+      Object.assign(game, {
+        level: m.stats.level, floor: m.stats.floor, roomIndex: m.stats.ri,
+        kills: m.stats.kills, gold: m.stats.gold, time: m.stats.time,
+      });
+      game.state = m.won ? "won" : "lost";
+      if (m.won) DD.audio.win(); else DD.audio.lose();
+      setTimeout(showResult, 1000);
+    }
+  });
+
+  function sendGuestInput() {
+    const lp = game.localPlayer;
+    if (!lp) return;
+    const msg = {
+      t: "i",
+      mv: DD.input.moveVector(),
+      aim: DD.input.aimAngle(lp),
+      atk: DD.input.attacking(),
+      dash: !!DD.input.keys.shift,
+    };
+    if (DD.input.consumeDashTap()) msg.dt = 1;
+    DD.net.send(msg);
+  }
+
   // ---- result buttons / shortcuts ----
 
-  document.getElementById("btn-again").addEventListener("click", () => startRun(game.classKey));
-  document.getElementById("btn-class").addEventListener("click", backToMenu);
+  document.getElementById("btn-again").addEventListener("click", () => {
+    if (DD.net.role) DD.net.reset();
+    startRun(game.classKey);
+  });
+  document.getElementById("btn-class").addEventListener("click", () => {
+    if (DD.net.role) DD.net.reset();
+    backToMenu();
+  });
   continueBtn.addEventListener("click", () => {
     const save = readSave();
     if (save) { DD.audio.unlock(); resumeRun(save); }
@@ -604,12 +866,12 @@
   window.addEventListener("keydown", (e) => {
     if (game.state === "levelup" && ["1", "2", "3"].includes(e.key)) {
       const up = game.levelUpPicks[Number(e.key) - 1];
-      if (up) chooseUpgrade(up);
+      if (up && game.lvlOnPick) game.lvlOnPick(up);
       return;
     }
     if (resultEl.classList.contains("hidden")) return;
-    if (e.key === "Enter") startRun(game.classKey);
-    if (e.key === "Escape") backToMenu();
+    if (e.key === "Enter") { if (DD.net.role) DD.net.reset(); startRun(game.classKey); }
+    if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); backToMenu(); }
   });
 
   // ---- boot ----
@@ -628,11 +890,27 @@
   });
 
   let last = performance.now();
+  let netAccum = 0;
   function frame(now) {
     const dt = Math.min((now - last) / 1000, 1 / 30);
     last = now;
     update(dt);
     draw();
+
+    // network pump: host streams snapshots, guest streams input
+    if (DD.net.connected) {
+      netAccum += dt;
+      const interval = DD.net.role === "host" ? 1 / 15 : 1 / 30;
+      if (netAccum >= interval) {
+        netAccum = 0;
+        if (DD.net.role === "host" && game.state !== "menu" && game.players.length > 1) {
+          DD.net.send(DD.netSync.snapshot(game));
+        } else if (DD.net.role === "guest" && guestInGame) {
+          sendGuestInput();
+        }
+      }
+    }
+
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

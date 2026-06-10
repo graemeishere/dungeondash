@@ -138,6 +138,23 @@
       return { x: DD.WIDTH / 2, y: DD.HEIGHT / 2 };
     },
 
+    // serialize / restore the layout for co-op guests
+    getData() {
+      return {
+        w: DD.ROOM_W, h: DD.ROOM_H, tiles: tiles.join(","),
+        doorCols: this.doorCols, doorOpen: this.doorOpen, spikes: this.spikes,
+      };
+    },
+
+    setData(d) {
+      DD.setRoomSize(d.w, d.h);
+      tiles = d.tiles.split(",").map(Number);
+      this.doorCols = d.doorCols;
+      this.doorOpen = d.doorOpen;
+      this.spikes = d.spikes || [];
+      this.prerender();
+    },
+
     prerender() {
       floorCanvas = document.createElement("canvas");
       floorCanvas.width = DD.WIDTH;

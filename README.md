@@ -1,8 +1,9 @@
 # Dungeon Dash
 
-A cartoon hack & slash roguelike for the web — desktop and mobile. Pick a class
-and fight through a five-room dungeon floor: three combat rooms, a treasure
-room, and the Skeleton King.
+A cartoon hack & slash roguelike for the web — desktop and mobile, solo or
+two-player co-op. Fight through three floors of combat rooms, trap gauntlets,
+elite hunts, and treasure vaults; spend gold at the shop between floors; and
+take down the Skeleton King, the Bone Emperor, and The Deathless.
 
 See [DungeonDash_DesignBrief.md](DungeonDash_DesignBrief.md) for the full game design.
 
@@ -39,16 +40,37 @@ No build step, no dependencies. Either:
 - **Mage** — 6 HP, magic bolts that explode for area damage
 - **Ranger** — 8 HP, fast arrows that pierce through enemies
 
+## Two-player co-op
+
+Per the design brief, a host owns the run and a guest can join peer-to-peer —
+no server involved. On the web this uses WebRTC with a copy-paste pairing code
+(the spiritual equivalent of the brief's Bluetooth pairing):
+
+1. Host clicks **Host Co-op**, picks a class, and sends the invite code to a friend
+2. Guest clicks **Join Co-op**, picks a class, pastes the code, and sends back the reply code
+3. Host pastes the reply — the run starts on both screens
+
+The host simulates the world; the guest streams input and renders snapshots.
+Co-op adds downed/revive (stand next to a fallen friend to pick them up,
+fallen players respawn at the entrance when the room is cleared), shared
+gold/XP, and both players choose their own upgrade on each level-up. If the
+guest disconnects, the host continues solo seamlessly. Works best on the same
+network; the pairing codes can be sent over any chat.
+
 ## What's in the game so far
 
-- A five-room floor: combat → combat → treasure → combat → boss, connected by
-  doors that open when each room is cleared
-- Skeletons rise from the floor in staggered waves, chase you, telegraph their
-  attacks, and drop gold (and the occasional heart); later rooms add tanky brutes
+- Three floors of escalating rooms: combat, treasure vaults, spike-trap
+  gauntlets, and named elite minibosses, each floor capped by its own boss
+  (Skeleton King → Bone Emperor → The Deathless) with AoE slams, summons,
+  and enrage phases
+- Enemy variety: melee skeletons, tanky brutes, hooded archers that kite and
+  shoot bones, and bombers that sprint in and explode
 - XP and level-ups: each level pauses the action with a choice of 3 random
   upgrades (damage, speed, max HP, attack speed, reach, lifesteal-on-kill)
-- A treasure room full of chests, and the Skeleton King boss with a telegraphed
-  AoE slam, skeleton summons, and an enrage phase
+- A shop between floors: gold buys a full heal, +3 max HP, or a random upgrade
+- Run saves: the run checkpoints to localStorage after every floor boss (as
+  the design brief specifies) and the menu offers Continue; death wipes it
+- Two-player WebRTC co-op with downed/revive (see above)
 - Coin/heart pickups with magnet collection, HP/XP bars, boss HP bar
 - Responsive rooms that fill any screen, with twin-stick touch controls on mobile
 - Hit feedback: knockback, hit-flash, damage numbers, particles, screen shake
@@ -76,10 +98,15 @@ js/hud.js       in-game HUD
 js/game.js      state machine, main loop, wiring
 ```
 
+## Code layout (additions)
+
+```
+js/net.js       WebRTC pairing, remote input, world snapshot sync
+```
+
 ## Next steps (toward the design brief)
 
-- Multi-floor runs with rising difficulty and run saves
-- More room types (trap gauntlet, elite, shop) and more enemy/boss variety
-- Gear drops and inventory
-- Second player (the brief calls for local co-op; on the web this would map
-  naturally to WebRTC peer-to-peer)
+- Gear drops and inventory (the last big brief feature missing)
+- Guest joining mid-run at floor transitions, co-op save of both characters
+- A lobby/signaling helper to replace manual code exchange
+- More floors, bosses, and class abilities

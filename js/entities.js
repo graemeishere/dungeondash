@@ -944,6 +944,14 @@
     }
   }
 
+  DD.makeShopkeeper = (x, y) => ({
+    x, y,
+    draw(c) {
+      c.drawImage(DD.sprites.shopkeeper[Math.floor(performance.now() / 600) % 2],
+        this.x - 24, this.y - 38, 48, 48);
+    },
+  });
+
   DD.Player = Player;
   DD.Skeleton = Skeleton;
   DD.Boss = Boss;

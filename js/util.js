@@ -26,7 +26,9 @@ window.DD = window.DD || {};
   });
 
   DD.updateView = (canvas) => {
-    const s = Math.min(1, canvas.width / DD.WIDTH, canvas.height / DD.HEIGHT);
+    // may upscale: a co-op guest mirrors the host's room, which can be smaller
+    // than the guest's screen
+    const s = Math.min(canvas.width / DD.WIDTH, canvas.height / DD.HEIGHT);
     DD.view.scale = s;
     DD.view.ox = (canvas.width - DD.WIDTH * s) / 2;
     DD.view.oy = (canvas.height - DD.HEIGHT * s) / 2;
