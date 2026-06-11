@@ -42,20 +42,21 @@ No build step, no dependencies. Either:
 
 ## Two-player co-op
 
-Per the design brief, a host owns the run and a guest can join peer-to-peer —
-no server involved. On the web this uses WebRTC with a copy-paste pairing code
-(the spiritual equivalent of the brief's Bluetooth pairing):
+Per the design brief, a host owns the run and a guest joins peer-to-peer:
 
-1. Host clicks **Host Co-op**, picks a class, and sends the invite code to a friend
-2. Guest clicks **Join Co-op**, picks a class, pastes the code, and sends back the reply code
-3. Host pastes the reply — the run starts on both screens
+1. Host clicks **Host Co-op** and picks a class — a 4-letter room code appears
+2. Guest clicks **Join Co-op**, picks a class, and types the room code
+3. The run starts on both screens
 
+Pairing uses [PeerJS](https://peerjs.com)'s free public broker for the WebRTC
+handshake only — once paired, game data flows directly between the two
+players, and a free TURN relay is configured so strict NATs can connect too.
 The host simulates the world; the guest streams input and renders snapshots.
+
 Co-op adds downed/revive (stand next to a fallen friend to pick them up,
 fallen players respawn at the entrance when the room is cleared), shared
 gold/XP, and both players choose their own upgrade on each level-up. If the
-guest disconnects, the host continues solo seamlessly. Works best on the same
-network; the pairing codes can be sent over any chat.
+guest disconnects, the host continues solo seamlessly.
 
 ## What's in the game so far
 

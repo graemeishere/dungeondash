@@ -1,27 +1,38 @@
 "use strict";
-// Peer-to-peer co-op over WebRTC with manual code exchange — no server needed,
-// in the spirit of the design brief's Bluetooth/local-WiFi pairing. The host
-// runs the simulation; the guest sends input and renders snapshots.
+// Peer-to-peer co-op over WebRTC. PeerJS's free cloud broker handles the
+// handshake, so pairing is a short room code instead of pasted SDP blobs;
+// game data still flows directly between the two players. A free TURN relay
+// is configured so strict NATs can connect too.
 (function (DD) {
-  let pc = null;
-  let chan = null;
+  let peer = null;
+  let conn = null;
   const handlers = { message: null, open: null, close: null };
+  let closeFired = false;
 
-  function waitIce(conn) {
-    return new Promise((resolve) => {
-      if (conn.iceGatheringState === "complete") return resolve();
-      const check = () => {
-        if (conn.iceGatheringState === "complete") {
-          conn.removeEventListener("icegatheringstatechange", check);
-          resolve();
-        }
-      };
-      conn.addEventListener("icegatheringstatechange", check);
-      setTimeout(resolve, 3000); // partial candidates usually suffice on a LAN
-    });
+  // unambiguous characters only (no 0/O, 1/I)
+  const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const CODE_LEN = 4;
+  const ID_PREFIX = "dungeondash-";
+
+  function randomCode() {
+    let c = "";
+    for (let i = 0; i < CODE_LEN; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    return c;
   }
 
-  let closeFired = false;
+  // window.DD_PEER_OPTS allows pointing at a self-hosted PeerServer (tests do
+  // this); by default the PeerJS public cloud broker is used.
+  function peerOpts() {
+    return Object.assign({
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+          { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+        ],
+      },
+    }, window.DD_PEER_OPTS || {});
+  }
 
   function fireClose() {
     if (closeFired) return;
@@ -31,72 +42,112 @@
   }
 
   function wire(c) {
-    chan = c;
-    c.onopen = () => { DD.net.connected = true; closeFired = false; if (handlers.open) handlers.open(); };
-    c.onclose = fireClose;
-    c.onerror = fireClose;
-    c.onmessage = (e) => {
-      try { if (handlers.message) handlers.message(JSON.parse(e.data)); } catch (err) { /* ignore malformed */ }
-    };
+    conn = c;
+    c.on("open", () => {
+      DD.net.connected = true;
+      closeFired = false;
+      // an abruptly closed tab never sends a clean close — watch the ICE state
+      const pc = c.peerConnection;
+      if (pc) {
+        pc.onconnectionstatechange = () => {
+          if (DD.net.connected && ["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+            fireClose();
+          }
+        };
+      }
+      if (handlers.open) handlers.open();
+    });
+    c.on("close", fireClose);
+    c.on("error", fireClose);
+    c.on("data", (data) => {
+      try { if (handlers.message) handlers.message(data); } catch (err) { /* ignore malformed */ }
+    });
   }
 
-  function newPc() {
-    pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-    // an abruptly closed tab never sends a channel close — watch the ICE state
-    pc.onconnectionstatechange = () => {
-      if (DD.net.connected && ["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-        fireClose();
+  function newPeer(id) {
+    return new Promise((resolve, reject) => {
+      if (typeof Peer === "undefined") {
+        reject(new Error("PeerJS failed to load — check your connection"));
+        return;
       }
-    };
-    return pc;
+      const p = id ? new Peer(id, peerOpts()) : new Peer(peerOpts());
+      const timer = setTimeout(() => reject(new Error("Could not reach the matchmaking server")), 12000);
+      p.on("open", () => { clearTimeout(timer); resolve(p); });
+      p.on("error", (e) => { clearTimeout(timer); reject(e); });
+    });
   }
 
   DD.net = {
     role: null, // null | 'host' | 'guest'
     connected: false,
+    roomCode: null,
 
     onMessage(cb) { handlers.message = cb; },
     onOpen(cb) { handlers.open = cb; },
     onClose(cb) { handlers.close = cb; },
 
     send(obj) {
-      if (chan && chan.readyState === "open") {
-        try { chan.send(JSON.stringify(obj)); } catch (e) { /* buffer full etc. */ }
+      if (conn && conn.open) {
+        try { conn.send(obj); } catch (e) { /* buffer full etc. */ }
       }
     },
 
+    // Registers a room and resolves with its short code. The returned promise
+    // does NOT wait for a guest — the 'open' handler fires when one connects.
     async host() {
       this.role = "host";
-      const p = newPc();
-      wire(p.createDataChannel("game"));
-      await p.setLocalDescription(await p.createOffer());
-      await waitIce(p);
-      return btoa(JSON.stringify(p.localDescription));
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const code = randomCode();
+        try {
+          peer = await newPeer(ID_PREFIX + code);
+          this.roomCode = code;
+          peer.on("connection", (c) => {
+            if (conn && conn.open) { c.close(); return; } // room is full
+            wire(c);
+          });
+          return code;
+        } catch (e) {
+          if (e && e.type === "unavailable-id") continue; // code collision, reroll
+          this.role = null;
+          throw e;
+        }
+      }
+      this.role = null;
+      throw new Error("Could not register a room code");
     },
 
-    async hostAccept(answerCode) {
-      await pc.setRemoteDescription(JSON.parse(atob(answerCode.trim())));
-    },
-
-    async join(offerCode) {
+    // Connects to a host's room code. Resolves once the data channel is open.
+    async join(code) {
       this.role = "guest";
-      const p = newPc();
-      p.ondatachannel = (e) => wire(e.channel);
-      await p.setRemoteDescription(JSON.parse(atob(offerCode.trim())));
-      await p.setLocalDescription(await p.createAnswer());
-      await waitIce(p);
-      return btoa(JSON.stringify(p.localDescription));
+      peer = await newPeer();
+      return new Promise((resolve, reject) => {
+        const c = peer.connect(ID_PREFIX + code.trim().toUpperCase(), {
+          reliable: true,
+          serialization: "json",
+        });
+        const timer = setTimeout(() => {
+          this.role = null;
+          reject(new Error("No game found with that code"));
+        }, 12000);
+        c.on("open", () => { clearTimeout(timer); resolve(); });
+        c.on("error", (e) => { clearTimeout(timer); this.role = null; reject(e); });
+        peer.on("error", (e) => { clearTimeout(timer); this.role = null; reject(e); });
+        wire(c);
+      });
     },
 
     reset() {
-      try { if (chan) chan.close(); } catch (e) { /* already closed */ }
-      try { if (pc) pc.close(); } catch (e) { /* already closed */ }
-      pc = null;
-      chan = null;
+      try { if (conn) conn.close(); } catch (e) { /* already closed */ }
+      try { if (peer) peer.destroy(); } catch (e) { /* already closed */ }
+      peer = null;
+      conn = null;
       this.role = null;
       this.connected = false;
+      this.roomCode = null;
+      closeFired = false;
     },
   };
+
 
   // Input provider for the guest's avatar on the host: replays the latest
   // input state received over the wire.
