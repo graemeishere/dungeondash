@@ -636,7 +636,6 @@
   // ---- co-op lobby & networking ----
 
   let coopMode = null;     // null | 'host-pick' | 'join-pick'
-  let lobbyStep = null;    // 'host-wait-answer' | 'join-wait-offer'
   let guestClass = "warrior";
   let guestInGame = false;
 
@@ -644,7 +643,7 @@
   const lobbyStatus = document.getElementById("lobby-status");
   const lobbyOut = document.getElementById("lobby-out");
   const lobbyIn = document.getElementById("lobby-in");
-  const codeOut = document.getElementById("code-out");
+  const roomCodeEl = document.getElementById("room-code");
   const codeIn = document.getElementById("code-in");
   const modeHint = document.getElementById("menu-mode-hint");
 
@@ -670,15 +669,13 @@
 
   async function hostWithClass(classKey) {
     game.classKey = classKey;
-    showLobby("Generating invite code...");
+    showLobby("Creating a room...");
     try {
       const code = await DD.net.host();
-      codeOut.value = code;
-      codeIn.value = "";
-      lobbyStep = "host-wait-answer";
-      showLobby("1) Send this code to your friend.  2) Paste their reply below.", { out: true, input: true });
+      roomCodeEl.textContent = code;
+      showLobby("Tell your friend this room code. Waiting for them to join...", { out: true });
     } catch (e) {
-      showLobby("Could not start a connection: " + e.message);
+      showLobby("Could not create a room: " + (e.message || e.type || e));
     }
   }
 
@@ -686,8 +683,8 @@
     guestClass = classKey;
     game.classKey = classKey;
     codeIn.value = "";
-    lobbyStep = "join-wait-offer";
-    showLobby("Paste the host's invite code below.", { input: true });
+    showLobby("Enter the host's room code.", { input: true });
+    codeIn.focus();
   }
 
   document.getElementById("btn-host").addEventListener("click", () => {
@@ -698,34 +695,28 @@
     DD.audio.unlock();
     setMenuMode("join-pick", "JOINING CO-OP — pick your class first");
   });
-  document.getElementById("btn-copy").addEventListener("click", async () => {
-    codeOut.select();
-    try { await navigator.clipboard.writeText(codeOut.value); } catch (e) { document.execCommand("copy"); }
-  });
   document.getElementById("btn-lobby-back").addEventListener("click", () => {
     DD.net.reset();
-    lobbyStep = null;
     setMenuMode(null, "");
     lobbyEl.classList.add("hidden");
     menuEl.classList.remove("hidden");
   });
-  document.getElementById("btn-accept").addEventListener("click", async () => {
+  async function tryJoin() {
     const code = codeIn.value.trim();
     if (!code) return;
+    lobbyStatus.textContent = "Connecting...";
     try {
-      if (lobbyStep === "host-wait-answer") {
-        await DD.net.hostAccept(code);
-        lobbyStatus.textContent = "Connecting...";
-      } else if (lobbyStep === "join-wait-offer") {
-        lobbyStatus.textContent = "Generating reply code...";
-        const answer = await DD.net.join(code);
-        codeOut.value = answer;
-        showLobby("Send this reply code back to the host. Connecting...", { out: true });
-      }
+      await DD.net.join(code);
+      // the onOpen handler takes it from here
     } catch (e) {
-      lobbyStatus.textContent = "That code didn't work — check it and try again.";
+      DD.net.reset();
+      const reason = e && e.type === "peer-unavailable" ? "No game found with that code." :
+        (e && (e.message || e.type)) || "Connection failed.";
+      showLobby(reason + " Check the code and try again.", { input: true });
     }
-  });
+  }
+  document.getElementById("btn-accept").addEventListener("click", tryJoin);
+  codeIn.addEventListener("keydown", (e) => { if (e.key === "Enter") tryJoin(); });
 
   function startCoopRun(guestClassKey) {
     clearSave();
@@ -750,6 +741,7 @@
     if (DD.net.role === "guest") {
       DD.net.send({ t: "join", cls: guestClass });
       lobbyStatus.textContent = "Connected! Waiting for the host to start...";
+      lobbyIn.classList.add("hidden");
     } else {
       lobbyStatus.textContent = "Friend connected! Starting...";
     }

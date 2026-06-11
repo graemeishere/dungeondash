@@ -26,15 +26,14 @@
     </div>
 
     <div id="lobby" class="overlay hidden">
-      <h1 class="small">LOCAL CO-OP</h1>
+      <h1 class="small">CO-OP</h1>
       <p id="lobby-status" class="tagline"></p>
       <div id="lobby-out" class="code-wrap hidden">
-        <textarea id="code-out" readonly></textarea>
-        <button id="btn-copy" class="small-btn">Copy code</button>
+        <div id="room-code"></div>
       </div>
       <div id="lobby-in" class="code-wrap hidden">
-        <textarea id="code-in" placeholder="paste the code here"></textarea>
-        <button id="btn-accept" class="small-btn">Accept code</button>
+        <input id="code-in" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="ROOM CODE">
+        <button id="btn-accept" class="small-btn">Join</button>
       </div>
       <button id="btn-lobby-back" class="small-btn back">Back</button>
     </div>
@@ -56,6 +55,7 @@
     </div>
   </div>
 
+  <script src="js/lib/peerjs.min.js"></script>
   <script src="js/util.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/audio.js"></script>
