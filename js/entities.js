@@ -640,6 +640,14 @@
       if (this.elite || Math.random() < 0.18) {
         game.pickups.push(new Pickup("heart", this.x, this.y));
       }
+      // Item drops: elite = guaranteed rare+, brute = 25%, regular = 10%
+      if (game.hero && DD.rollItem) {
+        const chance = this.elite ? 1.0 : this.big ? 0.25 : 0.10;
+        if (Math.random() < chance) {
+          const minRarity = this.elite ? "rare" : undefined;
+          game.pickups.push(new Pickup("item", this.x, this.y - 8, DD.rollItem({ floor: game.floor, minRarity })));
+        }
+      }
     }
 
     draw(ctx) {
@@ -777,6 +785,9 @@
       game.bossDefeated = true;
       game.shake = 12;
       DD.particles.burst(this.x, this.y - 20, { count: 50, colors: ["#ffd14a", "#e9e6da", "#fff"], speed: 260, life: 1.0, gravity: 200 });
+      if (game.hero && DD.rollItem) {
+        game.pickups.push(new Pickup("item", this.x + DD.rand(-24, 24), this.y, DD.rollItem({ floor: game.floor, minRarity: "rare" })));
+      }
     }
 
     draw(ctx) {
@@ -819,6 +830,9 @@
       if (Math.random() < 0.5) {
         game.pickups.push(new Pickup("heart", this.x, this.y + 6));
       }
+      if (game.hero && DD.rollItem) {
+        game.pickups.push(new Pickup("item", this.x, this.y + 6, DD.rollItem({ floor: game.floor })));
+      }
       game.addXP(4);
     }
 
@@ -840,8 +854,9 @@
   // ---------------- Pickup ----------------
 
   class Pickup {
-    constructor(kind, x, y) {
-      this.kind = kind; // 'coin' | 'heart'
+    constructor(kind, x, y, item) {
+      this.kind = kind; // 'coin' | 'heart' | 'item'
+      this.item = item || null;
       this.x = x;
       this.y = y;
       const a = DD.rand(0, Math.PI * 2);
@@ -877,18 +892,37 @@
         game.gold++;
         DD.audio.coin();
         DD.particles.text(this.x, this.y - 16, "+1", "#ffd14a");
-      } else {
+      } else if (this.kind === "heart") {
         pl.hp = Math.min(pl.maxHp, pl.hp + 2);
         DD.audio.heal();
         DD.particles.text(this.x, this.y - 16, "+2 HP", "#ff8c91");
         DD.particles.burst(this.x, this.y, { count: 8, colors: ["#ff8c91", "#e8484f"], speed: 60, life: 0.4, gravity: -80 });
+      } else if (this.kind === "item" && this.item && game.hero) {
+        game.hero.inventory.push(this.item);
+        DD.profile.save();
+        const rColor = DD.ITEM_RARITY[this.item.rarity].color;
+        DD.audio.chest();
+        DD.particles.text(this.x, this.y - 16, this.item.name, rColor);
+        DD.particles.burst(this.x, this.y, { count: 8, colors: [rColor, "#fff"], speed: 70, life: 0.4, gravity: -60 });
       }
     }
 
     draw(ctx) {
       const bobY = Math.sin(this.t * 5) * 2;
-      const img = this.kind === "coin" ? DD.sprites.coin : DD.sprites.heart;
-      ctx.drawImage(img, this.x - 8, this.y - 10 + bobY, 16, 16);
+      if (this.kind === "item" && this.item && DD.sprites.items) {
+        const rColor = (DD.ITEM_RARITY[this.item.rarity] || {}).color || "#8b80a8";
+        ctx.globalAlpha = 0.35 + 0.15 * Math.sin(this.t * 4);
+        ctx.fillStyle = rColor;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 2 + bobY, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        const icon = DD.sprites.items[this.item.icon];
+        if (icon) ctx.drawImage(icon, this.x - 8, this.y - 10 + bobY, 16, 16);
+      } else {
+        const img = this.kind === "coin" ? DD.sprites.coin : DD.sprites.heart;
+        ctx.drawImage(img, this.x - 8, this.y - 10 + bobY, 16, 16);
+      }
     }
   }
 

@@ -16,6 +16,7 @@
     const vitality = attrs.vitality || 0;
 
     const s = { ...c }; // exact copy at baseline
+    s.killHeal = 0;     // not in any class def; gear can add to it
 
     // Per-level growth and attribute scaling (both 0 at baseline)
     s.dmg   = c.dmg   + lvl * 0.15 + might   * 0.5;
