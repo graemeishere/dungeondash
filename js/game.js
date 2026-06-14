@@ -109,9 +109,15 @@
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         classKey: pl.classKey, floor: game.floor, level: game.level, xp: game.xp,
         gold: game.gold, kills: game.kills, time: game.time,
-        maxHp: pl.maxHp, hp: pl.hp, killHeal: pl.killHeal, stats: pl.stats,
+        maxHp: pl.maxHp, hp: pl.hp, killHeal: pl.killHeal,
+        runBuffs: pl.runBuffs, stats: pl.stats,
       }));
     } catch (e) { /* private browsing etc. */ }
+    if (game.hero) {
+      game.hero.level = game.level;
+      game.hero.xp = game.xp;
+      DD.profile.save();
+    }
   }
 
   function readSave() {
@@ -146,13 +152,15 @@
   }
 
   function startRun(classKey) {
-    clearSave(); // a new run abandons any saved one
+    clearSave();
+    const hero = DD.profile.getOrCreateHero(classKey);
+    game.hero = hero;
     game.classKey = classKey;
-    game.players = [new DD.Player(classKey, 0, 0, DD.input)];
+    game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
     game.localIndex = 0;
     game.floor = 0;
-    game.xp = 0;
-    game.level = 1;
+    game.xp = hero.xp || 0;
+    game.level = hero.level || 1;
     game.gold = 0;
     game.kills = 0;
     game.time = 0;
@@ -161,21 +169,31 @@
   }
 
   function resumeRun(save) {
+    const hero = DD.profile.getOrCreateHero(save.classKey);
+    game.hero = hero;
     game.classKey = save.classKey;
-    const pl = new DD.Player(save.classKey, 0, 0, DD.input);
-    Object.assign(pl.stats, save.stats);
-    pl.maxHp = save.maxHp;
-    pl.hp = Math.max(1, save.hp);
-    pl.killHeal = save.killHeal || 0;
+    const pl = new DD.Player(save.classKey, 0, 0, DD.input, hero);
+    if (save.runBuffs) {
+      Object.assign(pl.runBuffs, save.runBuffs);
+      pl.recompute();
+    } else if (save.maxHp) {
+      // Old save without runBuffs: infer the maxHp buff and apply raw stats
+      pl.runBuffs.maxHp = Math.max(0, save.maxHp - Math.floor(pl.baseStats.hp));
+      pl.recompute();
+      if (save.stats) Object.assign(pl.stats, save.stats);
+    }
+    pl.maxHp = save.maxHp || pl.maxHp;
+    pl.hp = Math.max(1, Math.min(pl.maxHp, save.hp));
+    pl.killHeal = save.killHeal !== undefined ? save.killHeal : pl.killHeal;
     game.players = [pl];
     game.localIndex = 0;
     game.floor = save.floor;
-    game.xp = save.xp;
-    game.level = save.level;
+    game.xp = hero ? (hero.xp || 0) : (save.xp || 0);
+    game.level = hero ? (hero.level || 1) : (save.level || 1);
     game.gold = save.gold;
     game.kills = save.kills;
     game.time = save.time;
-    loadRoom(game.plan().length - 1); // back to the shop after the saved boss kill
+    loadRoom(game.plan().length - 1);
     freshGameState();
   }
 
@@ -328,6 +346,14 @@
 
   function endRun(won) {
     clearSave();
+    if (game.hero) {
+      game.hero.level = game.level;
+      game.hero.xp = game.xp;
+      game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
+      game.hero.kills = (game.hero.kills || 0) + game.kills;
+      if (!won) game.hero.deaths = (game.hero.deaths || 0) + 1;
+      DD.profile.save();
+    }
     game.state = won ? "won" : "lost";
     game.endT = won ? 1.4 : 1.2;
     if (won) {
@@ -421,6 +447,10 @@
     if (lvlHostDone) return; // already picked this level
     const pl = game.players[0];
     up.apply(pl);
+    if (game.hero) {
+      game.hero.attrPoints = (game.hero.attrPoints || 0) + 1;
+      DD.profile.save();
+    }
     DD.particles.burst(pl.x, pl.y - 20, {
       count: 16, colors: ["#ffd95e", "#fff3b8"], speed: 100, life: 0.6, gravity: -60,
     });
@@ -720,14 +750,16 @@
 
   function startCoopRun(guestClassKey) {
     clearSave();
+    const hero = DD.profile.getOrCreateHero(game.classKey);
+    game.hero = hero;
     game.players = [
-      new DD.Player(game.classKey, 0, 0, DD.input),
+      new DD.Player(game.classKey, 0, 0, DD.input, hero),
       new DD.Player(guestClassKey, 0, 0, new DD.RemoteInput()),
     ];
     game.localIndex = 0;
     game.floor = 0;
-    game.xp = 0;
-    game.level = 1;
+    game.xp = hero.xp || 0;
+    game.level = hero.level || 1;
     game.gold = 0;
     game.kills = 0;
     game.time = 0;
