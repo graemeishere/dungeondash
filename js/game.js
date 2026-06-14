@@ -461,6 +461,108 @@
     maybeFinishLevelUp();
   }
 
+  // ---- inventory overlay ----
+
+  const inventoryEl = document.getElementById("inventory");
+  const invGridEl   = document.getElementById("inv-grid");
+  const invTooltip  = document.getElementById("inv-tooltip");
+
+  function openInventory() {
+    if (!game.hero || game.state !== "play") return;
+    game.state = "inventory";
+    renderInventory(game.hero);
+    inventoryEl.classList.remove("hidden");
+  }
+
+  function closeInventory() {
+    inventoryEl.classList.add("hidden");
+    invTooltip.classList.add("hidden");
+    game.state = "play";
+  }
+
+  function rebaseLocalPlayer() {
+    const pl = game.localPlayer;
+    if (pl && game.hero) {
+      pl.baseStats = DD.deriveStats(game.hero);
+      pl.recompute();
+      pl.hp = Math.min(pl.hp, pl.maxHp);
+    }
+  }
+
+  function renderInventory(hero) {
+    for (const slot of ["weapon", "armor", "trinket"]) {
+      const el = document.getElementById(`inv-slot-${slot}`);
+      const item = hero.equipped[slot];
+      el.innerHTML = "";
+      if (item) {
+        el.className = `inv-slot has-item rarity-${item.rarity}`;
+        const img = document.createElement("img");
+        img.src = DD.sprites.items[item.icon].toDataURL();
+        el.appendChild(img);
+        el.onclick = () => { DD.unequip(hero, slot); rebaseLocalPlayer(); DD.profile.save(); renderInventory(hero); };
+        el.onmouseenter = (e) => showInvTooltip(e, hero, item, null);
+        el.onmouseleave = hideInvTooltip;
+      } else {
+        el.className = "inv-slot";
+        el.onclick = null;
+        el.onmouseenter = null;
+        el.onmouseleave = null;
+      }
+    }
+
+    invGridEl.innerHTML = "";
+    if (hero.inventory.length === 0) {
+      const p = document.createElement("p");
+      p.className = "inv-empty";
+      p.textContent = "No items yet — defeat enemies to find gear!";
+      invGridEl.appendChild(p);
+    } else {
+      for (const item of hero.inventory) {
+        const cell = document.createElement("div");
+        cell.className = `inv-item rarity-${item.rarity}`;
+        const img = document.createElement("img");
+        img.src = DD.sprites.items[item.icon].toDataURL();
+        cell.appendChild(img);
+        cell.onclick = () => {
+          DD.equip(hero, item);
+          rebaseLocalPlayer();
+          DD.profile.save();
+          renderInventory(hero);
+        };
+        cell.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
+        cell.onmouseleave = hideInvTooltip;
+        invGridEl.appendChild(cell);
+      }
+    }
+  }
+
+  function showInvTooltip(e, hero, item, equipped) {
+    const lines = DD.itemStatLines(item);
+    const compare = equipped ? DD.compareItems(item, equipped) : null;
+    const rColor = DD.ITEM_RARITY[item.rarity].color;
+    let html =
+      `<div class="inv-tooltip-name" style="color:${rColor}">${item.name}</div>` +
+      `<div class="inv-tooltip-rarity">${DD.ITEM_RARITY[item.rarity].label} ${item.slot}</div>`;
+    for (const { key, text } of lines) {
+      const d = compare && compare[key];
+      const cls = d > 0 ? "better" : d < 0 ? "worse" : "";
+      html += `<div class="inv-tooltip-stat ${cls}">${text}</div>`;
+    }
+    if (equipped) {
+      html += `<div style="font-size:10px;color:#8b80a8;margin-top:5px">Replaces: ${equipped.name}</div>`;
+    }
+    invTooltip.innerHTML = html;
+    const tx = Math.min(e.clientX + 14, window.innerWidth - 210);
+    const ty = Math.min(e.clientY,       window.innerHeight - 160);
+    invTooltip.style.left = tx + "px";
+    invTooltip.style.top  = ty + "px";
+    invTooltip.classList.remove("hidden");
+  }
+
+  function hideInvTooltip() { invTooltip.classList.add("hidden"); }
+
+  document.getElementById("btn-inv-close").addEventListener("click", closeInventory);
+
   // ---- update ----
 
   function update(dt) {
@@ -470,7 +572,7 @@
       return;
     }
 
-    if (game.state === "menu" || game.state === "levelup") return;
+    if (game.state === "menu" || game.state === "levelup" || game.state === "inventory") return;
 
     if (game.state === "transition") {
       game.transitionT += dt * 2.6;
@@ -888,6 +990,11 @@
     if (save) { DD.audio.unlock(); resumeRun(save); }
   });
   window.addEventListener("keydown", (e) => {
+    if (e.key === "i" || e.key === "I") {
+      if (game.state === "play") { openInventory(); return; }
+      if (game.state === "inventory") { closeInventory(); return; }
+    }
+    if (game.state === "inventory" && e.key === "Escape") { closeInventory(); return; }
     if (game.state === "levelup" && ["1", "2", "3"].includes(e.key)) {
       const up = game.levelUpPicks[Number(e.key) - 1];
       if (up && game.lvlOnPick) game.lvlOnPick(up);

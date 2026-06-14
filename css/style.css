@@ -219,3 +219,58 @@ body {
 #btn-class { background: #b9aee0; box-shadow: 0 4px 0 #6c5f97; }
 
 #result-stats { font-size: 17px; color: #d8cfee; line-height: 1.6; }
+
+/* ---- Inventory overlay ---- */
+#inv-body {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 4px 0 8px;
+}
+
+#inv-equip { display: flex; flex-direction: column; gap: 10px; }
+
+.inv-slot-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.inv-slot-label { font-size: 10px; color: #8b80a8; letter-spacing: 1px; }
+
+.inv-slot, .inv-item {
+  width: 56px; height: 56px;
+  background: #16121f;
+  border: 2px solid #443a63;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.inv-slot:hover, .inv-item:hover { border-color: #ffd95e; }
+.inv-slot.has-item { border-color: #6b5e96; }
+.inv-slot img, .inv-item img { width: 32px; height: 32px; image-rendering: pixelated; }
+
+#inv-grid { display: grid; grid-template-columns: repeat(4, 56px); gap: 8px; }
+
+.rarity-common { border-color: #8b80a8 !important; }
+.rarity-rare   { border-color: #4a9bff !important; }
+.rarity-epic   { border-color: #c87dff !important; }
+
+.inv-empty { color: #8b80a8; font-size: 13px; grid-column: 1 / -1; padding: 8px 0; }
+
+.inv-tooltip {
+  position: fixed;
+  background: #1a1626;
+  border: 2px solid #443a63;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #d8cfee;
+  max-width: 190px;
+  z-index: 200;
+  pointer-events: none;
+  line-height: 1.5;
+}
+.inv-tooltip.hidden { display: none; }
+.inv-tooltip-name { font-weight: bold; font-size: 13px; margin-bottom: 3px; }
+.inv-tooltip-rarity { font-size: 10px; color: #8b80a8; margin-bottom: 6px; letter-spacing: 1px; }
+.inv-tooltip-stat { line-height: 1.6; }
+.inv-tooltip-stat.better { color: #6fce6f; }
+.inv-tooltip-stat.worse  { color: #e8484f; }

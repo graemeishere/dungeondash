@@ -53,6 +53,30 @@
       </div>
       <p class="hint">Enter: play again &nbsp;&bull;&nbsp; Esc: change class</p>
     </div>
+
+    <div id="inventory" class="overlay hidden">
+      <h1 class="small">INVENTORY</h1>
+      <div id="inv-body">
+        <div id="inv-equip">
+          <div class="inv-slot-wrap">
+            <div class="inv-slot-label">WEAPON</div>
+            <div class="inv-slot" id="inv-slot-weapon" data-slot="weapon"></div>
+          </div>
+          <div class="inv-slot-wrap">
+            <div class="inv-slot-label">ARMOR</div>
+            <div class="inv-slot" id="inv-slot-armor" data-slot="armor"></div>
+          </div>
+          <div class="inv-slot-wrap">
+            <div class="inv-slot-label">TRINKET</div>
+            <div class="inv-slot" id="inv-slot-trinket" data-slot="trinket"></div>
+          </div>
+        </div>
+        <div id="inv-grid"></div>
+      </div>
+      <p class="hint">Click to equip &nbsp;&bull;&nbsp; I or Esc to close</p>
+      <button id="btn-inv-close" class="small-btn">Close</button>
+    </div>
+    <div id="inv-tooltip" class="inv-tooltip hidden"></div>
   </div>
 
   <script src="js/lib/peerjs.min.js"></script>
@@ -66,6 +90,7 @@
   <script src="js/entities.js"></script>
   <script src="js/profile.js"></script>
   <script src="js/stats.js"></script>
+  <script src="js/items.js"></script>
   <script src="js/hud.js"></script>
   <script src="js/game.js"></script>
 </body>

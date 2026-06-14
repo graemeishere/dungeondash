@@ -292,6 +292,38 @@
     return s.canvas;
   }
 
+  function makeItemSword() {
+    const s = surface(8);
+    const BLADE = "#d8d4e6", GUARD = "#8b80a8", HILT = "#7a4f26", SHINE = "#f0eeff";
+    s.p(3, 0, BLADE, 2, 4); s.p(3, 1, SHINE, 1, 1);
+    s.p(2, 4, GUARD, 4, 1);
+    s.p(3, 5, HILT, 2, 3);
+    return s.canvas;
+  }
+
+  function makeItemArmor() {
+    const s = surface(8);
+    const STEEL = "#8b9ab5", EDGE = "#5d6880", EMBLEM = "#d33a3a";
+    s.p(1, 0, STEEL, 6, 1);
+    s.p(0, 1, STEEL, 8, 4);
+    s.p(1, 5, STEEL, 6, 1);
+    s.p(2, 6, STEEL, 4, 1);
+    s.p(3, 7, STEEL, 2, 1);
+    s.p(0, 1, EDGE, 1, 4); s.p(7, 1, EDGE, 1, 4);
+    s.p(3, 2, EMBLEM, 2, 2);
+    return s.canvas;
+  }
+
+  function makeItemRing() {
+    const s = surface(8);
+    const GOLD = "#ffd14a", GEM = "#b48cff", SHINE = "#e0c0ff";
+    s.p(2, 0, GEM, 4, 2); s.p(3, 0, SHINE, 1, 1);
+    s.p(3, 2, GOLD, 2, 1);
+    s.p(1, 3, GOLD, 1, 3); s.p(6, 3, GOLD, 1, 3);
+    s.p(2, 6, GOLD, 4, 1);
+    return s.canvas;
+  }
+
   function makeCoin() {
     const s = surface(8);
     const G = "#ffd14a", D = "#c2912a", L = "#fff3b8";
@@ -334,6 +366,7 @@
       this.crown = makeCrown();
       this.spikes = [0, 1, 2].map(makeSpike);
       this.scroll = makeScroll();
+      this.items = { sword: makeItemSword(), armor: makeItemArmor(), ring: makeItemRing() };
     },
   };
 })(window.DD);
