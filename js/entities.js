@@ -27,36 +27,38 @@
     },
   };
 
-  // Level-up choices. apply() mutates the player's per-run stats copy.
+  // Level-up choices. apply() records into runBuffs and calls recompute() so
+  // temporary run power never leaks onto the persistent hero profile.
   DD.UPGRADES = [
     {
       id: "dmg", name: "Sharpened Edge", desc: "+30% damage",
-      apply: (pl) => { pl.stats.dmg *= 1.3; },
+      apply: (pl) => { pl.runBuffs.dmg *= 1.3; pl.recompute(); },
     },
     {
       id: "speed", name: "Swift Boots", desc: "+15% move speed",
-      apply: (pl) => { pl.stats.speed *= 1.15; },
+      apply: (pl) => { pl.runBuffs.speed *= 1.15; pl.recompute(); },
     },
     {
       id: "hp", name: "Tough Hide", desc: "+3 max HP, heal 3",
-      apply: (pl) => { pl.maxHp += 3; pl.hp = Math.min(pl.maxHp, pl.hp + 3); },
+      apply: (pl) => { pl.runBuffs.maxHp += 3; pl.recompute(); pl.hp = Math.min(pl.maxHp, pl.hp + 3); },
     },
     {
       id: "cd", name: "Quick Hands", desc: "Attack 20% faster",
-      apply: (pl) => { pl.stats.cooldown = Math.max(0.08, pl.stats.cooldown * 0.8); },
+      apply: (pl) => { pl.runBuffs.cd *= 0.8; pl.recompute(); },
     },
     {
       id: "reach", name: "Heavy Impact", desc: "Bigger attacks",
       apply: (pl) => {
-        const s = pl.stats;
-        if (s.attack === "melee") { s.range *= 1.25; s.arc *= 1.12; }
-        else if (s.attack === "bolt") { s.splash *= 1.35; s.projSpeed *= 1.1; }
-        else { s.pierce += 1; s.projSpeed *= 1.1; }
+        const b = pl.baseStats;
+        if (b.attack === "melee") { pl.runBuffs.range *= 1.25; pl.runBuffs.arc *= 1.12; }
+        else if (b.attack === "bolt") { pl.runBuffs.splash *= 1.35; pl.runBuffs.projSpeed *= 1.1; }
+        else { pl.runBuffs.pierce += 1; pl.runBuffs.projSpeed *= 1.1; }
+        pl.recompute();
       },
     },
     {
       id: "siphon", name: "Soul Siphon", desc: "30% chance to heal 1 HP on kill",
-      apply: (pl) => { pl.killHeal = (pl.killHeal || 0) + 0.3; },
+      apply: (pl) => { pl.runBuffs.killHeal += 0.3; pl.recompute(); },
     },
   ];
 
@@ -85,18 +87,18 @@
   // ---------------- Player ----------------
 
   class Player {
-    constructor(classKey, x, y, inputProvider) {
+    constructor(classKey, x, y, inputProvider, hero) {
       const c = DD.CLASSES[classKey];
       this.classKey = classKey;
       this.cfg = c;
-      this.stats = { ...c }; // per-run copy that upgrades mutate
+      this.baseStats = hero ? DD.deriveStats(hero) : { ...c };
+      this.runBuffs = { dmg: 1, speed: 1, cd: 1, range: 1, arc: 1, splash: 1, projSpeed: 1, pierce: 0, maxHp: 0, killHeal: 0 };
+      this.recompute();
       this.input = inputProvider || DD.input;
       this.x = x;
       this.y = y;
       this.r = 10;
-      this.hp = c.hp;
-      this.maxHp = c.hp;
-      this.killHeal = 0;
+      this.hp = this.maxHp;
       this.aim = 0;
       this.flip = false;
       this.animT = 0;
@@ -112,6 +114,22 @@
       this.downed = false;   // co-op: waiting for a revive
       this.downT = 0;
       this.reviveP = 0;
+    }
+
+    recompute() {
+      const b = this.baseStats;
+      const r = this.runBuffs;
+      this.stats = { ...b };
+      this.stats.dmg      = b.dmg   * r.dmg;
+      this.stats.speed    = b.speed * r.speed;
+      this.stats.cooldown = Math.max(0.08, b.cooldown * r.cd);
+      if (b.range     !== undefined) this.stats.range     = b.range     * r.range;
+      if (b.arc       !== undefined) this.stats.arc       = b.arc       * r.arc;
+      if (b.projSpeed !== undefined) this.stats.projSpeed = b.projSpeed * r.projSpeed;
+      if (b.splash    !== undefined) this.stats.splash    = b.splash    * r.splash;
+      if (b.pierce    !== undefined) this.stats.pierce    = b.pierce    + r.pierce;
+      this.maxHp    = Math.floor(b.hp) + r.maxHp;
+      this.killHeal = (b.killHeal || 0) + r.killHeal;
     }
 
     alive() { return !this.dead && !this.downed; }
@@ -898,7 +916,8 @@
         pl.hp = pl.maxHp;
         DD.particles.text(this.x, this.y - 30, "Healed!", "#6fce6f");
       } else if (this.kind === "maxhp") {
-        pl.maxHp += 3;
+        pl.runBuffs.maxHp += 3;
+        pl.recompute();
         pl.hp = Math.min(pl.maxHp, pl.hp + 3);
         DD.particles.text(this.x, this.y - 30, "+3 Max HP", "#ff8c91");
       } else if (this.kind === "upgrade" && this.upgrade) {
