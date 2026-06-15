@@ -180,6 +180,21 @@
           ctx.textAlign = "left";
           ctx.globalAlpha = 1;
         }
+
+        // Inventory button — always shown on touch screens
+        const ibtn = DD.input.invBtn();
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = "#b48cff";
+        ctx.beginPath();
+        ctx.arc(ibtn.x, ibtn.y, ibtn.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = "#0e1b24";
+        ctx.font = `bold 11px ${font}`;
+        ctx.textAlign = "center";
+        ctx.fillText("BAG", ibtn.x, ibtn.y + 4);
+        ctx.textAlign = "left";
+        ctx.globalAlpha = 1;
       }
     },
   };
