@@ -607,6 +607,8 @@
     }
 
     if (game.state === "play") {
+      if (DD.input.consumeInvTap()) { openInventory(); return; }
+
       for (const p of game.players) p.update(dt, game);
 
       // spike traps

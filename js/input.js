@@ -8,6 +8,7 @@
     aim: { id: null, active: false, ox: 0, oy: 0, x: 0, y: 0 },
   };
   let dashTap = false;
+  let invTap  = false;
 
   const STICK_RADIUS = 48;
   const DEADZONE = 9;
@@ -38,9 +39,8 @@
     touchSeen: false,
     STICK_RADIUS,
 
-    dashBtn() {
-      return { x: DD.WIDTH - 64, y: DD.HEIGHT - 76, r: 32 };
-    },
+    dashBtn() { return { x: DD.WIDTH - 64, y: DD.HEIGHT - 76,  r: 32 }; },
+    invBtn()  { return { x: DD.WIDTH - 64, y: DD.HEIGHT - 152, r: 26 }; },
 
     init(canvas) {
       window.addEventListener("keydown", (e) => {
@@ -78,6 +78,11 @@
         for (const t of e.changedTouches) {
           const p = toWorld(canvas, t.clientX, t.clientY);
           const pl = DD.game && DD.game.localPlayer;
+          const ibtn = this.invBtn();
+          if (DD.dist(p.x, p.y, ibtn.x, ibtn.y) < ibtn.r + 12) {
+            invTap = true;
+            continue;
+          }
           const btn = this.dashBtn();
           if (pl && pl.cfg.dash && DD.dist(p.x, p.y, btn.x, btn.y) < btn.r + 12) {
             dashTap = true;
@@ -146,10 +151,7 @@
       return keys.shift;
     },
 
-    consumeDashTap() {
-      const v = dashTap;
-      dashTap = false;
-      return v;
-    },
+    consumeDashTap() { const v = dashTap; dashTap = false; return v; },
+    consumeInvTap()  { const v = invTap;  invTap  = false; return v; },
   };
 })(window.DD);
