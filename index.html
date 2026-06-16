@@ -54,6 +54,43 @@
       <p class="hint">Enter: play again &nbsp;&bull;&nbsp; Esc: change class</p>
     </div>
 
+    <div id="hub" class="overlay hidden">
+      <div id="hub-header">
+        <img id="hub-portrait" alt="hero">
+        <div>
+          <div id="hub-hero-name"></div>
+          <div id="hub-hero-meta"></div>
+        </div>
+      </div>
+      <div id="hub-xp-wrap">
+        <div id="hub-xp-bg"><div id="hub-xp-fill"></div></div>
+        <div id="hub-xp-label"></div>
+      </div>
+      <div id="hub-body">
+        <div id="hub-left">
+          <div class="inv-slot-label">STATS</div>
+          <div id="hub-stats"></div>
+          <div class="inv-slot-label" id="hub-attr-hdr">ATTRIBUTES</div>
+          <div id="hub-attrs"></div>
+        </div>
+        <div id="hub-right">
+          <div class="inv-slot-label">EQUIPMENT</div>
+          <div id="hub-equip-slots"></div>
+        </div>
+      </div>
+      <div class="buttons">
+        <button id="btn-descend">Descend</button>
+        <button id="btn-switch-class">Switch Class</button>
+      </div>
+      <button id="btn-hub-continue" class="continue-btn hidden"></button>
+      <div class="coop-row">
+        <button id="btn-hub-host" class="small-btn">Host Co-op</button>
+        <button id="btn-hub-join" class="small-btn">Join Co-op</button>
+      </div>
+      <button id="btn-hub-inventory" class="small-btn">View Bag</button>
+      <p class="hint">I &mdash; open bag &nbsp;&bull;&nbsp; Descend to start a run</p>
+    </div>
+
     <div id="inventory" class="overlay hidden">
       <h1 class="small">INVENTORY</h1>
       <div id="inv-body">

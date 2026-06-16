@@ -22,6 +22,7 @@
   const levelupEl = document.getElementById("levelup");
   const upgradeCardsEl = document.getElementById("upgrade-cards");
   const continueBtn = document.getElementById("btn-continue");
+  const hubEl = document.getElementById("hub");
 
   const SAVE_KEY = "dungeondash_save_v1";
 
@@ -146,6 +147,7 @@
     game.pendingLevelUps = 0;
     game.hintT = 7;
     menuEl.classList.add("hidden");
+    hubEl.classList.add("hidden");
     resultEl.classList.add("hidden");
     levelupEl.classList.add("hidden");
     game.state = "play";
@@ -382,13 +384,124 @@
     resultEl.classList.remove("hidden");
   }
 
+  // ---- hero hub ----
+
+  const ATTR_LABELS = { might: "Might", agility: "Agility", focus: "Focus", vitality: "Vitality" };
+  const ATTR_DESCS  = { might: "DMG +0.5", agility: "SPD +5", focus: "Range +2", vitality: "HP +1.5" };
+
+  function buildHub(hero) {
+    const cls = DD.CLASSES[hero.classKey];
+    document.getElementById("hub-portrait").src = DD.sprites.players[hero.classKey][0].toDataURL();
+    document.getElementById("hub-hero-name").textContent = `${cls.name} · Lv ${hero.level}`;
+    document.getElementById("hub-hero-meta").textContent =
+      `${hero.gold || 0} gold  •  ${hero.kills || 0} kills  •  ${hero.deaths || 0} deaths`;
+
+    // XP bar
+    const xpNext = 25 + (hero.level - 1) * 15;
+    document.getElementById("hub-xp-fill").style.width = (Math.min(1, (hero.xp || 0) / xpNext) * 100) + "%";
+    document.getElementById("hub-xp-label").textContent = `${hero.xp || 0} / ${xpNext} XP to next level`;
+
+    // Derived stats
+    const s = DD.deriveStats(hero);
+    const statsEl = document.getElementById("hub-stats");
+    statsEl.innerHTML = [
+      ["DMG",    s.dmg.toFixed(1)],
+      ["SPD",    Math.round(s.speed)],
+      ["MAX HP", Math.floor(s.hp)],
+      s.range !== undefined ? ["RANGE", Math.round(s.range)] : null,
+    ].filter(Boolean).map(([k, v]) =>
+      `<div class="hub-stat-row"><span class="hub-stat-key">${k}</span><span class="hub-stat-val">${v}</span></div>`
+    ).join("");
+
+    // Attribute allocation
+    const pts = hero.attrPoints || 0;
+    const attrHdr = document.getElementById("hub-attr-hdr");
+    attrHdr.textContent = pts > 0 ? `ATTRIBUTES  (${pts} to spend)` : "ATTRIBUTES";
+    attrHdr.style.color = pts > 0 ? "#ffd95e" : "";
+    const attrsEl = document.getElementById("hub-attrs");
+    attrsEl.innerHTML = "";
+    for (const attr of DD.ATTRS) {
+      const row = document.createElement("div");
+      row.className = "hub-attr-row";
+      const val = hero.attrs[attr] || 0;
+      row.innerHTML =
+        `<span class="hub-attr-name">${ATTR_LABELS[attr]}</span>` +
+        `<span class="hub-attr-val">${val}</span>` +
+        `<span class="hub-attr-desc">${ATTR_DESCS[attr]}</span>`;
+      if (pts > 0) {
+        const btn = document.createElement("button");
+        btn.className = "hub-attr-btn";
+        btn.textContent = "+";
+        btn.onclick = () => {
+          if ((hero.attrPoints || 0) <= 0) return;
+          hero.attrPoints--;
+          hero.attrs[attr] = (hero.attrs[attr] || 0) + 1;
+          DD.profile.save();
+          buildHub(hero);
+        };
+        row.appendChild(btn);
+      }
+      attrsEl.appendChild(row);
+    }
+
+    // Equipment slots
+    const equipEl = document.getElementById("hub-equip-slots");
+    equipEl.innerHTML = "";
+    for (const slot of ["weapon", "armor", "trinket"]) {
+      const wrap = document.createElement("div");
+      wrap.className = "inv-slot-wrap";
+      const label = document.createElement("div");
+      label.className = "inv-slot-label";
+      label.textContent = slot.toUpperCase();
+      const slotEl = document.createElement("div");
+      const item = hero.equipped[slot];
+      slotEl.className = item ? `inv-slot has-item rarity-${item.rarity}` : "inv-slot";
+      if (item) {
+        const img = document.createElement("img");
+        img.src = DD.sprites.items[item.icon].toDataURL();
+        slotEl.appendChild(img);
+        slotEl.title = item.name;
+        slotEl.onmouseenter = (e) => showInvTooltip(e, hero, item, null);
+        slotEl.onmouseleave = hideInvTooltip;
+      }
+      wrap.append(label, slotEl);
+      equipEl.appendChild(wrap);
+    }
+
+    // Continue button
+    const hcBtn = document.getElementById("btn-hub-continue");
+    const sv = readSave();
+    if (sv && DD.CLASSES[sv.classKey]) {
+      hcBtn.textContent = `Continue — Floor ${sv.floor + 1}, ${DD.CLASSES[sv.classKey].name} Lv ${sv.level}`;
+      hcBtn.classList.remove("hidden");
+    } else {
+      hcBtn.classList.add("hidden");
+    }
+  }
+
+  function showHub(hero) {
+    game.state = "hub";
+    game.hero = hero;
+    menuEl.classList.add("hidden");
+    resultEl.classList.add("hidden");
+    hubEl.classList.remove("hidden");
+    buildHub(hero);
+  }
+
   function backToMenu() {
     resultEl.classList.add("hidden");
-    menuEl.classList.remove("hidden");
-    refreshContinueButton();
+    lobbyEl.classList.add("hidden");
     setMenuMode(null, "");
-    game.state = "menu";
     DD.room.prerendered = false;
+    const hero = DD.profile.getActiveHero();
+    if (hero) {
+      menuEl.classList.add("hidden");
+      showHub(hero);
+    } else {
+      menuEl.classList.remove("hidden");
+      refreshContinueButton();
+      game.state = "menu";
+    }
   }
 
   // ---- level-up overlay ----
@@ -467,8 +580,12 @@
   const invGridEl   = document.getElementById("inv-grid");
   const invTooltip  = document.getElementById("inv-tooltip");
 
+  let _prevInventoryState = "play";
+
   function openInventory() {
-    if (!game.hero || game.state !== "play") return;
+    if (!game.hero) return;
+    if (game.state !== "play" && game.state !== "hub") return;
+    _prevInventoryState = game.state;
     game.state = "inventory";
     renderInventory(game.hero);
     inventoryEl.classList.remove("hidden");
@@ -477,7 +594,11 @@
   function closeInventory() {
     inventoryEl.classList.add("hidden");
     invTooltip.classList.add("hidden");
-    game.state = "play";
+    if (_prevInventoryState === "hub" && game.hero) {
+      showHub(game.hero);
+    } else {
+      game.state = "play";
+    }
   }
 
   function rebaseLocalPlayer() {
@@ -572,6 +693,10 @@
       return;
     }
 
+    if (game.state === "hub") {
+      if (DD.input.consumeInvTap()) openInventory();
+      return;
+    }
     if (game.state === "menu" || game.state === "levelup" || game.state === "inventory") return;
 
     if (game.state === "transition") {
@@ -690,8 +815,7 @@
     ctx.translate(DD.view.ox, DD.view.oy);
     ctx.scale(DD.view.scale, DD.view.scale);
 
-    if (game.state === "menu") {
-      // dim empty room behind the class-select overlay
+    if (game.state === "menu" || game.state === "hub") {
       if (!DD.room.prerendered) {
         sizeRoomToCanvas();
         DD.room.generate();
@@ -787,6 +911,7 @@
     lobbyIn.classList.toggle("hidden", !input);
     lobbyEl.classList.remove("hidden");
     menuEl.classList.add("hidden");
+    hubEl.classList.add("hidden");
   }
 
   function setMenuMode(mode, hint) {
@@ -831,9 +956,7 @@
   });
   document.getElementById("btn-lobby-back").addEventListener("click", () => {
     DD.net.reset();
-    setMenuMode(null, "");
-    lobbyEl.classList.add("hidden");
-    menuEl.classList.remove("hidden");
+    backToMenu();
   });
   async function tryJoin() {
     const code = codeIn.value.trim();
@@ -933,6 +1056,7 @@
       DD.particles.clear();
       lobbyEl.classList.add("hidden");
       menuEl.classList.add("hidden");
+      hubEl.classList.add("hidden");
       resultEl.classList.add("hidden");
       game.state = "play";
       game.hintT = 6;
@@ -993,7 +1117,7 @@
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "i" || e.key === "I") {
-      if (game.state === "play") { openInventory(); return; }
+      if (game.state === "play" || game.state === "hub") { openInventory(); return; }
       if (game.state === "inventory") { closeInventory(); return; }
     }
     if (game.state === "inventory" && e.key === "Escape") { closeInventory(); return; }
@@ -1007,19 +1131,63 @@
     if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); backToMenu(); }
   });
 
+  // ---- hub buttons ----
+
+  document.getElementById("btn-descend").addEventListener("click", () => {
+    DD.audio.unlock();
+    if (game.hero) startRun(game.hero.classKey);
+  });
+
+  document.getElementById("btn-switch-class").addEventListener("click", () => {
+    DD.audio.unlock();
+    hubEl.classList.add("hidden");
+    menuEl.classList.remove("hidden");
+    refreshContinueButton();
+    setMenuMode(null, "");
+    game.state = "menu";
+  });
+
+  document.getElementById("btn-hub-continue").addEventListener("click", () => {
+    const sv = readSave();
+    if (sv) { DD.audio.unlock(); resumeRun(sv); }
+  });
+
+  document.getElementById("btn-hub-host").addEventListener("click", () => {
+    DD.audio.unlock();
+    if (game.hero) {
+      game.classKey = game.hero.classKey;
+      hostWithClass(game.hero.classKey);
+    }
+  });
+
+  document.getElementById("btn-hub-join").addEventListener("click", () => {
+    DD.audio.unlock();
+    if (game.hero) joinWithClass(game.hero.classKey);
+  });
+
+  document.getElementById("btn-hub-inventory").addEventListener("click", () => {
+    DD.audio.unlock();
+    openInventory();
+  });
+
   // ---- boot ----
 
   DD.sprites.init();
   fitCanvas();
   DD.input.init(canvas);
   buildClassCards();
-  refreshContinueButton();
+  const _bootHero = DD.profile.getActiveHero();
+  if (_bootHero) {
+    showHub(_bootHero);
+  } else {
+    refreshContinueButton();
+  }
 
   window.addEventListener("resize", () => {
     fitCanvas();
     // regenerate the backdrop room to fill the new shape; mid-run rooms keep
     // their layout and letterbox until the next room loads
-    if (game.state === "menu") DD.room.prerendered = false;
+    if (game.state === "menu" || game.state === "hub") DD.room.prerendered = false;
   });
 
   let last = performance.now();
