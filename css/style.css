@@ -416,6 +416,21 @@ body {
 #so-equip { display: flex; gap: 10px; flex-wrap: wrap; }
 #so-inv-grid { display: grid; grid-template-columns: repeat(4, 56px); gap: 8px; }
 
+@media (max-width: 720px) {
+  /* stack the three sections and scroll inside the overlay so the title and
+     Close button stay on-screen on phones */
+  #so-body {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    width: 94vw;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  #so-col-left, #so-col-mid, #so-col-right { width: 100%; min-width: 0; }
+  #so-inv-grid { grid-template-columns: repeat(auto-fill, 48px); justify-content: center; }
+  #stats-overlay .inv-slot, #stats-overlay .inv-item { width: 48px; height: 48px; }
+}
+
 /* Hub quest log */
 #hub-quests-wrap { width: min(420px, 88vw); }
 #hub-quests { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
