@@ -16,10 +16,51 @@
     doorOpen: false,
     doorCols: [14, 15],
     spikes: [], // [{tx, ty, offset}]
+    theme: "catacombs",
+    decorations: [],    // animated/text overlays drawn every frame
+    staticDecor: [],    // baked into the floor canvas during prerender
+    tierDoorCols: null, // lobby: [[a,b],[c,d],[e,f]] -> tier index per doorway
+    isLobby: false,
+    isTown: false,
+
+    setTheme(id) {
+      this.theme = (DD.sprites.themes && DD.sprites.themes[id]) ? id : "catacombs";
+    },
+
+    themeSet() {
+      return (DD.sprites.themes && DD.sprites.themes[this.theme]) || null;
+    },
+
+    // Sprinkle non-colliding ambiance for the current theme along the walls.
+    addAmbiance() {
+      const th = this.themeSet();
+      if (!th) return;
+      const topY = DD.TILE * 0.9;
+      for (let tx = 3; tx < DD.ROOM_W - 3; tx += 6) {
+        const x = tx * DD.TILE + DD.TILE / 2;
+        if (th.torch) this.decorations.push({ frames: th.torch, x, y: topY, anim: true });
+        else if (th.lantern) this.decorations.push({ frames: th.lantern, x, y: topY, anim: true });
+      }
+      if (th.bat) {
+        for (let i = 0; i < 4; i++) {
+          this.decorations.push({
+            frames: th.bat, anim: true,
+            bx: DD.rand(DD.TILE * 3, DD.WIDTH - DD.TILE * 3),
+            by: DD.rand(DD.TILE * 2, DD.HEIGHT * 0.45),
+            phase: Math.random() * Math.PI * 2, fly: true,
+          });
+        }
+      }
+    },
 
     generate(opts = {}) {
       this.doorOpen = false;
       this.spikes = [];
+      this.decorations = [];
+      this.staticDecor = [];
+      this.tierDoorCols = null;
+      this.isLobby = false;
+      this.isTown = false;
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
 
       // border walls
@@ -67,6 +108,88 @@
         });
       }
 
+      this.addAmbiance();
+      // crypt-only ground props baked into the floor (purely visual)
+      const th = this.themeSet();
+      if (th && th.gravestone) {
+        for (let i = 0; i < 3; i++) {
+          const tx = DD.randi(2, DD.ROOM_W - 3), ty = DD.randi(2, DD.ROOM_H - 3);
+          if (tileAt(tx, ty) !== FLOOR) continue;
+          const img = Math.random() < 0.5 ? th.gravestone : (th.fence || th.gravestone);
+          this.staticDecor.push({ img, x: tx * DD.TILE + DD.TILE / 2, y: ty * DD.TILE + DD.TILE });
+        }
+      }
+      if (th && th.mineCart) {
+        const tx = DD.randi(2, DD.ROOM_W - 4), ty = DD.randi(DD.ROOM_H - 5, DD.ROOM_H - 3);
+        if (tileAt(tx, ty) === FLOOR) {
+          this.staticDecor.push({ img: th.mineCart, x: tx * DD.TILE + DD.TILE, y: ty * DD.TILE + DD.TILE });
+        }
+      }
+
+      this.prerender();
+    },
+
+    // A themed entry room with three doorways, one per dungeon tier.
+    generateLobby() {
+      this.spikes = [];
+      this.decorations = [];
+      this.staticDecor = [];
+      this.isLobby = true;
+      this.isTown = false;
+      this.doorOpen = true;
+      tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
+      for (let x = 0; x < DD.ROOM_W; x++) {
+        tiles[x] = WALL;
+        tiles[(DD.ROOM_H - 1) * DD.ROOM_W + x] = WALL;
+      }
+      for (let y = 0; y < DD.ROOM_H; y++) {
+        tiles[y * DD.ROOM_W] = WALL;
+        tiles[y * DD.ROOM_W + DD.ROOM_W - 1] = WALL;
+      }
+
+      const labels = ["I  ·  1-10", "II  ·  11-20", "III  ·  21-30"];
+      const colors = ["#9affb0", "#ffd95e", "#ff7a7a"];
+      this.tierDoorCols = [];
+      this.doorCols = [];
+      [0.22, 0.5, 0.78].forEach((f, ti) => {
+        const c = DD.clamp(Math.round(DD.ROOM_W * f), 2, DD.ROOM_W - 3);
+        const cols = [c, c + 1];
+        for (const cc of cols) { tiles[cc] = DOOR; this.doorCols.push(cc); }
+        this.tierDoorCols.push(cols);
+        const x = (c + 1) * DD.TILE;
+        this.decorations.push({ sign: true, text: `TIER ${ti + 1}`, sub: labels[ti], color: colors[ti], x, y: DD.TILE * 2.4 });
+      });
+      this.addAmbiance();
+      this.prerender();
+    },
+
+    // A walkable town: warm theme, a single exit door, a bar counter prop.
+    generateTown() {
+      this.spikes = [];
+      this.decorations = [];
+      this.staticDecor = [];
+      this.isLobby = false;
+      this.isTown = true;
+      this.doorOpen = true;
+      this.tierDoorCols = null;
+      tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
+      for (let x = 0; x < DD.ROOM_W; x++) {
+        tiles[x] = WALL;
+        tiles[(DD.ROOM_H - 1) * DD.ROOM_W + x] = WALL;
+      }
+      for (let y = 0; y < DD.ROOM_H; y++) {
+        tiles[y * DD.ROOM_W] = WALL;
+        tiles[y * DD.ROOM_W + DD.ROOM_W - 1] = WALL;
+      }
+      this.doorCols = [Math.floor(DD.ROOM_W / 2) - 1, Math.floor(DD.ROOM_W / 2)];
+      for (const c of this.doorCols) tiles[c] = DOOR;
+
+      const th = this.themeSet();
+      if (th && th.barCounter) {
+        this.staticDecor.push({ img: th.barCounter, x: DD.TILE * 3.5, y: DD.TILE * 2.4, anchorTop: true });
+      }
+      this.decorations.push({ sign: true, text: "TO THE MAP", sub: "▲ exit", color: "#ffd95e", x: (DD.ROOM_W / 2) * DD.TILE, y: DD.TILE * 2.2 });
+      this.addAmbiance();
       this.prerender();
     },
 
@@ -152,10 +275,17 @@
       this.doorCols = d.doorCols;
       this.doorOpen = d.doorOpen;
       this.spikes = d.spikes || [];
+      this.decorations = [];
+      this.staticDecor = [];
+      this.addAmbiance();
       this.prerender();
     },
 
     prerender() {
+      const th = this.themeSet();
+      const wallImg = th ? th.wall : DD.sprites.wallTile;
+      const floorSet = th ? th.floor : DD.sprites.floorTiles;
+      const doorImg = th ? th.doorClosed : DD.sprites.doorClosed;
       floorCanvas = document.createElement("canvas");
       floorCanvas.width = DD.WIDTH;
       floorCanvas.height = DD.HEIGHT;
@@ -164,23 +294,61 @@
         for (let tx = 0; tx < DD.ROOM_W; tx++) {
           const t = tileAt(tx, ty);
           let img;
-          if (t === WALL) img = DD.sprites.wallTile;
-          else if (t === DOOR) img = DD.sprites.doorClosed;
-          else img = DD.sprites.floorTiles[(tx * 7 + ty * 13) % DD.sprites.floorTiles.length];
+          if (t === WALL) img = wallImg;
+          else if (t === DOOR) img = doorImg;
+          else img = floorSet[(tx * 7 + ty * 13) % floorSet.length];
           ctx.drawImage(img, tx * DD.TILE, ty * DD.TILE);
         }
+      }
+      // bake static props (gravestones, fences, mine carts, bar counter)
+      for (const d of this.staticDecor) {
+        const y = d.anchorTop ? d.y : d.y - d.img.height;
+        ctx.drawImage(d.img, Math.round(d.x - d.img.width / 2), Math.round(y));
+      }
+    },
+
+    drawDecorations(ctx) {
+      const time = (DD.game && DD.game.time) || 0;
+      const font = "'Trebuchet MS', Verdana, sans-serif";
+      for (const d of this.decorations) {
+        if (d.sign) {
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(10,8,18,0.7)";
+          ctx.fillRect(d.x - 52, d.y - 16, 104, 34);
+          ctx.strokeStyle = d.color;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(d.x - 52, d.y - 16, 104, 34);
+          ctx.fillStyle = d.color;
+          ctx.font = `bold 14px ${font}`;
+          ctx.fillText(d.text, d.x, d.y - 1);
+          ctx.fillStyle = "#d8cfee";
+          ctx.font = `11px ${font}`;
+          ctx.fillText(d.sub, d.x, d.y + 13);
+          ctx.textAlign = "left";
+          continue;
+        }
+        const frame = d.frames[Math.floor(time * 6) % d.frames.length];
+        let x = d.x, y = d.y;
+        if (d.fly) {
+          x = d.bx + Math.sin(time * 1.6 + d.phase) * 40;
+          y = d.by + Math.cos(time * 2.3 + d.phase) * 22;
+        }
+        ctx.drawImage(frame, Math.round(x - frame.width / 2), Math.round(y - frame.height / 2));
       }
     },
 
     draw(ctx) {
+      const th = this.themeSet();
       ctx.drawImage(floorCanvas, 0, 0);
       if (this.doorOpen) {
-        for (const c of this.doorCols) ctx.drawImage(DD.sprites.doorOpen, c * DD.TILE, 0);
+        const openImg = th ? th.doorOpen : DD.sprites.doorOpen;
+        for (const c of this.doorCols) ctx.drawImage(openImg, c * DD.TILE, 0);
       }
       const time = (DD.game && DD.game.time) || 0;
       for (const s of this.spikes) {
         ctx.drawImage(DD.sprites.spikes[this.spikeStage(s, time)], s.tx * DD.TILE, s.ty * DD.TILE);
       }
+      this.drawDecorations(ctx);
     },
   };
 })(window.DD);

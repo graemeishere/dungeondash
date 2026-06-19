@@ -96,15 +96,35 @@
     </div>
 
 
-    <div id="town" class="overlay hidden">
-      <h1>TOWN</h1>
-      <p class="tagline">A safe haven between the dungeons.</p>
+    <div id="raid-warning" class="overlay hidden">
+      <h1 class="small" style="color:#ff5252">RAID!</h1>
+      <p id="raid-text" class="tagline"></p>
       <div class="buttons">
-        <button id="btn-town-hub">Visit Hero Hub</button>
-        <button id="btn-town-trader" disabled title="Coming soon">Trader (Soon)</button>
-        <button id="btn-town-quests" disabled title="Coming soon">Quest Giver (Soon)</button>
+        <button id="btn-fight-back">Fight Back</button>
+        <button id="btn-flee">Flee to Map</button>
       </div>
-      <button id="btn-town-leave" class="small-btn">Leave Town → Map</button>
+      <p class="hint">Defend the town, or escape to the world map.</p>
+    </div>
+
+    <div id="stats-overlay" class="overlay hidden">
+      <h1 class="small">THE BARKEEP</h1>
+      <p id="so-title" class="tagline"></p>
+      <div id="so-body">
+        <div id="so-col-left">
+          <div class="inv-slot-label">STATS</div>
+          <div id="so-stats"></div>
+          <div id="so-attrs"></div>
+        </div>
+        <div id="so-col-mid">
+          <div class="inv-slot-label">EQUIPMENT</div>
+          <div id="so-equip"></div>
+        </div>
+        <div id="so-col-right">
+          <div class="inv-slot-label">BAG</div>
+          <div id="so-inv-grid"></div>
+        </div>
+      </div>
+      <button id="btn-stats-close" class="small-btn">Close</button>
     </div>
 
     <div id="inventory" class="overlay hidden">

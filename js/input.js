@@ -9,6 +9,7 @@
   };
   let dashTap = false;
   let invTap  = false;
+  let interactTap = false;
 
   const STICK_RADIUS = 48;
   const DEADZONE = 9;
@@ -44,8 +45,10 @@
 
     init(canvas) {
       window.addEventListener("keydown", (e) => {
-        keys[e.key.toLowerCase()] = true;
-        if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
+        const k = e.key.toLowerCase();
+        if (k === "e" && !keys[k]) interactTap = true; // edge-triggered talk
+        keys[k] = true;
+        if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
           e.preventDefault();
         }
         DD.audio.unlock();
@@ -153,5 +156,6 @@
 
     consumeDashTap() { const v = dashTap; dashTap = false; return v; },
     consumeInvTap()  { const v = invTap;  invTap  = false; return v; },
+    consumeInteract() { const v = interactTap; interactTap = false; return v; },
   };
 })(window.DD);

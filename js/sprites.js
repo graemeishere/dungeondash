@@ -450,6 +450,266 @@
     return s.canvas;
   }
 
+  // ---- per-dungeon themed tiles ----
+  // Each theme supplies a wall tile, floor variants, and a closed/open door.
+  // The offset-brick layout matches makeWallTile so collision visuals stay aligned.
+
+  function paintTile(paint) {
+    const t = makeCanvas(DD.TILE, DD.TILE);
+    paint(t.getContext("2d"));
+    return t;
+  }
+
+  function makeBrickWall(pal) {
+    return paintTile((ctx) => {
+      ctx.fillStyle = pal.mortar;
+      ctx.fillRect(0, 0, DD.TILE, DD.TILE);
+      ctx.fillStyle = pal.brick;
+      ctx.fillRect(1, 1, 14, 13);
+      ctx.fillRect(17, 1, 14, 13);
+      ctx.fillRect(1, 17, 6, 13);
+      ctx.fillRect(9, 17, 14, 13);
+      ctx.fillRect(25, 17, 6, 13);
+      ctx.fillStyle = pal.hi;
+      ctx.fillRect(1, 1, 14, 2);
+      ctx.fillRect(17, 1, 14, 2);
+      if (pal.accent) {
+        ctx.fillStyle = pal.accent;
+        ctx.fillRect(4, 5, 2, 6);    // vein/beam accent
+        ctx.fillRect(20, 19, 2, 7);
+      }
+    });
+  }
+
+  function makeThemedFloor(pal, variant) {
+    return paintTile((ctx) => {
+      ctx.fillStyle = pal.base;
+      ctx.fillRect(0, 0, DD.TILE, DD.TILE);
+      ctx.fillStyle = pal.edge;
+      ctx.fillRect(0, 0, DD.TILE, 2);
+      ctx.fillRect(0, 0, 2, DD.TILE);
+      for (let i = 0; i < 6 + variant * 2; i++) {
+        ctx.fillStyle = DD.choice(pal.speckles);
+        ctx.fillRect(DD.randi(2, 28), DD.randi(2, 28), DD.randi(2, 4), DD.randi(2, 3));
+      }
+      if (pal.rail) {
+        // mine cart rails: two parallel lines with sleepers
+        ctx.fillStyle = pal.rail;
+        ctx.fillRect(8, 0, 3, DD.TILE);
+        ctx.fillRect(21, 0, 3, DD.TILE);
+        ctx.fillStyle = pal.sleeper || pal.edge;
+        for (let y = 3; y < DD.TILE; y += 10) ctx.fillRect(6, y, 20, 2);
+      }
+      if (pal.crack && variant === 2) {
+        ctx.strokeStyle = pal.crack;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(6, 24); ctx.lineTo(14, 16); ctx.lineTo(13, 9);
+        ctx.stroke();
+      }
+    });
+  }
+
+  function makeWoodFloor(variant) {
+    return paintTile((ctx) => {
+      const planks = ["#b9863f", "#c89850", "#a8762f"];
+      for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = planks[(i + variant) % planks.length];
+        ctx.fillRect(0, i * 8, DD.TILE, 8);
+        ctx.fillStyle = "#6e4a23"; // groove
+        ctx.fillRect(0, i * 8 + 7, DD.TILE, 1);
+      }
+      ctx.fillStyle = "#8a5e2e"; // plank butt joints
+      ctx.fillRect((variant * 11) % DD.TILE, 0, 1, DD.TILE);
+    });
+  }
+
+  function makeThemedDoor(pal, open) {
+    return paintTile((ctx) => {
+      ctx.drawImage(pal.wall, 0, 0);
+      ctx.fillStyle = open ? "#15121f" : "#0d0b14";
+      ctx.fillRect(4, 6, 24, 26);
+      if (open) {
+        ctx.fillStyle = pal.glow || "#ffd95e";
+        ctx.globalAlpha = 0.28;
+        ctx.fillRect(4, 6, 24, 26);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = pal.bars || "#6b6481";
+        for (let x = 7; x <= 25; x += 6) ctx.fillRect(x, 6, 3, 26);
+        ctx.fillRect(4, 14, 24, 3);
+      }
+      ctx.fillStyle = pal.hi || "#3e3857";
+      ctx.fillRect(2, 4, 28, 3);
+    });
+  }
+
+  // ---- themed decorations (free-size canvases, anchored by their center) ----
+
+  function makeTorch(frame) {
+    const c = makeCanvas(12 * 3, 22 * 3);
+    const ctx = c.getContext("2d");
+    const px = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x * 3, y * 3, w * 3, h * 3); };
+    px(5, 10, "#3a2a18", 2, 11);     // wooden handle
+    px(4, 9, "#6b6481", 4, 2);       // iron bracket
+    // flame flickers between two shapes
+    if (frame === 0) {
+      px(4, 4, "#ff8c00", 4, 5);
+      px(5, 2, "#ffcf3a", 2, 4);
+      px(5, 1, "#fff3b8", 2, 2);
+    } else {
+      px(4, 5, "#ff8c00", 4, 4);
+      px(5, 3, "#ffcf3a", 2, 3);
+      px(4, 2, "#fff3b8", 2, 2);
+    }
+    return c;
+  }
+
+  function makeLantern(frame) {
+    const c = makeCanvas(12 * 3, 20 * 3);
+    const ctx = c.getContext("2d");
+    const px = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x * 3, y * 3, w * 3, h * 3); };
+    px(5, 0, "#5a3a1a", 2, 3);        // hanging rope
+    px(3, 3, "#3a2a18", 6, 2);        // top cap
+    px(3, 5, "#7a5c2e", 6, 8);        // frame
+    const glow = frame === 0 ? "#ffd060" : "#ffe89a";
+    px(4, 6, glow, 4, 6);             // glass glow
+    px(5, 7, "#fff3b8", 2, 2);        // bright core
+    px(3, 13, "#3a2a18", 6, 2);       // bottom cap
+    return c;
+  }
+
+  function makeBat(frame) {
+    const c = makeCanvas(16 * 3, 10 * 3);
+    const ctx = c.getContext("2d");
+    const px = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x * 3, y * 3, w * 3, h * 3); };
+    const B = "#2a1a1a", D = "#3a2424";
+    px(7, 3, B, 2, 3);                // body
+    px(7, 2, B, 2, 1);               // head
+    if (frame === 0) {
+      px(2, 2, D, 5, 2); px(9, 2, D, 5, 2);   // wings up
+      px(1, 1, B, 2, 1); px(13, 1, B, 2, 1);
+    } else {
+      px(2, 4, D, 5, 2); px(9, 4, D, 5, 2);   // wings down
+      px(1, 5, B, 2, 1); px(13, 5, B, 2, 1);
+    }
+    px(7, 1, "#cc2222", 1, 1); px(8, 1, "#cc2222", 1, 1); // red eyes
+    return c;
+  }
+
+  function makeGravestone() {
+    const c = makeCanvas(20 * 3, 26 * 3);
+    const ctx = c.getContext("2d");
+    const px = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x * 3, y * 3, w * 3, h * 3); };
+    const STONE = "#8a8a9a", SHADE = "#5d5d6e", DARK = "#3a3a48";
+    px(7, 1, STONE, 6, 4);            // rounded top
+    px(6, 3, STONE, 8, 18);
+    px(6, 3, "#a4a4b4", 8, 1);        // top highlight
+    px(13, 4, SHADE, 1, 17);         // right shade
+    px(4, 21, DARK, 12, 3);          // dirt mound base
+    px(8, 7, SHADE, 4, 1);           // engraved lines
+    px(8, 9, SHADE, 4, 1);
+    px(9, 11, SHADE, 2, 1);
+    return c;
+  }
+
+  function makeIronFence() {
+    const c = makeCanvas(DD.TILE, 16 * 3);
+    const ctx = c.getContext("2d");
+    const px = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x * 3, y * 3, w * 3, h * 3); };
+    const IRON = "#444455", HI = "#5d5d70";
+    px(0, 4, IRON, 11, 2);            // top rail (32px wide ≈ 10.6 art px)
+    px(0, 10, IRON, 11, 2);          // bottom rail
+    for (let x = 1; x < 11; x += 3) {
+      px(x, 1, IRON, 1, 13);         // vertical bar
+      px(x, 0, HI, 1, 1);            // spear tip
+    }
+    return c;
+  }
+
+  function makeMineCart() {
+    const c = makeCanvas(28 * 3, 22 * 3);
+    const ctx = c.getContext("2d");
+    const px = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x * 3, y * 3, w * 3, h * 3); };
+    const METAL = "#4a4a55", HI = "#6a6a78", DARK = "#2a2a32", WOOD = "#7a5c2e";
+    px(3, 6, METAL, 22, 9);          // cart body
+    px(3, 6, HI, 22, 1);
+    px(4, 7, DARK, 20, 4);           // contents shadow
+    px(6, 7, "#7a5c2e", 3, 3); px(14, 8, "#8a6c3a", 4, 3); // ore/rocks
+    px(18, 7, "#6a6a78", 3, 2);
+    px(3, 15, WOOD, 22, 2);          // axle plank
+    px(6, 17, DARK, 5, 5); px(17, 17, DARK, 5, 5);   // wheels
+    px(7, 18, HI, 3, 3); px(18, 18, HI, 3, 3);
+    return c;
+  }
+
+  function makeBarCounter() {
+    const c = makeCanvas(DD.TILE * 4, DD.TILE * 2);
+    const ctx = c.getContext("2d");
+    const W = DD.TILE * 4;
+    ctx.fillStyle = "#5a3a1a";       // counter base
+    ctx.fillRect(0, 18, W, 46);
+    ctx.fillStyle = "#7a4f26";       // counter top
+    ctx.fillRect(0, 10, W, 10);
+    ctx.fillStyle = "#9a6f3a";
+    ctx.fillRect(0, 10, W, 3);       // top highlight
+    ctx.fillStyle = "#4a3020";       // panel grooves
+    for (let x = 14; x < W; x += 28) ctx.fillRect(x, 22, 2, 38);
+    // a couple of mugs on the bar
+    ctx.fillStyle = "#caa46a";
+    ctx.fillRect(24, 2, 8, 8); ctx.fillRect(70, 3, 7, 7);
+    ctx.fillStyle = "#e8dcb8";
+    ctx.fillRect(24, 2, 8, 2); ctx.fillRect(70, 3, 7, 2);
+    return c;
+  }
+
+  // ---- town NPCs (16x16, single static frame reused for both anim frames) ----
+
+  function drawNpc(p, kind) {
+    const DARKC = "#241f33";
+    if (kind === "barkeep") {
+      const SKIN = "#e8b888", SHIRT = "#9a5a3a", APRON = "#d8cfb8";
+      p(5, 13, "#3a2a18", 2, 2); p(9, 13, "#3a2a18", 2, 2); // boots
+      p(4, 9, SHIRT, 8, 4);                                  // burly torso
+      p(5, 10, APRON, 6, 3);                                 // apron
+      p(3, 10, SKIN, 1, 2); p(12, 10, SKIN, 1, 2);          // arms
+      p(4, 2, SKIN, 8, 7); p(4, 7, "#caa46a", 8, 1);        // head
+      p(4, 1, "#6b4a2a", 8, 2);                              // hair
+      p(6, 5, DARKC, 1, 1); p(9, 5, DARKC, 1, 1);          // eyes
+      p(6, 7, "#7a4a2a", 4, 1);                              // moustache
+      p(12, 9, "#caa46a", 2, 3); p(12, 9, "#e8dcb8", 2, 1); // tankard
+    } else if (kind === "innkeeper") {
+      const SKIN = "#f2c09a", ROBE = "#3a5e8a", ROBE_L = "#4a72a8";
+      p(5, 13, "#2a2418", 2, 2); p(9, 13, "#2a2418", 2, 2);
+      p(4, 9, ROBE, 8, 5); p(5, 9, ROBE_L, 6, 1);
+      p(3, 10, ROBE, 1, 3); p(12, 10, ROBE, 1, 3);
+      p(4, 2, SKIN, 8, 7); p(4, 7, "#d49a72", 8, 1);
+      p(3, 1, "#8a8a96", 10, 2);                             // grey hair
+      p(6, 5, DARKC, 1, 1); p(9, 5, DARKC, 1, 1);
+      p(7, 7, "#b8b8c4", 2, 2);                              // beard
+      p(12, 8, "#ffd14a", 1, 4); p(11, 11, "#ffd14a", 2, 1); // key
+    } else if (kind === "trader") {
+      const SKIN = "#caa078", CLOAK = "#6e4a8a", CLOAK_L = "#8a5ea8";
+      p(5, 13, "#2a2418", 2, 2); p(9, 13, "#2a2418", 2, 2);
+      p(4, 9, CLOAK, 8, 5); p(5, 9, CLOAK_L, 6, 1);
+      p(3, 1, CLOAK, 10, 4);                                 // hood
+      p(3, 4, CLOAK, 1, 4); p(12, 4, CLOAK, 1, 4);
+      p(4, 3, SKIN, 8, 5);
+      p(5, 5, DARKC, 2, 1); p(9, 5, DARKC, 2, 1);          // shaded eyes
+      p(11, 10, "#7a5c2e", 3, 3); p(12, 9, "#7a5c2e", 1, 1); // coin bag
+      p(12, 11, "#ffd14a", 1, 1);
+    } else if (kind === "questgiver") {
+      const SKIN = "#f2c09a", TUNIC = "#3a6e4a", TUNIC_L = "#4a8a5a";
+      p(5, 13, "#3a2a18", 2, 2); p(9, 13, "#3a2a18", 2, 2);
+      p(4, 9, TUNIC, 8, 4); p(5, 9, TUNIC_L, 6, 1);
+      p(3, 10, SKIN, 1, 2); p(12, 10, SKIN, 1, 2);
+      p(4, 2, SKIN, 8, 7); p(4, 7, "#d49a72", 8, 1);
+      p(4, 1, "#caa46a", 8, 2);                              // blond hair
+      p(6, 5, DARKC, 1, 1); p(9, 5, DARKC, 1, 1);
+      p(2, 9, "#e8dcb8", 3, 4); p(2, 9, "#b8a878", 3, 1); p(2, 12, "#b8a878", 3, 1); // scroll
+    }
+  }
+
   DD.sprites = {
     init() {
       const heroDefs = {
@@ -489,6 +749,63 @@
       this.spikes = [0, 1, 2].map(makeSpike);
       this.scroll = makeScroll();
       this.items = { sword: makeItemSword(), armor: makeItemArmor(), ring: makeItemRing(), axe: makeItemAxe() };
+
+      // NPC sprites — drawn on the same 16x16 hero grid, two identical frames
+      // so the idle-bob loop in the draw code finds a [0],[1] pair.
+      for (const kind of ["barkeep", "innkeeper", "trader", "questgiver"]) {
+        const cap = "npc" + kind[0].toUpperCase() + kind.slice(1);
+        this[cap] = makeFrames((p) => drawNpc(p, kind));
+      }
+
+      // ---- per-dungeon themes ----
+      // Each theme: wall, floor[] variants, doorClosed, doorOpen, plus the
+      // animated/decoration sprites used by room.generateLobby / generateTown.
+      const cataWall = makeBrickWall({ mortar: "#22222a", brick: "#3a3a45", hi: "#4d4d5c" });
+      const mineWall = makeBrickWall({ mortar: "#2a2012", brick: "#5c4a2a", hi: "#7a5c2e", accent: "#3a2a14" });
+      const cryptWall = makeBrickWall({ mortar: "#100e18", brick: "#1e1a2a", hi: "#2c2640", accent: "#4a2060" });
+      const townWall = makeBrickWall({ mortar: "#7a5c34", brick: "#c8a870", hi: "#e0c590" });
+
+      this.themes = {
+        catacombs: {
+          wall: cataWall,
+          floor: [0, 1, 2].map((v) => makeThemedFloor({
+            base: "#4a4a58", edge: "#3a3a46", speckles: ["#54546b", "#3f3f50", "#5c5c70"], crack: "#2e2e3c",
+          }, v)),
+          doorClosed: makeThemedDoor({ wall: cataWall }, false),
+          doorOpen: makeThemedDoor({ wall: cataWall, glow: "#ffd95e" }, true),
+          torch: [makeTorch(0), makeTorch(1)],
+        },
+        goblinMines: {
+          wall: mineWall,
+          floor: [0, 1, 2].map((v) => makeThemedFloor({
+            base: "#3c2e18", edge: "#2a2012", speckles: ["#4a3a20", "#332715", "#52401f"],
+            rail: "#6a6a72", sleeper: "#5a3a1a",
+          }, v)),
+          doorClosed: makeThemedDoor({ wall: mineWall, bars: "#7a5c2e" }, false),
+          doorOpen: makeThemedDoor({ wall: mineWall, glow: "#ffd060" }, true),
+          lantern: [makeLantern(0), makeLantern(1)],
+          mineCart: makeMineCart(),
+        },
+        crypt: {
+          wall: cryptWall,
+          floor: [0, 1, 2].map((v) => makeThemedFloor({
+            base: "#2a2535", edge: "#1a1726", speckles: ["#332e44", "#221d30", "#3a3450"], crack: "#15121f",
+          }, v)),
+          doorClosed: makeThemedDoor({ wall: cryptWall, bars: "#4a2060" }, false),
+          doorOpen: makeThemedDoor({ wall: cryptWall, glow: "#9940d0" }, true),
+          bat: [makeBat(0), makeBat(1)],
+          gravestone: makeGravestone(),
+          fence: makeIronFence(),
+        },
+        town: {
+          wall: townWall,
+          floor: [0, 1, 2].map((v) => makeWoodFloor(v)),
+          doorClosed: makeThemedDoor({ wall: townWall, bars: "#8a5e2e" }, false),
+          doorOpen: makeThemedDoor({ wall: townWall, glow: "#ffd95e" }, true),
+          barCounter: makeBarCounter(),
+          torch: [makeTorch(0), makeTorch(1)],
+        },
+      };
     },
   };
 })(window.DD);

@@ -394,6 +394,28 @@ body {
 
 #btn-switch-class { background: #b9aee0; box-shadow: 0 4px 0 #6c5f97; }
 
+/* ---- Barkeep stats overlay ---- */
+#so-body {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 10px 0;
+  width: min(720px, 94vw);
+}
+#so-col-left, #so-col-mid, #so-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 180px;
+}
+#so-stats { display: flex; flex-direction: column; gap: 3px; }
+#so-attrs { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+#so-equip { display: flex; gap: 10px; flex-wrap: wrap; }
+#so-inv-grid { display: grid; grid-template-columns: repeat(4, 56px); gap: 8px; }
+
 /* Hub quest log */
 #hub-quests-wrap { width: min(420px, 88vw); }
 #hub-quests { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }

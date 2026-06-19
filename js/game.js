@@ -146,6 +146,12 @@
     classKey: "warrior",
     time: 0,
     mapSelected: null, // dungeon id currently selected on the world map (showing tier buttons)
+    peaceful: false,   // town/lobby: player can move but not attack
+    lobbyDungeonId: null,
+    townNpcs: [],
+    nearbyNpc: null,
+    raidMode: false,
+    raidFaction: null,
 
     get localPlayer() { return this.players[this.localIndex]; },
     enemies() { return this.skeletons; },
@@ -234,6 +240,11 @@
     game.classKey = classKey;
     game.dungeonId = dungeonId;
     game.tier = tier;
+    game.peaceful = false;
+    game.raidMode = false;
+    game.townNpcs = [];
+    game.nearbyNpc = null;
+    DD.room.setTheme(dungeonId);
     game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
     game.localIndex = 0;
     game.floor = 0;
@@ -267,6 +278,8 @@
     game.localIndex = 0;
     game.dungeonId = save.dungeonId || "catacombs";
     game.tier = save.tier || 0;
+    game.peaceful = false;
+    DD.room.setTheme(game.dungeonId);
     game.floor = save.floor;
     game.xp = hero ? (hero.xp || 0) : (save.xp || 0);
     game.level = hero ? (hero.level || 1) : (save.level || 1);
@@ -615,21 +628,262 @@
     showMap();
   }
 
-  function showTown() {
-    game.state = "town";
+  // Spawn the local hero at the bottom-center of the current room.
+  function spawnHeroInRoom() {
+    const hero = game.hero || DD.profile.getActiveHero();
+    game.hero = hero;
+    const classKey = (hero && hero.classKey) || game.classKey;
+    const pl = new DD.Player(classKey, DD.WIDTH / 2, DD.HEIGHT - DD.TILE * 2.5, DD.input, hero);
+    game.players = [pl];
+    game.localIndex = 0;
+    game.skeletons = [];
+    game.projectiles = [];
+    game.enemyShots = [];
+    game.pickups = [];
+    game.chests = [];
+    game.shopItems = [];
+    game.shopkeeper = null;
+    game.spawnQueue = [];
+    DD.particles.clear();
+  }
+
+  function hideAllOverlays() {
     hubEl.classList.add("hidden");
     resultEl.classList.add("hidden");
     menuEl.classList.add("hidden");
-    document.getElementById("town").classList.remove("hidden");
+    document.getElementById("stats-overlay").classList.add("hidden");
+    document.getElementById("raid-warning").classList.add("hidden");
+  }
+
+  // Themed entry room with three tier doorways. Walk through one to start a run.
+  function showLobby(dungeonId) {
+    if (!DUNGEONS[dungeonId]) return;
+    hideAllOverlays();
+    game.state = "lobby";
+    game.peaceful = true;
+    game.lobbyDungeonId = dungeonId;
+    game.dungeonId = dungeonId;
+    game.time = 0;
+    game.nearbyNpc = null;
+    game.townNpcs = [];
+    sizeRoomToCanvas();
+    DD.room.setTheme(dungeonId);
+    DD.room.generateLobby();
+    DD.updateView(canvas);
+    spawnHeroInRoom();
+  }
+
+  function enterTierDoor(ti) {
+    const classKey = (game.hero && game.hero.classKey) || game.classKey;
+    startRun(classKey, game.lobbyDungeonId, ti);
+  }
+
+  function spawnTownNpcs() {
+    const y = DD.HEIGHT * 0.45;
+    const slots = [0.22, 0.41, 0.59, 0.78];
+    const defs = [
+      { id: "barkeep",    label: "Barkeep",     sprite: "npcBarkeep",    interact: openBarkeepMenu },
+      { id: "innkeeper",  label: "Innkeeper",   sprite: "npcInnkeeper",  interact: openInnkeeperMenu },
+      { id: "trader",     label: "Trader",      sprite: "npcTrader",     interact: openTraderMenu },
+      { id: "questgiver", label: "Quest Giver", sprite: "npcQuestGiver", interact: openQuestGiverMenu },
+    ];
+    return defs.map((d, i) => ({ ...d, x: DD.WIDTH * slots[i], y, r: 14, bob: Math.random() * Math.PI * 2 }));
+  }
+
+  // Walkable town. 25% of arrivals trigger a raid warning instead.
+  function showTownRoom(skipRaid) {
+    hideAllOverlays();
+    if (!skipRaid && Math.random() < 0.25) { showRaidWarning(); return; }
+    game.state = "town";
+    game.peaceful = true;
+    game.raidMode = false;
+    game.time = 0;
+    game.nearbyNpc = null;
+    sizeRoomToCanvas();
+    DD.room.setTheme("town");
+    DD.room.generateTown();
+    DD.updateView(canvas);
+    spawnHeroInRoom();
+    game.townNpcs = spawnTownNpcs();
   }
 
   function showMap() {
+    hideAllOverlays();
     game.state = "map";
     game.mapSelected = null;
-    hubEl.classList.add("hidden");
-    resultEl.classList.add("hidden");
+    game.peaceful = false;
+    game.townNpcs = [];
+    game.nearbyNpc = null;
+    sizeRoomToCanvas();
+    DD.updateView(canvas);
+  }
+
+  // ---- town NPC interactions ----
+
+  let townSwitchClass = false;
+
+  const statsOverlayEl = document.getElementById("stats-overlay");
+
+  function openBarkeepMenu() {
+    if (!game.hero) return;
+    game.state = "stats";
+    buildStatsOverlay(game.hero);
+    statsOverlayEl.classList.remove("hidden");
+  }
+
+  function closeStatsOverlay() {
+    statsOverlayEl.classList.add("hidden");
+    if (game.hero) rebaseLocalPlayer();
+    game.state = "town";
+  }
+
+  function openInnkeeperMenu() {
+    townSwitchClass = true;
+    game.state = "menu";
+    menuEl.classList.remove("hidden");
+    refreshContinueButton();
+    setMenuMode(null, "INNKEEPER — pick a new class. Your level, gold and gear are kept.");
+  }
+
+  function openTraderMenu() {
+    townToast("The Trader is still unpacking his wares — shop coming soon!", "#ffd95e");
+  }
+
+  function openQuestGiverMenu() {
+    townToast("The Quest Giver has no work for you yet — quests coming soon!", "#9affb0");
+  }
+
+  function townToast(text, color) {
+    const pl = game.players[0];
+    const x = pl ? pl.x : DD.WIDTH / 2;
+    const y = pl ? pl.y - 50 : DD.HEIGHT / 2;
+    DD.particles.text(x, y, text, color || "#ffd95e");
+  }
+
+  // Change the active hero's class while keeping all progression.
+  function switchClass(classKey) {
+    if (!DD.CLASSES[classKey] || !game.hero) return;
+    game.hero.classKey = classKey;
+    game.classKey = classKey;
+    DD.profile.save();
+    townSwitchClass = false;
     menuEl.classList.add("hidden");
-    document.getElementById("town").classList.add("hidden");
+    setMenuMode(null, "");
+    showTownRoom(true);
+  }
+
+  // ---- raid warning ----
+
+  function showRaidWarning() {
+    game.state = "raid-warn";
+    game.raidFaction = DD.choice(["goblin", "skeleton", "undead"]);
+    const dungeonName = {
+      goblin: "Goblin Mines", skeleton: "Catacombs", undead: "The Crypt",
+    }[game.raidFaction];
+    document.getElementById("raid-text").textContent =
+      `Raiders from the ${dungeonName} are attacking the town!`;
+    document.getElementById("raid-warning").classList.remove("hidden");
+  }
+
+  function factionDungeon(faction) {
+    return { goblin: "goblinMines", skeleton: "catacombs", undead: "crypt" }[faction] || "catacombs";
+  }
+
+  function startRaid() {
+    document.getElementById("raid-warning").classList.add("hidden");
+    const classKey = (game.hero && game.hero.classKey) || game.classKey;
+    startRun(classKey, factionDungeon(game.raidFaction), game.tier);
+    game.raidMode = true;
+  }
+
+  // ---- barkeep stats overlay ----
+
+  function buildStatsOverlay(hero) {
+    const cls = DD.CLASSES[hero.classKey];
+    const titleEl = document.getElementById("so-title");
+    if (titleEl) titleEl.textContent = `${cls.name} · Lv ${hero.level}`;
+
+    const s = DD.deriveStats(hero);
+    document.getElementById("so-stats").innerHTML = [
+      ["DMG",    s.dmg.toFixed(1)],
+      ["SPD",    Math.round(s.speed)],
+      ["MAX HP", Math.floor(s.hp)],
+      s.range !== undefined ? ["RANGE", Math.round(s.range)] : null,
+    ].filter(Boolean).map(([k, v]) =>
+      `<div class="hub-stat-row"><span class="hub-stat-key">${k}</span><span class="hub-stat-val">${v}</span></div>`
+    ).join("");
+
+    const pts = hero.attrPoints || 0;
+    const attrsEl = document.getElementById("so-attrs");
+    attrsEl.innerHTML = `<div class="inv-slot-label" style="color:${pts > 0 ? "#ffd95e" : ""}">ATTRIBUTES${pts > 0 ? ` (${pts} to spend)` : ""}</div>`;
+    for (const attr of DD.ATTRS) {
+      const row = document.createElement("div");
+      row.className = "hub-attr-row";
+      row.innerHTML =
+        `<span class="hub-attr-name">${ATTR_LABELS[attr]}</span>` +
+        `<span class="hub-attr-val">${hero.attrs[attr] || 0}</span>` +
+        `<span class="hub-attr-desc">${ATTR_DESCS[attr]}</span>`;
+      if (pts > 0) {
+        const btn = document.createElement("button");
+        btn.className = "hub-attr-btn";
+        btn.textContent = "+";
+        btn.onclick = () => {
+          if ((hero.attrPoints || 0) <= 0) return;
+          hero.attrPoints--;
+          hero.attrs[attr] = (hero.attrs[attr] || 0) + 1;
+          DD.profile.save();
+          buildStatsOverlay(hero);
+        };
+        row.appendChild(btn);
+      }
+      attrsEl.appendChild(row);
+    }
+
+    // equipment (click to unequip)
+    const equipEl = document.getElementById("so-equip");
+    equipEl.innerHTML = "";
+    for (const slot of ["weapon", "armor", "trinket"]) {
+      const wrap = document.createElement("div");
+      wrap.className = "inv-slot-wrap";
+      const label = document.createElement("div");
+      label.className = "inv-slot-label";
+      label.textContent = slot.toUpperCase();
+      const slotEl = document.createElement("div");
+      const item = hero.equipped[slot];
+      slotEl.className = item ? `inv-slot has-item rarity-${item.rarity}` : "inv-slot";
+      if (item) {
+        const img = document.createElement("img");
+        img.src = DD.sprites.items[item.icon].toDataURL();
+        slotEl.appendChild(img);
+        slotEl.onclick = () => { DD.unequip(hero, slot); DD.profile.save(); buildStatsOverlay(hero); };
+        slotEl.onmouseenter = (e) => showInvTooltip(e, hero, item, null);
+        slotEl.onmouseleave = hideInvTooltip;
+      }
+      wrap.append(label, slotEl);
+      equipEl.appendChild(wrap);
+    }
+
+    // inventory grid (click to equip)
+    const grid = document.getElementById("so-inv-grid");
+    grid.innerHTML = "";
+    if (hero.inventory.length === 0) {
+      const p = document.createElement("p");
+      p.className = "inv-empty";
+      p.textContent = "No items yet — defeat enemies to find gear!";
+      grid.appendChild(p);
+    } else {
+      for (const item of hero.inventory) {
+        const cell = document.createElement("div");
+        cell.className = `inv-item rarity-${item.rarity}`;
+        const img = document.createElement("img");
+        img.src = DD.sprites.items[item.icon].toDataURL();
+        cell.appendChild(img);
+        cell.onclick = () => { DD.equip(hero, item); DD.profile.save(); buildStatsOverlay(hero); };
+        cell.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
+        cell.onmouseleave = hideInvTooltip;
+        grid.appendChild(cell);
+      }
+    }
   }
 
   function backToMenu() {
@@ -843,7 +1097,9 @@
       if (DD.input.consumeInvTap()) openInventory();
       return;
     }
-    if (game.state === "map" || game.state === "town" || game.state === "menu" || game.state === "levelup" || game.state === "inventory") return;
+    if (game.state === "lobby" || game.state === "town") { updatePeaceful(dt); return; }
+    if (game.state === "map" || game.state === "menu" || game.state === "levelup" ||
+        game.state === "inventory" || game.state === "stats" || game.state === "raid-warn") return;
 
     if (game.state === "transition") {
       game.transitionT += dt * 2.6;
@@ -954,6 +1210,36 @@
     }
   }
 
+  // Movement-only loop for the town and dungeon-lobby rooms: walk around,
+  // talk to NPCs, and step through doorways. No combat.
+  function updatePeaceful(dt) {
+    game.time += dt;
+    const pl = game.players[0];
+    if (!pl) return;
+    pl.update(dt, game);
+    DD.particles.update(dt);
+
+    if (game.state === "town") {
+      game.nearbyNpc = null;
+      for (const npc of game.townNpcs) {
+        if (DD.dist(pl.x, pl.y, npc.x, npc.y) < npc.r + pl.r + 18) { game.nearbyNpc = npc; break; }
+      }
+      if (game.nearbyNpc && (DD.input.consumeInteract() || DD.input.consumeInvTap())) {
+        game.nearbyNpc.interact();
+        return;
+      }
+      DD.input.consumeInteract();
+      if (DD.room.doorOpen && DD.room.inDoorway(pl.x, pl.y - pl.r)) showMap();
+    } else if (game.state === "lobby") {
+      DD.input.consumeInteract();
+      if (DD.room.tierDoorCols && pl.y < DD.TILE * 1.6) {
+        const col = Math.floor(pl.x / DD.TILE);
+        const ti = DD.room.tierDoorCols.findIndex((cols) => cols.includes(col));
+        if (ti >= 0) { enterTierDoor(ti); return; }
+      }
+    }
+  }
+
   // ---- world map ----
 
   const MAP_LOCS = [
@@ -1054,7 +1340,7 @@
     ctx.fillText("WORLD MAP", W / 2, 30);
     ctx.font = `12px ${font}`;
     ctx.fillStyle = "#7a6e96";
-    ctx.fillText("Click a dungeon to select a tier  •  Esc to return to hub", W / 2, 50);
+    ctx.fillText("Click a location to travel there", W / 2, 50);
 
     const mx = DD.input.mouse.x, my = DD.input.mouse.y;
 
@@ -1069,24 +1355,76 @@
       ctx.font = `bold 13px ${font}`;
       ctx.fillStyle = hovered ? "#ffd95e" : "#bdb3d6";
       ctx.fillText(loc.name, cx, cy + 46);
+    }
+    ctx.textAlign = "left";
+  }
 
-      // tier buttons for selected dungeon
-      if (loc.kind === "dungeon" && game.mapSelected === loc.id) {
-        const dungeon = DUNGEONS[loc.id];
-        dungeon.tiers.forEach((t, ti) => {
-          const bx = cx + (ti - 1) * 80;
-          const by = cy + 70;
-          const bHov = Math.abs(mx - bx) < 36 && Math.abs(my - by) < 20;
-          ctx.fillStyle = bHov ? "#ffd95e" : "rgba(30,26,46,0.9)";
-          ctx.fillRect(bx - 36, by - 20, 72, 40);
-          ctx.strokeStyle = bHov ? "#ffd95e" : "#6b6481";
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(bx - 36, by - 20, 72, 40);
-          ctx.fillStyle = bHov ? "#1a1626" : "#d8cfee";
-          ctx.font = `bold 11px ${font}`;
-          ctx.fillText(`Tier ${ti} (${t.levelHint})`, bx, by + 4);
-        });
-      }
+  // ---- town / lobby rendering ----
+
+  function drawTownNpc(ctx, npc, time) {
+    const frames = DD.sprites[npc.sprite] || DD.sprites.npcBarkeep;
+    const d = 48;
+    const bobY = Math.sin(time * 2 + npc.bob) * 2;
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath();
+    ctx.ellipse(npc.x, npc.y + 5, npc.r + 2, (npc.r + 2) * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const frame = frames[Math.floor(time * 4) % frames.length];
+    ctx.drawImage(frame, Math.round(npc.x - d / 2), Math.round(npc.y - d + 10 + bobY), d, d);
+
+    const hot = game.nearbyNpc === npc;
+    const font = "'Trebuchet MS', Verdana, sans-serif";
+    ctx.textAlign = "center";
+    ctx.font = `bold 11px ${font}`;
+    const w = ctx.measureText(npc.label).width + 12;
+    ctx.fillStyle = "rgba(10,8,18,0.72)";
+    ctx.fillRect(npc.x - w / 2, npc.y - d - 6, w, 16);
+    ctx.fillStyle = hot ? "#ffd95e" : "#d8cfee";
+    ctx.fillText(npc.label, npc.x, npc.y - d + 6);
+    ctx.textAlign = "left";
+  }
+
+  function drawPeaceful(ctx) {
+    DD.room.draw(ctx);
+    const time = game.time;
+    const ents = [];
+    for (const p of game.players) if (p && !p.dead) ents.push({ y: p.y, render: () => p.draw(ctx) });
+    if (game.state === "town" || game.state === "stats") {
+      for (const npc of game.townNpcs) ents.push({ y: npc.y, render: () => drawTownNpc(ctx, npc, time) });
+    }
+    ents.sort((a, b) => a.y - b.y);
+    for (const e of ents) e.render();
+    DD.particles.draw(ctx);
+
+    // title + prompt
+    const font = "'Trebuchet MS', Verdana, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(10,8,18,0.66)";
+    ctx.fillRect(DD.WIDTH / 2 - 150, 10, 300, 44);
+    ctx.fillStyle = "#ffd95e";
+    ctx.font = `bold 19px ${font}`;
+    let title, sub;
+    if (game.state === "lobby") {
+      const dn = (DUNGEONS[game.lobbyDungeonId] || {}).name || "Dungeon";
+      title = dn.toUpperCase();
+      sub = "Walk through a doorway to choose your tier  •  Esc: map";
+    } else {
+      title = "TOWN";
+      sub = DD.input.touchSeen
+        ? "Tap an NPC to talk  •  walk up through the door to leave"
+        : "Walk to an NPC and press E  •  exit ▲ to the map  •  Esc: map";
+    }
+    ctx.fillText(title, DD.WIDTH / 2, 32);
+    ctx.fillStyle = "#bdb3d6";
+    ctx.font = `12px ${font}`;
+    ctx.fillText(sub, DD.WIDTH / 2, 48);
+
+    if (game.state === "town" && game.nearbyNpc) {
+      const pl = game.players[0];
+      ctx.fillStyle = "#ffd95e";
+      ctx.font = `bold 13px ${font}`;
+      const label = DD.input.touchSeen ? `Tap to talk to ${game.nearbyNpc.label}` : `[E] Talk to ${game.nearbyNpc.label}`;
+      ctx.fillText(label, pl.x, pl.y - 40);
     }
     ctx.textAlign = "left";
   }
@@ -1103,6 +1441,12 @@
 
     if (game.state === "map") {
       drawMap(ctx);
+      ctx.restore();
+      return;
+    }
+
+    if (game.state === "lobby" || game.state === "town" || game.state === "stats") {
+      drawPeaceful(ctx);
       ctx.restore();
       return;
     }
@@ -1177,6 +1521,7 @@
         DD.audio.unlock();
         if (coopMode === "host-pick") hostWithClass(key);
         else if (coopMode === "join-pick") joinWithClass(key);
+        else if (townSwitchClass) switchClass(key);
         else selectClass(key);
       });
       holder.appendChild(card);
@@ -1340,6 +1685,7 @@
 
     // guest side
     if (m.t === "room") {
+      DD.room.setTheme(m.dungeonId || "catacombs");
       DD.room.setData(m.room);
       DD.updateView(canvas);
       game.floor = m.floor;
@@ -1417,6 +1763,10 @@
       if (game.state === "inventory") { closeInventory(); return; }
     }
     if (game.state === "inventory" && e.key === "Escape") { closeInventory(); return; }
+    if (game.state === "stats" && e.key === "Escape") { closeStatsOverlay(); return; }
+    if ((game.state === "town" || game.state === "lobby") && e.key === "Escape") { showMap(); return; }
+    if (game.state === "raid-warn" && e.key === "Escape") { document.getElementById("raid-warning").classList.add("hidden"); showMap(); return; }
+    if (game.state === "menu" && townSwitchClass && e.key === "Escape") { townSwitchClass = false; showTownRoom(true); return; }
     if (game.state === "map" && e.key === "Escape") { if (game.hero) showHub(game.hero); else backToMenu(); return; }
     if (game.state === "levelup" && ["1", "2", "3"].includes(e.key)) {
       const up = game.levelUpPicks[Number(e.key) - 1];
@@ -1440,28 +1790,28 @@
 
     for (const loc of MAP_LOCS) {
       const lx = loc.fx * DD.WIDTH, ly = loc.fy * DD.HEIGHT;
-      // tier button clicks must be checked BEFORE the icon circle so taps on
-      // the buttons (which sit below the icon) are not swallowed by the icon hit zone
-      if (loc.kind === "dungeon" && game.mapSelected === loc.id) {
-        const dungeon = DUNGEONS[loc.id];
-        let hit = false;
-        dungeon.tiers.forEach((t, ti) => {
-          const bx = lx + (ti - 1) * 80;
-          const by = ly + 70;
-          if (Math.abs(wx - bx) < 36 && Math.abs(wy - by) < 20) {
-            DD.audio.unlock();
-            startRun((game.hero && game.hero.classKey) || game.classKey, loc.id, ti);
-            hit = true;
-          }
-        });
-        if (hit) return true;
-      }
       if (DD.dist(wx, wy, lx, ly) < 52) {
-        if (loc.kind === "town") {
-          showTown();
-        } else {
-          game.mapSelected = game.mapSelected === loc.id ? null : loc.id;
-        }
+        DD.audio.unlock();
+        if (loc.kind === "town") showTownRoom();
+        else showLobby(loc.id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Tap an NPC in the town to talk to them (mobile has no E key).
+  function handleTownTap(clientX, clientY, targetEl) {
+    if (game.state !== "town") return false;
+    const rect = targetEl.getBoundingClientRect();
+    const cx = (clientX - rect.left) * (targetEl.width / rect.width);
+    const cy = (clientY - rect.top) * (targetEl.height / rect.height);
+    const wx = (cx - DD.view.ox) / DD.view.scale;
+    const wy = (cy - DD.view.oy) / DD.view.scale;
+    for (const npc of game.townNpcs) {
+      if (DD.dist(wx, wy, npc.x, npc.y - 18) < 40) {
+        DD.audio.unlock();
+        npc.interact();
         return true;
       }
     }
@@ -1469,15 +1819,17 @@
   }
 
   canvas.addEventListener("click", (e) => {
-    handleMapTap(e.clientX, e.clientY, canvas);
+    if (handleMapTap(e.clientX, e.clientY, canvas)) return;
+    handleTownTap(e.clientX, e.clientY, canvas);
   });
 
   // touchstart in input.js calls preventDefault(), which swallows the click event
-  // on mobile — so we handle map taps via touchend directly.
+  // on mobile — so we handle map/town taps via touchend directly.
   canvas.addEventListener("touchend", (e) => {
-    if (game.state !== "map") return;
+    if (game.state !== "map" && game.state !== "town") return;
     const t = e.changedTouches[0];
-    if (t && handleMapTap(t.clientX, t.clientY, canvas)) {
+    if (!t) return;
+    if (handleMapTap(t.clientX, t.clientY, canvas) || handleTownTap(t.clientX, t.clientY, canvas)) {
       e.preventDefault();
     }
   }, { passive: false });
@@ -1521,15 +1873,17 @@
     openInventory();
   });
 
-  // ---- town buttons ----
+  // ---- stats overlay + raid buttons ----
 
-  document.getElementById("btn-town-hub").addEventListener("click", () => {
-    document.getElementById("town").classList.add("hidden");
-    if (game.hero) showHub(game.hero);
+  document.getElementById("btn-stats-close").addEventListener("click", closeStatsOverlay);
+
+  document.getElementById("btn-fight-back").addEventListener("click", () => {
+    DD.audio.unlock();
+    startRaid();
   });
 
-  document.getElementById("btn-town-leave").addEventListener("click", () => {
-    document.getElementById("town").classList.add("hidden");
+  document.getElementById("btn-flee").addEventListener("click", () => {
+    document.getElementById("raid-warning").classList.add("hidden");
     showMap();
   });
 
@@ -1552,7 +1906,18 @@
     fitCanvas();
     // regenerate the backdrop room to fill the new shape; mid-run rooms keep
     // their layout and letterbox until the next room loads
-    if (game.state === "menu" || game.state === "hub") DD.room.prerendered = false;
+    if (game.state === "menu" || game.state === "hub") {
+      DD.room.prerendered = false;
+    } else if (game.state === "map") {
+      // the map is redrawn each frame from DD.WIDTH/HEIGHT — resync them so it
+      // reflows to the new aspect instead of letterboxing the old shape
+      sizeRoomToCanvas();
+      DD.updateView(canvas);
+    } else if (game.state === "town") {
+      showTownRoom(true);
+    } else if (game.state === "lobby") {
+      showLobby(game.lobbyDungeonId);
+    }
   });
 
   let last = performance.now();
