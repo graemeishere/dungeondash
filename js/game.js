@@ -839,9 +839,11 @@
       const s = game.spawnQueue[i];
       s.delay -= dt;
       if (s.delay <= 0) {
+        const floorCfg = game.floorCfg();
+        const grade = s.grade || (s.big || s.elite ? "regular" : DD.rollGrade(game.floor, game.tier));
         game.skeletons.push(new DD.Skeleton(s.x, s.y, {
           big: s.big, kind: s.kind, elite: s.elite, name: s.name,
-          scale: game.floorCfg().scale, faction: s.faction || "skeleton",
+          scale: floorCfg.scale, faction: s.faction || "skeleton", grade,
         }));
         DD.audio.spawn();
         game.spawnQueue.splice(i, 1);

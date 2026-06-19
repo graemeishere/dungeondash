@@ -418,12 +418,13 @@
   // ---------------- Enemy bone shot ----------------
 
   class EnemyShot {
-    constructor(x, y, angle, speed = 240, dmg = 1) {
+    constructor(x, y, angle, speed = 240, dmg = 1, style = "bone") {
       this.x = x;
       this.y = y;
       this.vx = Math.cos(angle) * speed;
       this.vy = Math.sin(angle) * speed;
       this.dmg = dmg;
+      this.style = style;
       this.t = 0;
       this.dead = false;
     }
@@ -444,26 +445,64 @@
     }
 
     draw(ctx) {
-      // spinning bone
       ctx.save();
       ctx.translate(this.x, this.y);
-      ctx.rotate(this.t * 12);
-      ctx.strokeStyle = "#e9e6da";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(-6, 0);
-      ctx.lineTo(6, 0);
-      ctx.stroke();
-      ctx.fillStyle = "#e9e6da";
-      for (const ex of [-6, 6]) {
+      if (this.style === "magic") {
+        // swirling arcane orb
+        ctx.fillStyle = "#9940d0";
         ctx.beginPath();
-        ctx.arc(ex, -2, 2, 0, Math.PI * 2);
-        ctx.arc(ex, 2, 2, 0, Math.PI * 2);
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = "#c060f0";
+        ctx.beginPath();
+        ctx.arc(-2, -2, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.t * 14);
+        ctx.strokeStyle = "#e080ff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, this.t * 8, this.t * 8 + Math.PI * 1.4);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else {
+        // spinning bone
+        ctx.rotate(this.t * 12);
+        ctx.strokeStyle = "#e9e6da";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-6, 0);
+        ctx.lineTo(6, 0);
+        ctx.stroke();
+        ctx.fillStyle = "#e9e6da";
+        for (const ex of [-6, 6]) {
+          ctx.beginPath();
+          ctx.arc(ex, -2, 2, 0, Math.PI * 2);
+          ctx.arc(ex, 2, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.restore();
     }
   }
+
+  // ---------------- Enemy grade roller ----------------
+
+  // Returns "regular" | "veteran" | "elite" based on floor index (0-2) and tier (0-2).
+  // Higher floors and tiers skew toward harder grades.
+  DD.rollGrade = function (floorIndex, tier) {
+    const probs = [
+      [[85, 13, 2], [75, 20, 5], [65, 25, 10]],
+      [[65, 28, 7], [55, 32, 13], [45, 35, 20]],
+      [[45, 38, 17], [35, 40, 25], [25, 42, 33]],
+    ];
+    const fi = Math.min(Math.max(floorIndex, 0), 2);
+    const ti = Math.min(Math.max(tier, 0), 2);
+    const [r, v, e] = probs[fi][ti];
+    const roll = Math.random() * 100;
+    if (roll < e) return "elite";
+    if (roll < e + v) return "veteran";
+    return "regular";
+  };
 
   // ---------------- Skeleton (melee / archer / bomber, brute, elite) ----------------
 
@@ -471,7 +510,8 @@
     constructor(x, y, opts = {}) {
       this.x = x;
       this.y = y;
-      this.kind = opts.kind || "melee"; // melee | archer | bomber | shade
+      // melee|archer|bomber|shade | goblin|goblinArcher|goblinBerserker|goblinShaman | zombie|warlock|necromancer
+      this.kind = opts.kind || "melee";
       this.faction = opts.faction || "skeleton";
       this.big = !!opts.big;
       this.elite = !!opts.elite;
@@ -482,26 +522,64 @@
 
       const baseHp = opts.hp ?? (
         this.big ? 16 :
-        this.kind === "bomber" ? 4 :
-        this.kind === "archer" ? 5 :
-        this.kind === "shade"  ? 3 : 6);
+        this.kind === "bomber"          ? 4 :
+        this.kind === "archer"          ? 5 :
+        this.kind === "shade"           ? 3 :
+        this.kind === "goblin"          ? 4 :
+        this.kind === "goblinArcher"    ? 4 :
+        this.kind === "goblinBerserker" ? 5 :
+        this.kind === "goblinShaman"    ? 7 :
+        this.kind === "zombie"          ? 14 :
+        this.kind === "warlock"         ? 5 :
+        this.kind === "necromancer"     ? 9 : 6);
       this.hp = Math.round(baseHp * scale);
       this.maxHp = this.hp;
       const baseSpeed = opts.speed ?? (
         this.big ? DD.rand(38, 48) :
-        this.kind === "bomber" ? DD.rand(100, 118) :
-        this.kind === "archer" ? DD.rand(48, 60) :
-        this.kind === "shade"  ? DD.rand(85, 105) :
+        this.kind === "bomber"          ? DD.rand(100, 118) :
+        this.kind === "archer"          ? DD.rand(48, 60) :
+        this.kind === "shade"           ? DD.rand(85, 105) :
+        this.kind === "goblin"          ? DD.rand(95, 120) :
+        this.kind === "goblinArcher"    ? DD.rand(55, 75) :
+        this.kind === "goblinBerserker" ? DD.rand(120, 145) :
+        this.kind === "goblinShaman"    ? DD.rand(30, 45) :
+        this.kind === "zombie"          ? DD.rand(35, 55) :
+        this.kind === "warlock"         ? DD.rand(40, 58) :
+        this.kind === "necromancer"     ? DD.rand(28, 40) :
         DD.rand(52, 78));
       this.speed = baseSpeed * (1 + 0.06 * (scale - 1));
       this.dmg = opts.dmg ?? (this.big ? 2 : 1) + (scale >= 1.9 ? 1 : 0);
       this.xpValue = opts.xpValue ?? (
         this.elite ? 25 : this.big ? 12 :
-        this.kind === "shade" ? 4 :
-        this.kind === "melee" ? 5 : 7);
+        this.kind === "shade"           ? 4 :
+        this.kind === "melee"           ? 5 :
+        this.kind === "goblin"          ? 4 :
+        this.kind === "goblinArcher"    ? 5 :
+        this.kind === "goblinBerserker" ? 7 :
+        this.kind === "goblinShaman"    ? 10 :
+        this.kind === "zombie"          ? 6 :
+        this.kind === "warlock"         ? 8 :
+        this.kind === "necromancer"     ? 14 : 7);
       this.coinDrop = opts.coinDrop ?? (
         this.elite ? [6, 10] : this.big ? [2, 4] :
-        this.kind === "shade" ? [0, 2] : [1, 3]);
+        this.kind === "shade"        ? [0, 2] :
+        this.kind === "goblin"       ? [1, 2] :
+        this.kind === "goblinShaman" ? [3, 5] :
+        this.kind === "necromancer"  ? [4, 7] : [1, 3]);
+
+      // grade: "regular" | "veteran" | "elite" (enemy difficulty tier, orthogonal to elite room)
+      this.grade = opts.grade || "regular";
+      if (this.grade === "veteran") {
+        this.maxHp = Math.round(this.maxHp * 1.6);
+        this.hp = this.maxHp;
+        this.dmg = Math.ceil(this.dmg * 1.35);
+      } else if (this.grade === "elite") {
+        this.maxHp = Math.round(this.maxHp * 2.8);
+        this.hp = this.maxHp;
+        this.dmg = Math.ceil(this.dmg * 2.0);
+        this.xpValue = Math.round(this.xpValue * 2.0);
+        this.coinDrop = [this.coinDrop[0] + 1, this.coinDrop[1] + 2];
+      }
 
       this.state = "spawn"; // spawn -> chase -> windup/fuse -> recover
       this.stateT = 1.0;
@@ -509,6 +587,7 @@
       this.animT = Math.random() * 10;
       this.flip = false;
       this.flash = 0;
+      this.enraged = false;
       this.kbx = 0;
       this.kby = 0;
       this.dead = false;
@@ -516,10 +595,18 @@
     }
 
     frames() {
-      if (this.kind === "archer") return DD.sprites.skeletonArcher;
-      if (this.kind === "bomber") return DD.sprites.skeletonBomber;
-      if (this.kind === "shade")  return DD.sprites.skeletonShade;
-      return DD.sprites.skeleton;
+      const sp = DD.sprites;
+      if (this.kind === "archer")          return sp.skeletonArcher;
+      if (this.kind === "bomber")          return sp.skeletonBomber;
+      if (this.kind === "shade")           return sp.skeletonShade;
+      if (this.kind === "goblin")          return sp.goblin          || sp.skeleton;
+      if (this.kind === "goblinArcher")    return sp.goblinArcher    || sp.skeletonArcher;
+      if (this.kind === "goblinBerserker") return sp.goblinBerserker || sp.skeleton;
+      if (this.kind === "goblinShaman")    return sp.goblinShaman    || sp.skeleton;
+      if (this.kind === "zombie")          return sp.zombie          || sp.skeleton;
+      if (this.kind === "warlock")         return sp.warlock         || sp.skeleton;
+      if (this.kind === "necromancer")     return sp.necromancer     || sp.skeleton;
+      return sp.skeleton;
     }
 
     update(dt, game) {
@@ -552,22 +639,65 @@
           let a;
           if (d < 380) {
             a = DD.angleTo(this.x, this.y, pl.x, pl.y);
-            if (this.kind === "archer") {
-              // hold a comfortable range
-              if (d < 150) a += Math.PI;          // back away
-              else if (d < 240) a += Math.PI / 2; // strafe
+            const isRanged = this.kind === "archer" || this.kind === "goblinArcher" ||
+              this.kind === "goblinShaman" || this.kind === "warlock" || this.kind === "necromancer";
+            if (isRanged) {
+              if (d < 150) a += Math.PI;
+              else if (d < 240) a += Math.PI / 2;
               if (this.shootCd <= 0 && d < 340) {
-                this.shootCd = DD.rand(1.9, 2.6);
-                game.enemyShots.push(new EnemyShot(this.x, this.y - 14, DD.angleTo(this.x, this.y, pl.x, pl.y - 8)));
-                DD.audio.shoot();
+                const aimAngle = DD.angleTo(this.x, this.y, pl.x, pl.y - 8);
+                if (this.kind === "archer" || this.kind === "goblinArcher") {
+                  this.shootCd = DD.rand(1.9, 2.6);
+                  game.enemyShots.push(new EnemyShot(this.x, this.y - 14, aimAngle));
+                  DD.audio.shoot();
+                } else if (this.kind === "goblinShaman") {
+                  this.shootCd = DD.rand(3.5, 5.0);
+                  // heal most-damaged goblin ally
+                  let bestTarget = null, bestMissing = 0;
+                  for (const sk of game.skeletons) {
+                    if (sk === this || sk.dead || sk.state === "spawn" || sk.faction !== "goblin") continue;
+                    const missing = sk.maxHp - sk.hp;
+                    if (missing > bestMissing && DD.dist(this.x, this.y, sk.x, sk.y) < 220) {
+                      bestMissing = missing; bestTarget = sk;
+                    }
+                  }
+                  if (bestTarget) {
+                    bestTarget.hp = Math.min(bestTarget.maxHp, bestTarget.hp + 2);
+                    DD.particles.burst(bestTarget.x, bestTarget.y - 14, {
+                      count: 10, colors: ["#4a7c4a", "#6bae6b", "#88dd88"], speed: 55, life: 0.55, gravity: -100,
+                    });
+                  }
+                  game.enemyShots.push(new EnemyShot(this.x, this.y - 14, aimAngle, 200, 1));
+                  DD.audio.shoot();
+                } else if (this.kind === "warlock") {
+                  this.shootCd = DD.rand(2.0, 3.0);
+                  game.enemyShots.push(new EnemyShot(this.x, this.y - 14, aimAngle, 200, 1, "magic"));
+                  DD.audio.bolt();
+                } else if (this.kind === "necromancer") {
+                  this.shootCd = DD.rand(8.0, 12.0);
+                  const summonCount = DD.randi(1, 2);
+                  for (let i = 0; i < summonCount; i++) {
+                    const pos = DD.room.randomFloorPos(pl.x, pl.y, 140);
+                    game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.3 + i * 0.5, kind: "zombie", faction: "undead", scale: game.floorCfg().scale });
+                  }
+                  DD.particles.burst(this.x, this.y - 20, {
+                    count: 14, colors: ["#9940d0", "#4a90d9", "#0d1a2e"], speed: 70, life: 0.6, gravity: -80,
+                  });
+                }
               }
             }
           } else {
             if (Math.random() < dt * 0.8) this.wanderA = DD.rand(0, Math.PI * 2);
             a = this.wanderA;
           }
-          let mx = Math.cos(a) * this.speed;
-          let my = Math.sin(a) * this.speed;
+          const isEnraged = this.kind === "goblinBerserker" && this.hp < this.maxHp * 0.5;
+          if (isEnraged && !this.enraged) {
+            this.enraged = true;
+            DD.particles.burst(this.x, this.y - 14, { count: 8, colors: ["#cc2222", "#ff6666"], speed: 80, life: 0.4 });
+          }
+          const spd = isEnraged ? this.speed * 1.6 : this.speed;
+          let mx = Math.cos(a) * spd;
+          let my = Math.sin(a) * spd;
           // gently push away from other skeletons so they don't stack
           for (const other of game.enemies()) {
             if (other === this || other.dead) continue;
@@ -586,11 +716,13 @@
             DD.room.moveEntity(this, mx * dt, my * dt);
           }
 
+          const isMelee = this.kind === "melee" || this.kind === "shade" ||
+            this.kind === "goblin" || this.kind === "goblinBerserker" || this.kind === "zombie";
           if (this.kind === "bomber") {
             if (d < 60) { this.state = "fuse"; this.stateT = 0.8; }
-          } else if ((this.kind === "melee" || this.kind === "shade") && d < this.r + 20) {
+          } else if (isMelee && d < this.r + 20) {
             this.state = "windup";
-            this.stateT = this.big ? 0.5 : 0.38;
+            this.stateT = this.kind === "goblinBerserker" ? 0.26 : this.big ? 0.5 : 0.38;
           }
           break;
         }
@@ -649,7 +781,11 @@
       game.addXP(this.xpValue);
       if (attacker) attacker.onKill();
       DD.audio.bones();
-      const deathColors = this.kind === "shade"
+      const deathColors = this.faction === "goblin"
+        ? ["#4a7c4a", "#88dd88", "#2d5e2d"]
+        : this.faction === "undead"
+        ? ["#9940d0", "#6688ff", "#0d1a2e"]
+        : this.kind === "shade"
         ? ["#6688ff", "#99aaff", "#3344cc"]
         : ["#e9e6da", "#b9b4a4", "#fff"];
       DD.particles.burst(this.x, this.y - 14, {
@@ -659,7 +795,8 @@
       for (let i = 0; i < coins; i++) {
         game.pickups.push(new Pickup("coin", this.x + DD.rand(-8, 8), this.y + DD.rand(-8, 8)));
       }
-      if (this.elite || Math.random() < 0.18) {
+      const heartChance = (this.kind === "goblinShaman" || this.kind === "necromancer") ? 0.35 : 0.18;
+      if (this.elite || Math.random() < heartChance) {
         game.pickups.push(new Pickup("heart", this.x, this.y));
       }
       // Item drops: elite = guaranteed rare+, brute = 25%, regular = 10%
@@ -700,13 +837,16 @@
       if (this.kind === "shade") ctx.globalAlpha = 0.72;
 
       const fuseFlash = this.state === "fuse" && Math.floor(this.stateT * 14) % 2 === 0;
+      const enrageFlash = this.enraged && Math.floor(performance.now() / 100) % 2 === 0;
 
-      if (this.flash > 0 || fuseFlash) {
+      if (this.flash > 0 || fuseFlash || enrageFlash) {
         ctx.save();
         ctx.translate(this.x, this.y);
         if (this.flip) ctx.scale(-1, 1);
         ctx.filter = fuseFlash
           ? "brightness(2) sepia(1) hue-rotate(-50deg) saturate(4)"
+          : enrageFlash
+          ? "brightness(2) sepia(1) hue-rotate(100deg) saturate(4)"
           : "brightness(3)";
         ctx.drawImage(this.frames()[0], -d / 2, -d + 10, d, d);
         ctx.restore();
@@ -717,11 +857,14 @@
 
       if (this.kind === "shade") ctx.globalAlpha = 1;
 
-      if ((this.big || this.elite) && this.maxHp > this.hp) {
-        // small HP bar over brutes and elites
+      const showHpBar = this.big || this.elite || this.grade === "veteran" || this.grade === "elite";
+      if (showHpBar && this.maxHp > this.hp) {
+        const barColor = this.grade === "elite" ? "#ffd95e"
+          : this.grade === "veteran" ? "#a06ce8"
+          : "#e8484f";
         ctx.fillStyle = "#1a1626";
         ctx.fillRect(this.x - 16, this.y - d + 2, 32, 4);
-        ctx.fillStyle = "#e8484f";
+        ctx.fillStyle = barColor;
         ctx.fillRect(this.x - 16, this.y - d + 2, 32 * (this.hp / this.maxHp), 4);
       }
 
