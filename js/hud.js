@@ -47,7 +47,8 @@
         combat: "Combat", treasure: "Treasure", boss: "BOSS",
         trap: "Trap Gauntlet", elite: "Elite", shop: "Shop",
       }[game.roomType];
-      const roomLabel = `Floor ${game.floor + 1} · Room ${game.roomIndex + 1}/${game.plan().length} — ${typeLabel}`;
+      const floorName = game.floorCfg().name || `Floor ${game.floor + 1}`;
+      const roomLabel = `${floorName} · Room ${game.roomIndex + 1}/${game.plan().length} — ${typeLabel}`;
 
       // --- room progress ---
       ctx.font = `bold 13px ${font}`;

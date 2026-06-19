@@ -393,3 +393,29 @@ body {
 #hub-equip-slots { display: flex; gap: 10px; flex-wrap: wrap; }
 
 #btn-switch-class { background: #b9aee0; box-shadow: 0 4px 0 #6c5f97; }
+
+/* Hub quest log */
+#hub-quests-wrap { width: min(420px, 88vw); }
+#hub-quests { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+
+.hub-quest-row {
+  background: #16121f;
+  border: 1px solid #2e2845;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.hub-quest-title { font-size: 13px; font-weight: bold; color: #ffd95e; margin-bottom: 2px; }
+.hub-quest-desc  { font-size: 11px; color: #9b90b8; margin-bottom: 4px; }
+.hub-quest-reward { font-size: 10px; color: #6b5e96; margin-top: 3px; }
+
+.hub-quest-bar-bg {
+  height: 5px;
+  background: #2e2845;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.hub-quest-bar-fill {
+  height: 100%;
+  background: #ffd95e;
+  border-radius: 3px;
+}

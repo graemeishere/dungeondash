@@ -95,6 +95,89 @@
     save();
   }
 
+  // ---- quests ----
+
+  const QUEST_DEFS = [
+    {
+      id: "first_blood",
+      title: "First Blood",
+      desc: "Slay your first skeleton.",
+      goal: { kills: 1 },
+      reward: { gold: 20 },
+    },
+    {
+      id: "dungeon_delver",
+      title: "Dungeon Delver",
+      desc: "Defeat 50 skeletons across all runs.",
+      goal: { kills: 50 },
+      reward: { gold: 75 },
+    },
+    {
+      id: "bone_collector",
+      title: "Bone Collector",
+      desc: "Defeat 200 skeletons.",
+      goal: { kills: 200 },
+      reward: { gold: 200 },
+    },
+    {
+      id: "floor_two",
+      title: "Deeper Darkness",
+      desc: "Reach the Crypt (Floor 2).",
+      goal: { floor: 2 },
+      reward: { gold: 50 },
+    },
+    {
+      id: "survivor",
+      title: "Survivor",
+      desc: "Complete a full run without dying.",
+      goal: { wonRuns: 1 },
+      reward: { gold: 150 },
+    },
+  ];
+
+  function ensureActiveQuests() {
+    const active = profile.quests.active;
+    const completed = profile.quests.completed;
+    for (const def of QUEST_DEFS) {
+      if (!completed.includes(def.id) && !active.find((q) => q.id === def.id)) {
+        active.push({ id: def.id, progress: {} });
+      }
+    }
+  }
+
+  function progressQuests(update) {
+    const { kills = 0, floor, won } = update;
+    let changed = false;
+    for (const q of profile.quests.active) {
+      const def = QUEST_DEFS.find((d) => d.id === q.id);
+      if (!def) continue;
+      const g = def.goal;
+      if (g.kills) {
+        q.progress.kills = (q.progress.kills || 0) + kills;
+        if (q.progress.kills >= g.kills) { completeQuest(q, def); changed = true; }
+      }
+      if (g.floor !== undefined && floor !== undefined && floor >= g.floor) {
+        completeQuest(q, def); changed = true;
+      }
+      if (g.wonRuns && won) {
+        q.progress.wonRuns = (q.progress.wonRuns || 0) + 1;
+        if (q.progress.wonRuns >= g.wonRuns) { completeQuest(q, def); changed = true; }
+      }
+    }
+    // prune completed from active list
+    profile.quests.active = profile.quests.active.filter(
+      (q) => !profile.quests.completed.includes(q.id)
+    );
+    if (changed) ensureActiveQuests();
+  }
+
+  function completeQuest(q, def) {
+    if (profile.quests.completed.includes(q.id)) return;
+    profile.quests.completed.push(q.id);
+    const hero = getActiveHero();
+    if (hero && def.reward.gold) hero.gold = (hero.gold || 0) + def.reward.gold;
+  }
+
   DD.profile = {
     load,
     save,
@@ -104,7 +187,11 @@
     clear,
     migrate,
     data: profile,
+    questDefs: QUEST_DEFS,
+    ensureActiveQuests,
+    progressQuests,
   };
 
   load();
+  ensureActiveQuests();
 })(window.DD = window.DD || {});
