@@ -191,9 +191,10 @@
           bg: s.big ? 1 : 0, el: s.elite ? 1 : 0, nm: s.name || 0, kd: s.kind,
           ds: s.drawSize, r: s.r, fs: r2(Math.max(0, s.flash)),
           boss: s instanceof DD.Boss ? 1 : 0, bn: s.bossName || 0, sl: s.slamT ? r2(s.slamT) : 0,
+          fc: s.faction || "skeleton", gr: s.grade || "regular", eg: s.enraged ? 1 : 0,
         })),
         pr: game.projectiles.map((p) => ({ x: r1(p.x), y: r1(p.y), vx: r1(p.vx), vy: r1(p.vy), kind: p.kind })),
-        es: game.enemyShots.map((e) => ({ x: r1(e.x), y: r1(e.y), t: r2(e.t) })),
+        es: game.enemyShots.map((e) => ({ x: r1(e.x), y: r1(e.y), t: r2(e.t), style: e.style || "bone" })),
         pk: game.pickups.map((p) => ({ kind: p.kind, x: r1(p.x), y: r1(p.y), t: r2(p.t % 100) })),
         ch: game.chests.map((c) => ({ x: r1(c.x), y: r1(c.y), o: c.opened ? 1 : 0 })),
         si: game.shopItems.map((i) => ({
@@ -229,6 +230,7 @@
         o.big = !!d.bg; o.elite = !!d.el; o.name = d.nm || null; o.kind = d.kd;
         o.drawSize = d.ds; o.r = d.r; o.flash = d.fs; o.dead = false;
         o.bossName = d.bn || null; o.slamT = d.sl || 0;
+        o.faction = d.fc || "skeleton"; o.grade = d.gr || "regular"; o.enraged = !!d.eg;
         return o;
       });
 
