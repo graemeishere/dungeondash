@@ -1053,14 +1053,14 @@
       if (loc.kind === "dungeon" && game.mapSelected === loc.id) {
         const dungeon = DUNGEONS[loc.id];
         dungeon.tiers.forEach((t, ti) => {
-          const bx = cx + (ti - 1) * 60;
-          const by = cy + 62;
-          const bHov = Math.abs(mx - bx) < 26 && Math.abs(my - by) < 13;
+          const bx = cx + (ti - 1) * 80;
+          const by = cy + 70;
+          const bHov = Math.abs(mx - bx) < 36 && Math.abs(my - by) < 20;
           ctx.fillStyle = bHov ? "#ffd95e" : "rgba(30,26,46,0.9)";
-          ctx.fillRect(bx - 26, by - 13, 52, 26);
+          ctx.fillRect(bx - 36, by - 20, 72, 40);
           ctx.strokeStyle = bHov ? "#ffd95e" : "#6b6481";
           ctx.lineWidth = 1.5;
-          ctx.strokeRect(bx - 26, by - 13, 52, 26);
+          ctx.strokeRect(bx - 36, by - 20, 72, 40);
           ctx.fillStyle = bHov ? "#1a1626" : "#d8cfee";
           ctx.font = `bold 11px ${font}`;
           ctx.fillText(`Tier ${ti} (${t.levelHint})`, bx, by + 4);
@@ -1407,42 +1407,59 @@
     if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); if (game.hero) showMap(); else backToMenu(); }
   });
 
-  // ---- world map click handler ----
+  // ---- world map click / tap handler ----
 
-  canvas.addEventListener("click", (e) => {
-    if (game.state !== "map") return;
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+  function handleMapTap(clientX, clientY, targetEl) {
+    if (game.state !== "map") return false;
+    const rect = targetEl.getBoundingClientRect();
+    const cx = (clientX - rect.left) * (targetEl.width / rect.width);
+    const cy = (clientY - rect.top) * (targetEl.height / rect.height);
     const wx = (cx - DD.view.ox) / DD.view.scale;
     const wy = (cy - DD.view.oy) / DD.view.scale;
 
     for (const loc of MAP_LOCS) {
       const lx = loc.fx * DD.WIDTH, ly = loc.fy * DD.HEIGHT;
-      if (DD.dist(wx, wy, lx, ly) < 36) {
-        if (loc.kind === "town") {
-          // Stage 6: showTown() — for now just show hub as placeholder
-          if (game.hero) showHub(game.hero);
-        } else {
-          // toggle selection or deselect
-          game.mapSelected = game.mapSelected === loc.id ? null : loc.id;
-        }
-        return;
-      }
-      // tier button clicks (only for selected dungeon)
+      // tier button clicks must be checked BEFORE the icon circle so taps on
+      // the buttons (which sit below the icon) are not swallowed by the icon hit zone
       if (loc.kind === "dungeon" && game.mapSelected === loc.id) {
         const dungeon = DUNGEONS[loc.id];
+        let hit = false;
         dungeon.tiers.forEach((t, ti) => {
-          const bx = lx + (ti - 1) * 60;
-          const by = ly + 62;
-          if (Math.abs(wx - bx) < 26 && Math.abs(wy - by) < 13) {
+          const bx = lx + (ti - 1) * 80;
+          const by = ly + 70;
+          if (Math.abs(wx - bx) < 36 && Math.abs(wy - by) < 20) {
             DD.audio.unlock();
             startRun(game.classKey, loc.id, ti);
+            hit = true;
           }
         });
+        if (hit) return true;
+      }
+      if (DD.dist(wx, wy, lx, ly) < 52) {
+        if (loc.kind === "town") {
+          if (game.hero) showHub(game.hero);
+        } else {
+          game.mapSelected = game.mapSelected === loc.id ? null : loc.id;
+        }
+        return true;
       }
     }
+    return false;
+  }
+
+  canvas.addEventListener("click", (e) => {
+    handleMapTap(e.clientX, e.clientY, canvas);
   });
+
+  // touchstart in input.js calls preventDefault(), which swallows the click event
+  // on mobile — so we handle map taps via touchend directly.
+  canvas.addEventListener("touchend", (e) => {
+    if (game.state !== "map") return;
+    const t = e.changedTouches[0];
+    if (t && handleMapTap(t.clientX, t.clientY, canvas)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 
   // ---- hub buttons ----
 
