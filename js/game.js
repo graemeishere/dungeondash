@@ -605,12 +605,31 @@
     buildHub(hero);
   }
 
+  // Called when player picks a class from the class-select screen.
+  // Creates/switches the hero profile then goes to the world map.
+  function selectClass(classKey) {
+    const hero = DD.profile.getOrCreateHero(classKey);
+    game.hero = hero;
+    game.classKey = classKey;
+    menuEl.classList.add("hidden");
+    showMap();
+  }
+
+  function showTown() {
+    game.state = "town";
+    hubEl.classList.add("hidden");
+    resultEl.classList.add("hidden");
+    menuEl.classList.add("hidden");
+    document.getElementById("town").classList.remove("hidden");
+  }
+
   function showMap() {
     game.state = "map";
     game.mapSelected = null;
     hubEl.classList.add("hidden");
     resultEl.classList.add("hidden");
     menuEl.classList.add("hidden");
+    document.getElementById("town").classList.add("hidden");
   }
 
   function backToMenu() {
@@ -620,8 +639,10 @@
     DD.room.prerendered = false;
     const hero = DD.profile.getActiveHero();
     if (hero) {
+      game.hero = hero;
+      game.classKey = hero.classKey;
       menuEl.classList.add("hidden");
-      showHub(hero);
+      showMap();
     } else {
       menuEl.classList.remove("hidden");
       refreshContinueButton();
@@ -822,7 +843,7 @@
       if (DD.input.consumeInvTap()) openInventory();
       return;
     }
-    if (game.state === "map" || game.state === "menu" || game.state === "levelup" || game.state === "inventory") return;
+    if (game.state === "map" || game.state === "town" || game.state === "menu" || game.state === "levelup" || game.state === "inventory") return;
 
     if (game.state === "transition") {
       game.transitionT += dt * 2.6;
@@ -1156,7 +1177,7 @@
         DD.audio.unlock();
         if (coopMode === "host-pick") hostWithClass(key);
         else if (coopMode === "join-pick") joinWithClass(key);
-        else startRun(key);
+        else selectClass(key);
       });
       holder.appendChild(card);
     }
@@ -1429,7 +1450,7 @@
           const by = ly + 70;
           if (Math.abs(wx - bx) < 36 && Math.abs(wy - by) < 20) {
             DD.audio.unlock();
-            startRun(game.classKey, loc.id, ti);
+            startRun((game.hero && game.hero.classKey) || game.classKey, loc.id, ti);
             hit = true;
           }
         });
@@ -1437,7 +1458,7 @@
       }
       if (DD.dist(wx, wy, lx, ly) < 52) {
         if (loc.kind === "town") {
-          if (game.hero) showHub(game.hero);
+          showTown();
         } else {
           game.mapSelected = game.mapSelected === loc.id ? null : loc.id;
         }
@@ -1500,6 +1521,18 @@
     openInventory();
   });
 
+  // ---- town buttons ----
+
+  document.getElementById("btn-town-hub").addEventListener("click", () => {
+    document.getElementById("town").classList.add("hidden");
+    if (game.hero) showHub(game.hero);
+  });
+
+  document.getElementById("btn-town-leave").addEventListener("click", () => {
+    document.getElementById("town").classList.add("hidden");
+    showMap();
+  });
+
   // ---- boot ----
 
   DD.sprites.init();
@@ -1508,7 +1541,9 @@
   buildClassCards();
   const _bootHero = DD.profile.getActiveHero();
   if (_bootHero) {
-    showHub(_bootHero);
+    game.hero = _bootHero;
+    game.classKey = _bootHero.classKey;
+    showMap();
   } else {
     refreshContinueButton();
   }
