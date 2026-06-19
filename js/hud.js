@@ -99,7 +99,7 @@
         ctx.textAlign = "center";
         ctx.font = `bold 11px ${font}`;
         ctx.fillStyle = "#f2ecdd";
-        ctx.fillText("SKELETON KING", DD.WIDTH / 2, bby + 11);
+        ctx.fillText(boss.label || "BOSS", DD.WIDTH / 2, bby + 11);
       } else {
         const remaining = game.skeletons.filter((s) => !s.dead).length + game.spawnQueue.length;
         const chestsLeft = game.chests.filter((c) => !c.opened).length;
@@ -111,7 +111,8 @@
           ctx.fillText(narrow ? `Chests: ${chestsLeft}` : `Open the chests! ${chestsLeft} left`, DD.WIDTH - 26, 31);
         } else if (remaining > 0) {
           ctx.fillStyle = "#f2ecdd";
-          ctx.fillText(narrow ? `Foes: ${remaining}` : `Skeletons: ${remaining}`, DD.WIDTH - 26, 31);
+          const eLabel = game.floorCfg().enemyLabel || "Enemies";
+          ctx.fillText(narrow ? `Foes: ${remaining}` : `${eLabel}: ${remaining}`, DD.WIDTH - 26, 31);
         } else if (game.roomType === "shop") {
           ctx.fillStyle = "#ffd95e";
           ctx.fillText(narrow ? "Shop · Exit ▲" : "Spend your gold, then exit ▲", DD.WIDTH - 26, 31);
