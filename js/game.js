@@ -28,29 +28,85 @@
 
   // The dungeon: each floor ends with a boss, then a shop before the next
   // floor. Clear the last boss to win the run.
-  const FLOORS = [
-    {
-      name: "Catacombs", enemyLabel: "Skeletons", faction: "skeleton",
-      boss: "SKELETON KING", bossHp: 70, bossDmg: 2, scale: 1, summonKind: "melee",
-      kinds: ["melee", "shade"],
-      eliteKinds: ["melee"],
-      plan: ["combat", "combat", "treasure", "combat", "boss"],
+  // DUNGEONS map — add new dungeons here without touching run logic.
+  // Each dungeon: id, name, faction, enemyLabel, floors[], tiers[]
+  // floors[] = room content per floor (kinds, eliteKinds, plan)
+  // tiers[] = stat scaling per difficulty door (scale, boss stats)
+  const DUNGEONS = {
+    catacombs: {
+      id: "catacombs", name: "Catacombs", faction: "skeleton", enemyLabel: "Skeletons",
+      floors: [
+        { name: "Upper Catacombs",
+          kinds: ["melee", "shade"], eliteKinds: ["melee"],
+          plan: ["combat", "combat", "treasure", "combat", "boss"] },
+        { name: "Deep Catacombs",
+          kinds: ["melee", "archer", "shade"], eliteKinds: ["archer", "shade"],
+          plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
+        { name: "Catacombs Core",
+          kinds: ["melee", "archer", "shade"], eliteKinds: ["melee", "archer", "shade"],
+          plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
+      ],
+      tiers: [
+        { tier: 0, levelHint: "1-10",  scale: 1.0, bossHp: 70,  bossDmg: 2, bossName: "SKELETON KING",  summonKind: "melee"  },
+        { tier: 1, levelHint: "11-20", scale: 3.0, bossHp: 160, bossDmg: 4, bossName: "SKELETON KING",  summonKind: "archer" },
+        { tier: 2, levelHint: "21-30", scale: 6.0, bossHp: 280, bossDmg: 7, bossName: "SKELETON KING",  summonKind: "bomber" },
+      ],
     },
-    {
-      name: "Crypt", enemyLabel: "Skeletons", faction: "skeleton",
-      boss: "BONE EMPEROR", bossHp: 105, bossDmg: 2, scale: 1.45, summonKind: "archer",
-      kinds: ["melee", "archer", "shade"],
-      eliteKinds: ["archer", "shade"],
-      plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"],
+    goblinMines: {
+      id: "goblinMines", name: "Goblin Mines", faction: "goblin", enemyLabel: "Goblins",
+      floors: [
+        { name: "Mine Entrance",
+          kinds: ["goblin", "goblinArcher"], eliteKinds: ["goblin"],
+          plan: ["combat", "combat", "treasure", "combat", "boss"] },
+        { name: "Deep Mines",
+          kinds: ["goblin", "goblinArcher", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblinArcher", "goblinShaman"],
+          plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
+        { name: "Warlord's Den",
+          kinds: ["goblin", "goblinArcher", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblin", "goblinBerserker", "goblinShaman"],
+          plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
+      ],
+      tiers: [
+        { tier: 0, levelHint: "1-10",  scale: 1.1, bossHp: 80,  bossDmg: 2, bossName: "GOBLIN WARLORD", summonKind: "goblin"          },
+        { tier: 1, levelHint: "11-20", scale: 3.3, bossHp: 175, bossDmg: 5, bossName: "GOBLIN WARLORD", summonKind: "goblinBerserker"  },
+        { tier: 2, levelHint: "21-30", scale: 6.5, bossHp: 300, bossDmg: 8, bossName: "GOBLIN WARLORD", summonKind: "goblinShaman"     },
+      ],
     },
-    {
-      name: "Bone Palace", enemyLabel: "Skeletons", faction: "skeleton",
-      boss: "THE DEATHLESS", bossHp: 145, bossDmg: 3, scale: 1.95, summonKind: "bomber",
-      kinds: ["melee", "archer", "bomber", "shade"],
-      eliteKinds: ["melee", "archer"],
-      plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"],
+    crypt: {
+      id: "crypt", name: "The Crypt", faction: "undead", enemyLabel: "Undead",
+      floors: [
+        { name: "Outer Crypt",
+          kinds: ["zombie", "warlock"], eliteKinds: ["zombie"],
+          plan: ["combat", "combat", "treasure", "combat", "boss"] },
+        { name: "Inner Crypt",
+          kinds: ["zombie", "warlock", "necromancer"], eliteKinds: ["warlock", "necromancer"],
+          plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
+        { name: "Lich's Sanctum",
+          kinds: ["zombie", "warlock", "necromancer"], eliteKinds: ["zombie", "warlock"],
+          plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
+      ],
+      tiers: [
+        { tier: 0, levelHint: "1-10",  scale: 1.2, bossHp: 90,  bossDmg: 3, bossName: "THE LICH", summonKind: "zombie"      },
+        { tier: 1, levelHint: "11-20", scale: 3.6, bossHp: 190, bossDmg: 5, bossName: "THE LICH", summonKind: "warlock"     },
+        { tier: 2, levelHint: "21-30", scale: 7.0, bossHp: 320, bossDmg: 9, bossName: "THE LICH", summonKind: "necromancer" },
+      ],
     },
-  ];
+  };
+
+  // Merge the active floor's content + tier's stats into one flat config object.
+  // All run logic reads game.floorCfg() — adding new dungeons requires only a DUNGEONS entry.
+  function dungeonFloorCfg() {
+    const d = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
+    const flr = d.floors[Math.min(game.floor, d.floors.length - 1)];
+    const tier = d.tiers[Math.min(game.tier, d.tiers.length - 1)];
+    return {
+      ...flr,
+      ...tier,
+      faction: d.faction,
+      enemyLabel: d.enemyLabel,
+      id: d.id,
+      boss: tier.bossName, // alias used by Boss constructor
+    };
+  }
 
   const ELITE_NAMES = {
     skeleton: ["GRAVE WARDEN", "TOMB HERALD", "MARROW FIEND"],
@@ -59,7 +115,7 @@
   };
 
   const game = {
-    state: "menu", // menu | play | levelup | transition | won | lost
+    state: "menu", // menu | play | levelup | transition | won | lost | map
     players: [],
     localIndex: 0,
     skeletons: [],
@@ -69,7 +125,9 @@
     chests: [],
     shopItems: [],
     shopkeeper: null,
-    spawnQueue: [],   // [{x, y, delay, big, kind}]
+    spawnQueue: [],   // [{x, y, delay, big, kind, faction}]
+    dungeonId: "catacombs",
+    tier: 0,
     floor: 0,
     roomIndex: 0,
     roomType: "combat",
@@ -90,8 +148,8 @@
 
     get localPlayer() { return this.players[this.localIndex]; },
     enemies() { return this.skeletons; },
-    floorCfg() { return FLOORS[this.floor]; },
-    plan() { return FLOORS[this.floor].plan; },
+    floorCfg() { return dungeonFloorCfg(); },
+    plan() { return dungeonFloorCfg().plan; },
     xpNext() { return 25 + (this.level - 1) * 15; },
 
     nearestAlivePlayer(x, y) {
@@ -121,7 +179,8 @@
     const pl = game.players[0];
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
-        classKey: pl.classKey, floor: game.floor, level: game.level, xp: game.xp,
+        classKey: pl.classKey, dungeonId: game.dungeonId, tier: game.tier,
+        floor: game.floor, level: game.level, xp: game.xp,
         gold: game.gold, kills: game.kills, time: game.time,
         maxHp: pl.maxHp, hp: pl.hp, killHeal: pl.killHeal,
         runBuffs: pl.runBuffs, stats: pl.stats,
@@ -145,8 +204,9 @@
   function refreshContinueButton() {
     const save = readSave();
     if (save && DD.CLASSES[save.classKey]) {
+      const dungeonName = save.dungeonId && DUNGEONS[save.dungeonId] ? DUNGEONS[save.dungeonId].name : "Dungeon";
       continueBtn.textContent =
-        `Continue run — Floor ${save.floor + 1}, ${DD.CLASSES[save.classKey].name} Lv ${save.level}`;
+        `Continue — ${dungeonName} Fl.${save.floor + 1}, ${DD.CLASSES[save.classKey].name} Lv ${save.level}`;
       continueBtn.classList.remove("hidden");
     } else {
       continueBtn.classList.add("hidden");
@@ -166,11 +226,13 @@
     game.state = "play";
   }
 
-  function startRun(classKey) {
+  function startRun(classKey, dungeonId = "catacombs", tier = 0) {
     clearSave();
     const hero = DD.profile.getOrCreateHero(classKey);
     game.hero = hero;
     game.classKey = classKey;
+    game.dungeonId = dungeonId;
+    game.tier = tier;
     game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
     game.localIndex = 0;
     game.floor = 0;
@@ -202,6 +264,8 @@
     pl.killHeal = save.killHeal !== undefined ? save.killHeal : pl.killHeal;
     game.players = [pl];
     game.localIndex = 0;
+    game.dungeonId = save.dungeonId || "catacombs";
+    game.tier = save.tier || 0;
     game.floor = save.floor;
     game.xp = hero ? (hero.xp || 0) : (save.xp || 0);
     game.level = hero ? (hero.level || 1) : (save.level || 1);
@@ -333,13 +397,16 @@
     }
 
     if (game.roomType === "boss") {
-      if (game.floor >= FLOORS.length - 1) {
+      const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
+      if (game.floor >= dungeon.floors.length - 1) {
         endRun(true);
       } else {
-        writeSave(); // the run is checkpointed after every floor boss
+        writeSave();
         DD.room.doorOpen = true;
         DD.audio.door();
-        DD.particles.text(DD.WIDTH / 2, DD.TILE * 2.2, "Floor cleared! The shop awaits...", "#ffd95e");
+        const nextFloor = dungeon.floors[game.floor + 1];
+        DD.particles.text(DD.WIDTH / 2, DD.TILE * 2.2,
+          `Floor cleared! Onward to ${nextFloor ? nextFloor.name : "the depths"}...`, "#ffd95e");
       }
     } else {
       DD.room.doorOpen = true;
@@ -394,9 +461,11 @@
     const won = game.state === "won";
     resultTitle.textContent = won ? "DUNGEON CLEARED!" : "YOU DIED";
     resultTitle.style.color = won ? "#ffd95e" : "#ff5252";
+    const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
+    const floorName = (dungeon.floors[game.floor] || {}).name || `Floor ${game.floor + 1}`;
     resultStats.innerHTML =
       `${DD.CLASSES[game.classKey].name} Lv ${game.level} &nbsp;•&nbsp; ` +
-      `Floor ${game.floor + 1}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
+      `${floorName}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
       `${game.kills} kills &nbsp;•&nbsp; ${game.gold} gold &nbsp;•&nbsp; ` +
       `${game.time.toFixed(1)}s`;
     resultEl.classList.remove("hidden");
@@ -518,7 +587,8 @@
     const hcBtn = document.getElementById("btn-hub-continue");
     const sv = readSave();
     if (sv && DD.CLASSES[sv.classKey]) {
-      hcBtn.textContent = `Continue — Floor ${sv.floor + 1}, ${DD.CLASSES[sv.classKey].name} Lv ${sv.level}`;
+      const svDungeonName = sv.dungeonId && DUNGEONS[sv.dungeonId] ? DUNGEONS[sv.dungeonId].name : "Dungeon";
+      hcBtn.textContent = `Continue — ${svDungeonName} Fl.${sv.floor + 1}, ${DD.CLASSES[sv.classKey].name} Lv ${sv.level}`;
       hcBtn.classList.remove("hidden");
     } else {
       hcBtn.classList.add("hidden");
@@ -969,7 +1039,7 @@
 
   function sendRoomToGuest() {
     if (DD.net.role === "host" && DD.net.connected) {
-      DD.net.send({ t: "room", room: DD.room.getData(), floor: game.floor, ri: game.roomIndex, rt: game.roomType });
+      DD.net.send({ t: "room", room: DD.room.getData(), floor: game.floor, dungeonId: game.dungeonId, tier: game.tier, ri: game.roomIndex, rt: game.roomType });
     }
   }
 
@@ -1031,6 +1101,8 @@
       new DD.Player(guestClassKey, 0, 0, new DD.RemoteInput()),
     ];
     game.localIndex = 0;
+    game.dungeonId = game.dungeonId || "catacombs";
+    game.tier = game.tier || 0;
     game.floor = 0;
     game.xp = hero.xp || 0;
     game.level = hero.level || 1;
@@ -1096,6 +1168,8 @@
       DD.room.setData(m.room);
       DD.updateView(canvas);
       game.floor = m.floor;
+      game.dungeonId = m.dungeonId || "catacombs";
+      game.tier = m.tier || 0;
       game.roomIndex = m.ri;
       game.roomType = m.rt;
       game.localIndex = 1;
@@ -1152,7 +1226,7 @@
 
   document.getElementById("btn-again").addEventListener("click", () => {
     if (DD.net.role) DD.net.reset();
-    startRun(game.classKey);
+    startRun(game.classKey, game.dungeonId, game.tier);
   });
   document.getElementById("btn-class").addEventListener("click", () => {
     if (DD.net.role) DD.net.reset();
@@ -1174,7 +1248,7 @@
       return;
     }
     if (resultEl.classList.contains("hidden")) return;
-    if (e.key === "Enter") { if (DD.net.role) DD.net.reset(); startRun(game.classKey); }
+    if (e.key === "Enter") { if (DD.net.role) DD.net.reset(); startRun(game.classKey, game.dungeonId, game.tier); }
     if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); backToMenu(); }
   });
 
