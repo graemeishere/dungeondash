@@ -656,7 +656,7 @@
   }
 
   // Themed entry room with three tier doorways. Walk through one to start a run.
-  function showLobby(dungeonId) {
+  function showDungeonLobby(dungeonId) {
     if (!DUNGEONS[dungeonId]) return;
     hideAllOverlays();
     game.state = "lobby";
@@ -746,18 +746,16 @@
   }
 
   function openTraderMenu() {
-    townToast("The Trader is still unpacking his wares — shop coming soon!", "#ffd95e");
+    townToast("Trader — coming soon!", "#ffd95e");
   }
 
   function openQuestGiverMenu() {
-    townToast("The Quest Giver has no work for you yet — quests coming soon!", "#9affb0");
+    townToast("Quest Giver — coming soon!", "#9affb0");
   }
 
   function townToast(text, color) {
-    const pl = game.players[0];
-    const x = pl ? pl.x : DD.WIDTH / 2;
-    const y = pl ? pl.y - 50 : DD.HEIGHT / 2;
-    DD.particles.text(x, y, text, color || "#ffd95e");
+    // centered on-screen so short placeholder messages never run off a narrow phone
+    DD.particles.text(DD.WIDTH / 2, DD.HEIGHT * 0.66, text, color || "#ffd95e");
   }
 
   // Change the active hero's class while keeping all progression.
@@ -1793,7 +1791,7 @@
       if (DD.dist(wx, wy, lx, ly) < 52) {
         DD.audio.unlock();
         if (loc.kind === "town") showTownRoom();
-        else showLobby(loc.id);
+        else showDungeonLobby(loc.id);
         return true;
       }
     }
@@ -1916,7 +1914,7 @@
     } else if (game.state === "town") {
       showTownRoom(true);
     } else if (game.state === "lobby") {
-      showLobby(game.lobbyDungeonId);
+      showDungeonLobby(game.lobbyDungeonId);
     }
   });
 
