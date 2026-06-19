@@ -145,6 +145,7 @@
     transitionPhase: null, // 'out' | 'in'
     classKey: "warrior",
     time: 0,
+    mapSelected: null, // dungeon id currently selected on the world map (showing tier buttons)
 
     get localPlayer() { return this.players[this.localIndex]; },
     enemies() { return this.skeletons; },
@@ -604,6 +605,14 @@
     buildHub(hero);
   }
 
+  function showMap() {
+    game.state = "map";
+    game.mapSelected = null;
+    hubEl.classList.add("hidden");
+    resultEl.classList.add("hidden");
+    menuEl.classList.add("hidden");
+  }
+
   function backToMenu() {
     resultEl.classList.add("hidden");
     lobbyEl.classList.add("hidden");
@@ -813,7 +822,7 @@
       if (DD.input.consumeInvTap()) openInventory();
       return;
     }
-    if (game.state === "menu" || game.state === "levelup" || game.state === "inventory") return;
+    if (game.state === "map" || game.state === "menu" || game.state === "levelup" || game.state === "inventory") return;
 
     if (game.state === "transition") {
       game.transitionT += dt * 2.6;
@@ -924,6 +933,143 @@
     }
   }
 
+  // ---- world map ----
+
+  const MAP_LOCS = [
+    { id: "catacombs",   name: "Catacombs",    fx: 0.22, fy: 0.27, kind: "dungeon" },
+    { id: "goblinMines", name: "Goblin Mines",  fx: 0.26, fy: 0.68, kind: "dungeon" },
+    { id: "town",        name: "Town",          fx: 0.50, fy: 0.50, kind: "town"    },
+    { id: "crypt",       name: "The Crypt",     fx: 0.75, fy: 0.28, kind: "dungeon" },
+  ];
+
+  // Draw a small pixel-art icon for each location (48×48 in world pixels).
+  function drawMapIcon(ctx, loc, cx, cy, hovered) {
+    const R = 28;
+    ctx.fillStyle = hovered ? "rgba(255,255,255,0.12)" : "rgba(10,8,18,0.55)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = hovered ? "#ffd95e" : "#6b6481";
+    ctx.lineWidth = hovered ? 2.5 : 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 4, 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (loc.id === "catacombs") {
+      // skull icon
+      ctx.fillStyle = "#e9e6da";
+      ctx.beginPath(); ctx.arc(cx, cy - 6, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#1a1626";
+      ctx.fillRect(cx - 8, cy - 10, 5, 6); ctx.fillRect(cx + 3, cy - 10, 5, 6); // sockets
+      ctx.fillRect(cx - 10, cy + 6, 20, 8); // jaw
+      ctx.fillStyle = "#e9e6da";
+      ctx.fillRect(cx - 9, cy + 7, 18, 6);
+      for (let i = 0; i < 4; i++) ctx.fillRect(cx - 7 + i * 5, cy + 10, 3, 4); // teeth
+    } else if (loc.id === "goblinMines") {
+      // pickaxe icon
+      ctx.fillStyle = "#8b9ab5";
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(-Math.PI / 4);
+      ctx.fillRect(-3, -18, 6, 36); // handle
+      ctx.restore();
+      ctx.fillStyle = "#d8d4e6";
+      ctx.save(); ctx.translate(cx - 10, cy - 10);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(20, 0); ctx.lineTo(20, 8); ctx.lineTo(0, 20); ctx.closePath();
+      ctx.fill(); ctx.restore();
+    } else if (loc.id === "crypt") {
+      // coffin / arch icon
+      ctx.fillStyle = "#3a1a60";
+      ctx.beginPath();
+      ctx.arc(cx, cy - 8, 14, Math.PI, 0);
+      ctx.lineTo(cx + 14, cy + 14);
+      ctx.lineTo(cx - 14, cy + 14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#9940d0";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#9940d0";
+      ctx.beginPath(); ctx.arc(cx, cy - 8, 6, 0, Math.PI * 2); ctx.fill();
+    } else if (loc.id === "town") {
+      // house icon
+      ctx.fillStyle = "#7a5c2e";
+      ctx.fillRect(cx - 14, cy - 4, 28, 20);
+      ctx.fillStyle = "#6fce6f";
+      ctx.beginPath(); ctx.moveTo(cx - 18, cy - 4); ctx.lineTo(cx, cy - 22); ctx.lineTo(cx + 18, cy - 4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#4a3020";
+      ctx.fillRect(cx - 5, cy + 2, 10, 14); // door
+    }
+  }
+
+  function drawMap(ctx) {
+    const W = DD.WIDTH, H = DD.HEIGHT;
+    // stone floor background
+    ctx.fillStyle = "#1e1a2e";
+    ctx.fillRect(0, 0, W, H);
+    // subtle grid
+    ctx.strokeStyle = "rgba(80,70,110,0.18)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y <= H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    // path lines between locations
+    ctx.strokeStyle = "rgba(180,160,220,0.2)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    const town = MAP_LOCS.find((l) => l.id === "town");
+    for (const loc of MAP_LOCS) {
+      if (loc.kind !== "dungeon") continue;
+      ctx.beginPath();
+      ctx.moveTo(town.fx * W, town.fy * H);
+      ctx.lineTo(loc.fx * W, loc.fy * H);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // title
+    const font = "'Trebuchet MS', Verdana, sans-serif";
+    ctx.font = `bold 20px ${font}`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#d8cfee";
+    ctx.fillText("WORLD MAP", W / 2, 30);
+    ctx.font = `12px ${font}`;
+    ctx.fillStyle = "#7a6e96";
+    ctx.fillText("Click a dungeon to select a tier  •  Esc to return to hub", W / 2, 50);
+
+    const mx = DD.input.mouse.x, my = DD.input.mouse.y;
+
+    // draw locations
+    for (const loc of MAP_LOCS) {
+      const cx = loc.fx * W, cy = loc.fy * H;
+      const hovered = DD.dist(mx, my, cx, cy) < 36;
+      drawMapIcon(ctx, loc, cx, cy, hovered);
+
+      // label
+      ctx.textAlign = "center";
+      ctx.font = `bold 13px ${font}`;
+      ctx.fillStyle = hovered ? "#ffd95e" : "#bdb3d6";
+      ctx.fillText(loc.name, cx, cy + 46);
+
+      // tier buttons for selected dungeon
+      if (loc.kind === "dungeon" && game.mapSelected === loc.id) {
+        const dungeon = DUNGEONS[loc.id];
+        dungeon.tiers.forEach((t, ti) => {
+          const bx = cx + (ti - 1) * 60;
+          const by = cy + 62;
+          const bHov = Math.abs(mx - bx) < 26 && Math.abs(my - by) < 13;
+          ctx.fillStyle = bHov ? "#ffd95e" : "rgba(30,26,46,0.9)";
+          ctx.fillRect(bx - 26, by - 13, 52, 26);
+          ctx.strokeStyle = bHov ? "#ffd95e" : "#6b6481";
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(bx - 26, by - 13, 52, 26);
+          ctx.fillStyle = bHov ? "#1a1626" : "#d8cfee";
+          ctx.font = `bold 11px ${font}`;
+          ctx.fillText(`Tier ${ti} (${t.levelHint})`, bx, by + 4);
+        });
+      }
+    }
+    ctx.textAlign = "left";
+  }
+
   // ---- draw ----
 
   function draw() {
@@ -933,6 +1079,12 @@
     ctx.save();
     ctx.translate(DD.view.ox, DD.view.oy);
     ctx.scale(DD.view.scale, DD.view.scale);
+
+    if (game.state === "map") {
+      drawMap(ctx);
+      ctx.restore();
+      return;
+    }
 
     if (game.state === "menu" || game.state === "hub") {
       if (!DD.room.prerendered) {
@@ -1232,7 +1384,7 @@
   });
   document.getElementById("btn-class").addEventListener("click", () => {
     if (DD.net.role) DD.net.reset();
-    backToMenu();
+    if (game.hero) showMap(); else backToMenu();
   });
   continueBtn.addEventListener("click", () => {
     const save = readSave();
@@ -1244,6 +1396,7 @@
       if (game.state === "inventory") { closeInventory(); return; }
     }
     if (game.state === "inventory" && e.key === "Escape") { closeInventory(); return; }
+    if (game.state === "map" && e.key === "Escape") { if (game.hero) showHub(game.hero); else backToMenu(); return; }
     if (game.state === "levelup" && ["1", "2", "3"].includes(e.key)) {
       const up = game.levelUpPicks[Number(e.key) - 1];
       if (up && game.lvlOnPick) game.lvlOnPick(up);
@@ -1251,14 +1404,51 @@
     }
     if (resultEl.classList.contains("hidden")) return;
     if (e.key === "Enter") { if (DD.net.role) DD.net.reset(); startRun(game.classKey, game.dungeonId, game.tier); }
-    if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); backToMenu(); }
+    if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); if (game.hero) showMap(); else backToMenu(); }
+  });
+
+  // ---- world map click handler ----
+
+  canvas.addEventListener("click", (e) => {
+    if (game.state !== "map") return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const wx = (cx - DD.view.ox) / DD.view.scale;
+    const wy = (cy - DD.view.oy) / DD.view.scale;
+
+    for (const loc of MAP_LOCS) {
+      const lx = loc.fx * DD.WIDTH, ly = loc.fy * DD.HEIGHT;
+      if (DD.dist(wx, wy, lx, ly) < 36) {
+        if (loc.kind === "town") {
+          // Stage 6: showTown() — for now just show hub as placeholder
+          if (game.hero) showHub(game.hero);
+        } else {
+          // toggle selection or deselect
+          game.mapSelected = game.mapSelected === loc.id ? null : loc.id;
+        }
+        return;
+      }
+      // tier button clicks (only for selected dungeon)
+      if (loc.kind === "dungeon" && game.mapSelected === loc.id) {
+        const dungeon = DUNGEONS[loc.id];
+        dungeon.tiers.forEach((t, ti) => {
+          const bx = lx + (ti - 1) * 60;
+          const by = ly + 62;
+          if (Math.abs(wx - bx) < 26 && Math.abs(wy - by) < 13) {
+            DD.audio.unlock();
+            startRun(game.classKey, loc.id, ti);
+          }
+        });
+      }
+    }
   });
 
   // ---- hub buttons ----
 
   document.getElementById("btn-descend").addEventListener("click", () => {
     DD.audio.unlock();
-    if (game.hero) startRun(game.hero.classKey);
+    if (game.hero) showMap();
   });
 
   document.getElementById("btn-switch-class").addEventListener("click", () => {
