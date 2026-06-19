@@ -30,29 +30,33 @@
   // floor. Clear the last boss to win the run.
   const FLOORS = [
     {
-      name: "Catacombs",
+      name: "Catacombs", enemyLabel: "Skeletons", faction: "skeleton",
       boss: "SKELETON KING", bossHp: 70, bossDmg: 2, scale: 1, summonKind: "melee",
-      kinds: ["melee", "shade"],           // shades phase through walls — spooky swarms
+      kinds: ["melee", "shade"],
       eliteKinds: ["melee"],
-      plan: ["combat", "combat", "treasure", "combat", "boss", "shop"],
+      plan: ["combat", "combat", "treasure", "combat", "boss"],
     },
     {
-      name: "Crypt",
+      name: "Crypt", enemyLabel: "Skeletons", faction: "skeleton",
       boss: "BONE EMPEROR", bossHp: 105, bossDmg: 2, scale: 1.45, summonKind: "archer",
-      kinds: ["melee", "archer", "berserker"], // ranged pressure + glass-cannon chargers
-      eliteKinds: ["archer", "berserker"],
-      plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss", "shop"],
+      kinds: ["melee", "archer", "shade"],
+      eliteKinds: ["archer", "shade"],
+      plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"],
     },
     {
-      name: "Bone Palace",
+      name: "Bone Palace", enemyLabel: "Skeletons", faction: "skeleton",
       boss: "THE DEATHLESS", bossHp: 145, bossDmg: 3, scale: 1.95, summonKind: "bomber",
-      kinds: ["melee", "archer", "bomber", "shaman"], // everything + healers
-      eliteKinds: ["melee", "archer", "shaman"],
+      kinds: ["melee", "archer", "bomber", "shade"],
+      eliteKinds: ["melee", "archer"],
       plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"],
     },
   ];
 
-  const ELITE_NAMES = ["GRAVE WARDEN", "TOMB HERALD", "MARROW FIEND"];
+  const ELITE_NAMES = {
+    skeleton: ["GRAVE WARDEN", "TOMB HERALD", "MARROW FIEND"],
+    goblin:   ["RAID CAPTAIN", "CAVE BRUISER", "MINE TYRANT"],
+    undead:   ["DEATH KNIGHT", "DREAD REVENANT", "BONE HERALD"],
+  };
 
   const game = {
     state: "menu", // menu | play | levelup | transition | won | lost
@@ -239,36 +243,36 @@
     const spawnDist = Math.min(170, DD.WIDTH * 0.35);
     const areaScale = Math.min(1, (DD.ROOM_W * DD.ROOM_H) / (30 * 18) + 0.25);
 
+    const faction = cfg.faction || "skeleton";
     if (game.roomType === "combat") {
       const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
       const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
       const kinds = cfg.kinds || ["melee"];
       for (let i = 0; i < count; i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
-        // first two spawns always use the primary kind so the room doesn't start with all specials
         const kind = i > 1 && Math.random() < 0.4 ? DD.choice(kinds) : kinds[0];
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind });
+        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind, faction });
       }
-      // brutes: use first non-shade kind so they always feel solid
       const bruteKind = kinds.find((k) => k !== "shade") || "melee";
       for (let i = 0; i < tier + Math.max(0, game.floor - 1); i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind });
+        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind, faction });
       }
     } else if (game.roomType === "elite") {
       const eliteKinds = cfg.eliteKinds || cfg.kinds || ["melee"];
       const eliteKind = DD.choice(eliteKinds);
+      const eliteNames = ELITE_NAMES[faction] || ELITE_NAMES.skeleton || ["ELITE"];
       const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
       game.spawnQueue.push({
-        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind,
-        elite: true, name: DD.choice(ELITE_NAMES),
+        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind, faction,
+        elite: true, name: DD.choice(eliteNames),
       });
       const minionKinds = (cfg.kinds || ["melee"]).filter((k) => k !== "shade");
       for (let i = 0; i < 2; i++) {
         const mp = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         game.spawnQueue.push({
           x: mp.x, y: mp.y, delay: 1.6 + i * 0.5, big: false,
-          kind: DD.choice(minionKinds),
+          kind: DD.choice(minionKinds), faction,
         });
       }
     } else if (game.roomType === "treasure") {
@@ -766,7 +770,8 @@
       s.delay -= dt;
       if (s.delay <= 0) {
         game.skeletons.push(new DD.Skeleton(s.x, s.y, {
-          big: s.big, kind: s.kind, elite: s.elite, name: s.name, scale: game.floorCfg().scale,
+          big: s.big, kind: s.kind, elite: s.elite, name: s.name,
+          scale: game.floorCfg().scale, faction: s.faction || "skeleton",
         }));
         DD.audio.spawn();
         game.spawnQueue.splice(i, 1);

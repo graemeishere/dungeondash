@@ -1,5 +1,7 @@
 "use strict";
 (function (DD) {
+  DD.INV_CAP = 15;
+
   DD.ITEM_RARITY = {
     common: { color: "#b0a8cc", weight: 60, scale: 1.0, label: "Common" },
     rare:   { color: "#4a9bff", weight: 28, scale: 1.6, label: "Rare"   },

@@ -471,7 +471,8 @@
     constructor(x, y, opts = {}) {
       this.x = x;
       this.y = y;
-      this.kind = opts.kind || "melee"; // melee | archer | bomber | shade | berserker | shaman
+      this.kind = opts.kind || "melee"; // melee | archer | bomber | shade
+      this.faction = opts.faction || "skeleton";
       this.big = !!opts.big;
       this.elite = !!opts.elite;
       this.name = opts.name || null;
@@ -481,33 +482,26 @@
 
       const baseHp = opts.hp ?? (
         this.big ? 16 :
-        this.kind === "bomber"    ? 4 :
-        this.kind === "archer"    ? 5 :
-        this.kind === "shade"     ? 3 :
-        this.kind === "berserker" ? 5 :
-        this.kind === "shaman"    ? 7 : 6);
+        this.kind === "bomber" ? 4 :
+        this.kind === "archer" ? 5 :
+        this.kind === "shade"  ? 3 : 6);
       this.hp = Math.round(baseHp * scale);
       this.maxHp = this.hp;
       const baseSpeed = opts.speed ?? (
-        this.big        ? DD.rand(38, 48) :
-        this.kind === "bomber"    ? DD.rand(100, 118) :
-        this.kind === "archer"    ? DD.rand(48, 60) :
-        this.kind === "shade"     ? DD.rand(85, 105) :
-        this.kind === "berserker" ? DD.rand(120, 145) :
-        this.kind === "shaman"    ? DD.rand(32, 42) :
+        this.big ? DD.rand(38, 48) :
+        this.kind === "bomber" ? DD.rand(100, 118) :
+        this.kind === "archer" ? DD.rand(48, 60) :
+        this.kind === "shade"  ? DD.rand(85, 105) :
         DD.rand(52, 78));
       this.speed = baseSpeed * (1 + 0.06 * (scale - 1));
       this.dmg = opts.dmg ?? (this.big ? 2 : 1) + (scale >= 1.9 ? 1 : 0);
       this.xpValue = opts.xpValue ?? (
         this.elite ? 25 : this.big ? 12 :
-        this.kind === "shaman"    ? 12 :
-        this.kind === "berserker" ? 7 :
-        this.kind === "shade"     ? 4 :
-        this.kind === "melee"     ? 5 : 7);
+        this.kind === "shade" ? 4 :
+        this.kind === "melee" ? 5 : 7);
       this.coinDrop = opts.coinDrop ?? (
         this.elite ? [6, 10] : this.big ? [2, 4] :
-        this.kind === "shade"  ? [0, 2] :
-        this.kind === "shaman" ? [3, 6] : [1, 3]);
+        this.kind === "shade" ? [0, 2] : [1, 3]);
 
       this.state = "spawn"; // spawn -> chase -> windup/fuse -> recover
       this.stateT = 1.0;
@@ -522,11 +516,9 @@
     }
 
     frames() {
-      if (this.kind === "archer")    return DD.sprites.skeletonArcher;
-      if (this.kind === "bomber")    return DD.sprites.skeletonBomber;
-      if (this.kind === "shade")     return DD.sprites.skeletonShade;
-      if (this.kind === "berserker") return DD.sprites.skeletonBerserker;
-      if (this.kind === "shaman")    return DD.sprites.skeletonShaman;
+      if (this.kind === "archer") return DD.sprites.skeletonArcher;
+      if (this.kind === "bomber") return DD.sprites.skeletonBomber;
+      if (this.kind === "shade")  return DD.sprites.skeletonShade;
       return DD.sprites.skeleton;
     }
 
@@ -560,43 +552,22 @@
           let a;
           if (d < 380) {
             a = DD.angleTo(this.x, this.y, pl.x, pl.y);
-            if (this.kind === "archer" || this.kind === "shaman") {
+            if (this.kind === "archer") {
               // hold a comfortable range
               if (d < 150) a += Math.PI;          // back away
               else if (d < 240) a += Math.PI / 2; // strafe
-              if (this.kind === "archer" && this.shootCd <= 0 && d < 340) {
+              if (this.shootCd <= 0 && d < 340) {
                 this.shootCd = DD.rand(1.9, 2.6);
                 game.enemyShots.push(new EnemyShot(this.x, this.y - 14, DD.angleTo(this.x, this.y, pl.x, pl.y - 8)));
                 DD.audio.shoot();
-              }
-              if (this.kind === "shaman" && this.shootCd <= 0) {
-                this.shootCd = DD.rand(3.5, 5.0);
-                let bestTarget = null, bestMissing = 0;
-                for (const sk of game.skeletons) {
-                  if (sk === this || sk.dead || sk.state === "spawn") continue;
-                  const missing = sk.maxHp - sk.hp;
-                  if (missing > bestMissing && DD.dist(this.x, this.y, sk.x, sk.y) < 220) {
-                    bestMissing = missing; bestTarget = sk;
-                  }
-                }
-                if (bestTarget) {
-                  bestTarget.hp = Math.min(bestTarget.maxHp, bestTarget.hp + 2);
-                  DD.particles.burst(bestTarget.x, bestTarget.y - 14, {
-                    count: 10, colors: ["#22cc66", "#66ff99", "#aaffcc"],
-                    speed: 55, life: 0.55, gravity: -100,
-                  });
-                }
               }
             }
           } else {
             if (Math.random() < dt * 0.8) this.wanderA = DD.rand(0, Math.PI * 2);
             a = this.wanderA;
           }
-          // berserker enrages below 50% HP
-          const spd = (this.kind === "berserker" && this.hp < this.maxHp * 0.5)
-            ? this.speed * 1.6 : this.speed;
-          let mx = Math.cos(a) * spd;
-          let my = Math.sin(a) * spd;
+          let mx = Math.cos(a) * this.speed;
+          let my = Math.sin(a) * this.speed;
           // gently push away from other skeletons so they don't stack
           for (const other of game.enemies()) {
             if (other === this || other.dead) continue;
@@ -617,9 +588,9 @@
 
           if (this.kind === "bomber") {
             if (d < 60) { this.state = "fuse"; this.stateT = 0.8; }
-          } else if ((this.kind === "melee" || this.kind === "berserker" || this.kind === "shade") && d < this.r + 20) {
+          } else if ((this.kind === "melee" || this.kind === "shade") && d < this.r + 20) {
             this.state = "windup";
-            this.stateT = this.kind === "berserker" ? 0.26 : this.big ? 0.5 : 0.38;
+            this.stateT = this.big ? 0.5 : 0.38;
           }
           break;
         }
@@ -688,8 +659,7 @@
       for (let i = 0; i < coins; i++) {
         game.pickups.push(new Pickup("coin", this.x + DD.rand(-8, 8), this.y + DD.rand(-8, 8)));
       }
-      const heartChance = this.kind === "shaman" ? 0.4 : 0.18;
-      if (this.elite || Math.random() < heartChance) {
+      if (this.elite || Math.random() < 0.18) {
         game.pickups.push(new Pickup("heart", this.x, this.y));
       }
       // Item drops: elite = guaranteed rare+, brute = 25%, regular = 10%
@@ -697,7 +667,8 @@
         const chance = this.elite ? 1.0 : this.big ? 0.25 : 0.10;
         if (Math.random() < chance) {
           const minRarity = this.elite ? "rare" : undefined;
-          game.pickups.push(new Pickup("item", this.x, this.y - 8, DD.rollItem({ floor: game.floor, minRarity })));
+          game.pickups.push(new Pickup("item", this.x, this.y - 8,
+            DD.rollItem({ floor: game.floor, minRarity, faction: this.faction })));
         }
       }
     }
@@ -728,19 +699,15 @@
       // shade is semi-transparent
       if (this.kind === "shade") ctx.globalAlpha = 0.72;
 
-      const berserkerEnraged = this.kind === "berserker" && this.hp < this.maxHp * 0.5;
       const fuseFlash = this.state === "fuse" && Math.floor(this.stateT * 14) % 2 === 0;
-      const enrageFlash = berserkerEnraged && Math.floor(this.animT * 7) % 2 === 0;
 
-      if (this.flash > 0 || fuseFlash || enrageFlash) {
-        // white flash on hit, red-hot blink while a bomber's fuse burns or berserker enrages
+      if (this.flash > 0 || fuseFlash) {
         ctx.save();
         ctx.translate(this.x, this.y);
         if (this.flip) ctx.scale(-1, 1);
-        const filter = (fuseFlash || (enrageFlash && this.flash <= 0))
+        ctx.filter = fuseFlash
           ? "brightness(2) sepia(1) hue-rotate(-50deg) saturate(4)"
           : "brightness(3)";
-        ctx.filter = filter;
         ctx.drawImage(this.frames()[0], -d / 2, -d + 10, d, d);
         ctx.restore();
         ctx.filter = "none";
@@ -789,6 +756,7 @@
         coinDrop: [12, 18],
       });
       this.bossName = opts.name || "SKELETON KING";
+      this.label = this.bossName;
       this.summonKind = opts.summonKind || "melee";
       this.r = 18;
       this.drawSize = 96;
@@ -835,7 +803,10 @@
           this.summonCd = enraged ? 6 : 9;
           for (let i = 0; i < 2; i++) {
             const pos = DD.room.randomFloorPos(pl.x, pl.y, 120);
-            game.skeletons.push(new Skeleton(pos.x, pos.y, { kind: i === 0 ? this.summonKind : "melee" }));
+            game.skeletons.push(new Skeleton(pos.x, pos.y, {
+              kind: i === 0 ? this.summonKind : "melee",
+              faction: this.faction || "skeleton",
+            }));
             DD.audio.spawn();
           }
         }
@@ -962,6 +933,10 @@
         DD.particles.text(this.x, this.y - 16, "+2 HP", "#ff8c91");
         DD.particles.burst(this.x, this.y, { count: 8, colors: ["#ff8c91", "#e8484f"], speed: 60, life: 0.4, gravity: -80 });
       } else if (this.kind === "item" && this.item && game.hero) {
+        if (game.hero.inventory.length >= (DD.INV_CAP || 15)) {
+          DD.particles.text(this.x, this.y - 16, "Bag full!", "#e8484f");
+          return;
+        }
         game.hero.inventory.push(this.item);
         DD.profile.save();
         const rColor = DD.ITEM_RARITY[this.item.rarity].color;
