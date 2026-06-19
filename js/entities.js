@@ -211,7 +211,7 @@
         DD.room.moveEntity(this, dx * this.stats.speed * dt, dy * this.stats.speed * dt);
       }
 
-      if (input.attacking() && this.attackCd <= 0) this.performAttack(game);
+      if (!game.peaceful && input.attacking() && this.attackCd <= 0) this.performAttack(game);
     }
 
     performAttack(game) {
