@@ -30,15 +30,24 @@
   // floor. Clear the last boss to win the run.
   const FLOORS = [
     {
+      name: "Catacombs",
       boss: "SKELETON KING", bossHp: 70, bossDmg: 2, scale: 1, summonKind: "melee",
+      kinds: ["melee", "shade"],           // shades phase through walls — spooky swarms
+      eliteKinds: ["melee"],
       plan: ["combat", "combat", "treasure", "combat", "boss", "shop"],
     },
     {
+      name: "Crypt",
       boss: "BONE EMPEROR", bossHp: 105, bossDmg: 2, scale: 1.45, summonKind: "archer",
+      kinds: ["melee", "archer", "berserker"], // ranged pressure + glass-cannon chargers
+      eliteKinds: ["archer", "berserker"],
       plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss", "shop"],
     },
     {
+      name: "Bone Palace",
       boss: "THE DEATHLESS", bossHp: 145, bossDmg: 3, scale: 1.95, summonKind: "bomber",
+      kinds: ["melee", "archer", "bomber", "shaman"], // everything + healers
+      eliteKinds: ["melee", "archer", "shaman"],
       plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"],
     },
   ];
@@ -233,29 +242,33 @@
     if (game.roomType === "combat") {
       const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
       const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
-      const kinds = ["melee"];
-      if (game.floor >= 1) kinds.push("archer");
-      if (game.floor >= 2) kinds.push("bomber");
+      const kinds = cfg.kinds || ["melee"];
       for (let i = 0; i < count; i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
-        const kind = i > 1 && Math.random() < 0.3 ? DD.choice(kinds) : "melee";
+        // first two spawns always use the primary kind so the room doesn't start with all specials
+        const kind = i > 1 && Math.random() < 0.4 ? DD.choice(kinds) : kinds[0];
         game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind });
       }
+      // brutes: use first non-shade kind so they always feel solid
+      const bruteKind = kinds.find((k) => k !== "shade") || "melee";
       for (let i = 0; i < tier + Math.max(0, game.floor - 1); i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: "melee" });
+        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind });
       }
     } else if (game.roomType === "elite") {
+      const eliteKinds = cfg.eliteKinds || cfg.kinds || ["melee"];
+      const eliteKind = DD.choice(eliteKinds);
       const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
       game.spawnQueue.push({
-        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: "melee",
+        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind,
         elite: true, name: DD.choice(ELITE_NAMES),
       });
+      const minionKinds = (cfg.kinds || ["melee"]).filter((k) => k !== "shade");
       for (let i = 0; i < 2; i++) {
         const mp = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         game.spawnQueue.push({
           x: mp.x, y: mp.y, delay: 1.6 + i * 0.5, big: false,
-          kind: game.floor >= 1 ? "archer" : "melee",
+          kind: DD.choice(minionKinds),
         });
       }
     } else if (game.roomType === "treasure") {
@@ -354,6 +367,7 @@
       game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
       game.hero.kills = (game.hero.kills || 0) + game.kills;
       if (!won) game.hero.deaths = (game.hero.deaths || 0) + 1;
+      DD.profile.progressQuests({ kills: game.kills, floor: game.floor + (won ? 1 : 0), won });
       DD.profile.save();
     }
     game.state = won ? "won" : "lost";
@@ -466,6 +480,34 @@
       }
       wrap.append(label, slotEl);
       equipEl.appendChild(wrap);
+    }
+
+    // Quest log
+    const questsEl = document.getElementById("hub-quests");
+    if (questsEl) {
+      const active = DD.profile.data.quests.active;
+      if (active.length === 0) {
+        questsEl.innerHTML = `<div class="hub-quest-row" style="color:#6b5e96">All quests complete!</div>`;
+      } else {
+        questsEl.innerHTML = active.slice(0, 3).map((q) => {
+          const def = DD.profile.questDefs.find((d) => d.id === q.id);
+          if (!def) return "";
+          const prog = q.progress || {};
+          const goal = def.goal;
+          let bar = "";
+          if (goal.kills) {
+            const cur = Math.min(prog.kills || 0, goal.kills);
+            const pct = Math.round(cur / goal.kills * 100);
+            bar = `<div class="hub-quest-bar-bg"><div class="hub-quest-bar-fill" style="width:${pct}%"></div></div>`;
+          }
+          return `<div class="hub-quest-row">
+            <div class="hub-quest-title">${def.title}</div>
+            <div class="hub-quest-desc">${def.desc}${goal.kills ? ` (${Math.min(prog.kills || 0, goal.kills)}/${goal.kills})` : ""}</div>
+            ${bar}
+            <div class="hub-quest-reward">+${def.reward.gold}g on complete</div>
+          </div>`;
+        }).join("");
+      }
     }
 
     // Continue button

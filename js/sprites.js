@@ -82,8 +82,8 @@
 
   function drawSkeleton(p, frame, variant) {
     const bob = frame === 1 ? 1 : 0;
-    const BONE = "#e9e6da";
-    const BONE_SHADE = "#b9b4a4";
+    const BONE = variant === "shade" ? "#8899dd" : "#e9e6da";
+    const BONE_SHADE_C = variant === "shade" ? "#6677bb" : "#b9b4a4";
 
     // feet
     if (frame === 0) {
@@ -98,8 +98,8 @@
     p(5, 9, "#34304a", 6, 4);
     p(5, 9, BONE, 6, 1);
     p(5, 11, BONE, 6, 1);
-    p(4, 9, BONE_SHADE, 1, 3); // arms
-    p(11, 9, BONE_SHADE, 1, 3);
+    p(4, 9, BONE_SHADE_C, 1, 3); // arms
+    p(11, 9, BONE_SHADE_C, 1, 3);
 
     if (variant === "bomber") {
       // round black bomb strapped to the ribcage
@@ -107,12 +107,27 @@
       p(5, 8, "#1c1a24", 6, 1);
       p(7, 7, "#ff9234", 2, 1); // fuse spark
       p(5, 9, "#3a3750", 2, 1); // highlight
+    } else if (variant === "berserker") {
+      // jagged red sword held to the side
+      p(2, 8, "#8a2020", 2, 6);
+      p(3, 7, "#cc3030", 1, 1);
+      p(3, 8, "#cc3030", 1, 1);
+    } else if (variant === "shaman") {
+      // gnarled staff
+      p(2, 6, "#5a7a5a", 1, 8);
+      p(1, 5, "#6bae6b", 3, 1);
+      p(1, 4, "#8bde8b", 1, 2);
+      p(3, 4, "#8bde8b", 1, 2);
     }
 
     // skull
     p(4, 1 + bob, BONE, 8, 7);
     p(3, 2 + bob, BONE, 10, 4);
-    const socket = variant === "bomber" ? "#c93232" : "#1a1626";
+    const socket = variant === "bomber" ? "#c93232"
+      : variant === "shade" ? "#5566ee"
+      : variant === "berserker" ? "#cc2222"
+      : variant === "shaman" ? "#22cc66"
+      : "#1a1626";
     p(5, 3 + bob, socket, 2, 2);  // sockets
     p(9, 3 + bob, socket, 2, 2);
     p(7, 5 + bob, "#1a1626", 1, 1);  // nose
@@ -128,6 +143,11 @@
       p(13, 8, "#8a5e2e", 1, 5); // bow stave
       p(12, 7, "#8a5e2e", 1, 1);
       p(12, 13, "#8a5e2e", 1, 1);
+    } else if (variant === "shaman") {
+      // dark green hood
+      p(3, 0 + bob, "#2a4e33", 10, 3);
+      p(3, 3 + bob, "#2a4e33", 1, 4);
+      p(12, 3 + bob, "#2a4e33", 1, 4);
     }
   }
 
@@ -351,6 +371,9 @@
       this.skeleton = makeFrames((p, f) => drawSkeleton(p, f));
       this.skeletonArcher = makeFrames((p, f) => drawSkeleton(p, f, "archer"));
       this.skeletonBomber = makeFrames((p, f) => drawSkeleton(p, f, "bomber"));
+      this.skeletonShade = makeFrames((p, f) => drawSkeleton(p, f, "shade"));
+      this.skeletonBerserker = makeFrames((p, f) => drawSkeleton(p, f, "berserker"));
+      this.skeletonShaman = makeFrames((p, f) => drawSkeleton(p, f, "shaman"));
       this.shopkeeper = makeFrames((p, f) => drawHero(p, {
         hat: "hood", hatColor: "#6e4a23", accent: "#6e4a23",
         body: "#8a6a3a", sleeve: "#6e4a23", belt: "#3c2c14", boot: "#3c2c14",

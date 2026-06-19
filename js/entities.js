@@ -471,7 +471,7 @@
     constructor(x, y, opts = {}) {
       this.x = x;
       this.y = y;
-      this.kind = opts.kind || "melee"; // melee | archer | bomber
+      this.kind = opts.kind || "melee"; // melee | archer | bomber | shade | berserker | shaman
       this.big = !!opts.big;
       this.elite = !!opts.elite;
       this.name = opts.name || null;
@@ -479,17 +479,35 @@
       this.r = this.big ? 14 : 10;
       this.drawSize = this.big ? 68 : SPRITE_DRAW;
 
-      const baseHp = opts.hp ?? (this.big ? 16 : this.kind === "bomber" ? 4 : this.kind === "archer" ? 5 : 6);
+      const baseHp = opts.hp ?? (
+        this.big ? 16 :
+        this.kind === "bomber"    ? 4 :
+        this.kind === "archer"    ? 5 :
+        this.kind === "shade"     ? 3 :
+        this.kind === "berserker" ? 5 :
+        this.kind === "shaman"    ? 7 : 6);
       this.hp = Math.round(baseHp * scale);
       this.maxHp = this.hp;
       const baseSpeed = opts.speed ?? (
-        this.big ? DD.rand(38, 48) :
-        this.kind === "bomber" ? DD.rand(100, 118) :
-        this.kind === "archer" ? DD.rand(48, 60) : DD.rand(52, 78));
+        this.big        ? DD.rand(38, 48) :
+        this.kind === "bomber"    ? DD.rand(100, 118) :
+        this.kind === "archer"    ? DD.rand(48, 60) :
+        this.kind === "shade"     ? DD.rand(85, 105) :
+        this.kind === "berserker" ? DD.rand(120, 145) :
+        this.kind === "shaman"    ? DD.rand(32, 42) :
+        DD.rand(52, 78));
       this.speed = baseSpeed * (1 + 0.06 * (scale - 1));
       this.dmg = opts.dmg ?? (this.big ? 2 : 1) + (scale >= 1.9 ? 1 : 0);
-      this.xpValue = opts.xpValue ?? (this.elite ? 25 : this.big ? 12 : this.kind === "melee" ? 5 : 7);
-      this.coinDrop = opts.coinDrop ?? (this.elite ? [6, 10] : this.big ? [2, 4] : [1, 3]);
+      this.xpValue = opts.xpValue ?? (
+        this.elite ? 25 : this.big ? 12 :
+        this.kind === "shaman"    ? 12 :
+        this.kind === "berserker" ? 7 :
+        this.kind === "shade"     ? 4 :
+        this.kind === "melee"     ? 5 : 7);
+      this.coinDrop = opts.coinDrop ?? (
+        this.elite ? [6, 10] : this.big ? [2, 4] :
+        this.kind === "shade"  ? [0, 2] :
+        this.kind === "shaman" ? [3, 6] : [1, 3]);
 
       this.state = "spawn"; // spawn -> chase -> windup/fuse -> recover
       this.stateT = 1.0;
@@ -504,8 +522,11 @@
     }
 
     frames() {
-      if (this.kind === "archer") return DD.sprites.skeletonArcher;
-      if (this.kind === "bomber") return DD.sprites.skeletonBomber;
+      if (this.kind === "archer")    return DD.sprites.skeletonArcher;
+      if (this.kind === "bomber")    return DD.sprites.skeletonBomber;
+      if (this.kind === "shade")     return DD.sprites.skeletonShade;
+      if (this.kind === "berserker") return DD.sprites.skeletonBerserker;
+      if (this.kind === "shaman")    return DD.sprites.skeletonShaman;
       return DD.sprites.skeleton;
     }
 
@@ -539,22 +560,43 @@
           let a;
           if (d < 380) {
             a = DD.angleTo(this.x, this.y, pl.x, pl.y);
-            if (this.kind === "archer") {
-              // hold a comfortable range and shoot
+            if (this.kind === "archer" || this.kind === "shaman") {
+              // hold a comfortable range
               if (d < 150) a += Math.PI;          // back away
               else if (d < 240) a += Math.PI / 2; // strafe
-              if (this.shootCd <= 0 && d < 340) {
+              if (this.kind === "archer" && this.shootCd <= 0 && d < 340) {
                 this.shootCd = DD.rand(1.9, 2.6);
                 game.enemyShots.push(new EnemyShot(this.x, this.y - 14, DD.angleTo(this.x, this.y, pl.x, pl.y - 8)));
                 DD.audio.shoot();
+              }
+              if (this.kind === "shaman" && this.shootCd <= 0) {
+                this.shootCd = DD.rand(3.5, 5.0);
+                let bestTarget = null, bestMissing = 0;
+                for (const sk of game.skeletons) {
+                  if (sk === this || sk.dead || sk.state === "spawn") continue;
+                  const missing = sk.maxHp - sk.hp;
+                  if (missing > bestMissing && DD.dist(this.x, this.y, sk.x, sk.y) < 220) {
+                    bestMissing = missing; bestTarget = sk;
+                  }
+                }
+                if (bestTarget) {
+                  bestTarget.hp = Math.min(bestTarget.maxHp, bestTarget.hp + 2);
+                  DD.particles.burst(bestTarget.x, bestTarget.y - 14, {
+                    count: 10, colors: ["#22cc66", "#66ff99", "#aaffcc"],
+                    speed: 55, life: 0.55, gravity: -100,
+                  });
+                }
               }
             }
           } else {
             if (Math.random() < dt * 0.8) this.wanderA = DD.rand(0, Math.PI * 2);
             a = this.wanderA;
           }
-          let mx = Math.cos(a) * this.speed;
-          let my = Math.sin(a) * this.speed;
+          // berserker enrages below 50% HP
+          const spd = (this.kind === "berserker" && this.hp < this.maxHp * 0.5)
+            ? this.speed * 1.6 : this.speed;
+          let mx = Math.cos(a) * spd;
+          let my = Math.sin(a) * spd;
           // gently push away from other skeletons so they don't stack
           for (const other of game.enemies()) {
             if (other === this || other.dead) continue;
@@ -565,13 +607,19 @@
             }
           }
           this.flip = mx < 0;
-          DD.room.moveEntity(this, mx * dt, my * dt);
+          // shades phase through walls; others use room collision
+          if (this.kind === "shade") {
+            this.x = DD.clamp(this.x + mx * dt, DD.TILE, DD.WIDTH - DD.TILE);
+            this.y = DD.clamp(this.y + my * dt, DD.TILE, DD.HEIGHT - DD.TILE);
+          } else {
+            DD.room.moveEntity(this, mx * dt, my * dt);
+          }
 
           if (this.kind === "bomber") {
             if (d < 60) { this.state = "fuse"; this.stateT = 0.8; }
-          } else if (this.kind === "melee" && d < this.r + 20) {
+          } else if ((this.kind === "melee" || this.kind === "berserker" || this.kind === "shade") && d < this.r + 20) {
             this.state = "windup";
-            this.stateT = this.big ? 0.5 : 0.38;
+            this.stateT = this.kind === "berserker" ? 0.26 : this.big ? 0.5 : 0.38;
           }
           break;
         }
@@ -630,14 +678,18 @@
       game.addXP(this.xpValue);
       if (attacker) attacker.onKill();
       DD.audio.bones();
+      const deathColors = this.kind === "shade"
+        ? ["#6688ff", "#99aaff", "#3344cc"]
+        : ["#e9e6da", "#b9b4a4", "#fff"];
       DD.particles.burst(this.x, this.y - 14, {
-        count: this.big ? 24 : 16, colors: ["#e9e6da", "#b9b4a4", "#fff"], speed: 140, life: 0.6, gravity: 260,
+        count: this.big ? 24 : 16, colors: deathColors, speed: 140, life: 0.6, gravity: 260,
       });
       const coins = DD.randi(this.coinDrop[0], this.coinDrop[1]);
       for (let i = 0; i < coins; i++) {
         game.pickups.push(new Pickup("coin", this.x + DD.rand(-8, 8), this.y + DD.rand(-8, 8)));
       }
-      if (this.elite || Math.random() < 0.18) {
+      const heartChance = this.kind === "shaman" ? 0.4 : 0.18;
+      if (this.elite || Math.random() < heartChance) {
         game.pickups.push(new Pickup("heart", this.x, this.y));
       }
       // Item drops: elite = guaranteed rare+, brute = 25%, regular = 10%
@@ -673,18 +725,30 @@
 
       drawShadow(ctx, this.x, this.y, this.r + 2);
 
-      if (this.flash > 0 || (this.state === "fuse" && Math.floor(this.stateT * 14) % 2 === 0)) {
-        // white flash on hit, red-hot blink while a bomber's fuse burns
+      // shade is semi-transparent
+      if (this.kind === "shade") ctx.globalAlpha = 0.72;
+
+      const berserkerEnraged = this.kind === "berserker" && this.hp < this.maxHp * 0.5;
+      const fuseFlash = this.state === "fuse" && Math.floor(this.stateT * 14) % 2 === 0;
+      const enrageFlash = berserkerEnraged && Math.floor(this.animT * 7) % 2 === 0;
+
+      if (this.flash > 0 || fuseFlash || enrageFlash) {
+        // white flash on hit, red-hot blink while a bomber's fuse burns or berserker enrages
         ctx.save();
         ctx.translate(this.x, this.y);
         if (this.flip) ctx.scale(-1, 1);
-        ctx.filter = this.state === "fuse" ? "brightness(2) sepia(1) hue-rotate(-50deg) saturate(4)" : "brightness(3)";
+        const filter = (fuseFlash || (enrageFlash && this.flash <= 0))
+          ? "brightness(2) sepia(1) hue-rotate(-50deg) saturate(4)"
+          : "brightness(3)";
+        ctx.filter = filter;
         ctx.drawImage(this.frames()[0], -d / 2, -d + 10, d, d);
         ctx.restore();
         ctx.filter = "none";
       } else {
         drawSprite(ctx, this.frames(), this, this.state === "chase");
       }
+
+      if (this.kind === "shade") ctx.globalAlpha = 1;
 
       if ((this.big || this.elite) && this.maxHp > this.hp) {
         // small HP bar over brutes and elites
