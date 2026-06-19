@@ -10,20 +10,32 @@
 
   const ITEM_BASES = [
     // Weapons — improve damage / attack stats
-    { name: "Iron Sword",   slot: "weapon",  icon: "sword", mods: { dmg: 1.5 } },
-    { name: "Keen Blade",   slot: "weapon",  icon: "sword", mods: { dmg: 1.0, cooldown: -0.04 } },
-    { name: "Heavy Maul",   slot: "weapon",  icon: "sword", mods: { dmg: 3.0 } },
-    { name: "Magic Focus",  slot: "weapon",  icon: "sword", mods: { dmg: 1.5, projSpeed: 28 } },
+    { name: "Iron Sword",    slot: "weapon",  icon: "sword", mods: { dmg: 1.5 } },
+    { name: "Keen Blade",    slot: "weapon",  icon: "sword", mods: { dmg: 1.0, cooldown: -0.04 } },
+    { name: "Heavy Maul",    slot: "weapon",  icon: "sword", mods: { dmg: 3.0 } },
+    { name: "Magic Focus",   slot: "weapon",  icon: "sword", mods: { dmg: 1.5, projSpeed: 28 } },
     // Armor — improve survivability
-    { name: "Leather Vest", slot: "armor",   icon: "armor", mods: { hp: 2 } },
-    { name: "Chain Mail",   slot: "armor",   icon: "armor", mods: { hp: 4 } },
-    { name: "Swift Leather",slot: "armor",   icon: "armor", mods: { hp: 1, speed: 14 } },
-    { name: "Arcane Robe",  slot: "armor",   icon: "armor", mods: { hp: 2, projSpeed: 22 } },
+    { name: "Leather Vest",  slot: "armor",   icon: "armor", mods: { hp: 2 } },
+    { name: "Chain Mail",    slot: "armor",   icon: "armor", mods: { hp: 4 } },
+    { name: "Swift Leather", slot: "armor",   icon: "armor", mods: { hp: 1, speed: 14 } },
+    { name: "Arcane Robe",   slot: "armor",   icon: "armor", mods: { hp: 2, projSpeed: 22 } },
     // Trinkets — utility / hybrid bonuses
-    { name: "Swift Ring",   slot: "trinket", icon: "ring",  mods: { speed: 20 } },
-    { name: "Vampire Fang", slot: "trinket", icon: "ring",  mods: { killHeal: 0.3 } },
-    { name: "Power Gem",    slot: "trinket", icon: "ring",  mods: { dmg: 1.5 } },
-    { name: "Vigor Amulet", slot: "trinket", icon: "ring",  mods: { hp: 2, speed: 7 } },
+    { name: "Swift Ring",    slot: "trinket", icon: "ring",  mods: { speed: 20 } },
+    { name: "Vampire Fang",  slot: "trinket", icon: "ring",  mods: { killHeal: 0.3 } },
+    { name: "Power Gem",     slot: "trinket", icon: "ring",  mods: { dmg: 1.5 } },
+    { name: "Vigor Amulet",  slot: "trinket", icon: "ring",  mods: { hp: 2, speed: 7 } },
+    // Skeleton faction loot
+    { name: "Bone Axe",      slot: "weapon",  icon: "axe",   faction: "skeleton", mods: { dmg: 2.0, arc: 0.3 } },
+    { name: "Cursed Shield", slot: "armor",   icon: "armor", faction: "skeleton", mods: { hp: 3, speed: -12 } },
+    { name: "Skull Ring",    slot: "trinket", icon: "ring",  faction: "skeleton", mods: { killHeal: 0.2, dmg: 1.0 } },
+    // Goblin faction loot
+    { name: "Shiv",          slot: "weapon",  icon: "sword", faction: "goblin",   mods: { dmg: 1.0, cooldown: -0.06 } },
+    { name: "Rat-Hide Vest", slot: "armor",   icon: "armor", faction: "goblin",   mods: { hp: 2, speed: 18 } },
+    { name: "Shiny Trinket", slot: "trinket", icon: "ring",  faction: "goblin",   mods: { speed: 24, dmg: 0.5 } },
+    // Undead faction loot
+    { name: "Soul Blade",    slot: "weapon",  icon: "sword", faction: "undead",   mods: { dmg: 2.5, killHeal: 0.15 } },
+    { name: "Shadow Shroud", slot: "armor",   icon: "armor", faction: "undead",   mods: { hp: 3, projSpeed: 30 } },
+    { name: "Phylactery",    slot: "trinket", icon: "ring",  faction: "undead",   mods: { hp: 2, killHeal: 0.25 } },
   ];
 
   // Labels used in the inventory tooltip
@@ -39,7 +51,8 @@
   ]);
 
   // Generate a random item for the given floor (0-based) and optional min rarity.
-  DD.rollItem = function ({ floor = 0, minRarity } = {}) {
+  // When faction is provided, 70% of drops come from matching-faction bases, 30% from universal ones.
+  DD.rollItem = function ({ floor = 0, minRarity, faction } = {}) {
     // Choose rarity
     const entries = Object.entries(DD.ITEM_RARITY);
     const pool = minRarity
@@ -53,7 +66,19 @@
       if (roll <= 0) { rarity = r; break; }
     }
 
-    const base = DD.choice(ITEM_BASES);
+    // Build the item base pool, weighting toward the dungeon faction
+    let base;
+    if (faction) {
+      const factionBases = ITEM_BASES.filter((b) => b.faction === faction);
+      const universalBases = ITEM_BASES.filter((b) => !b.faction);
+      if (factionBases.length > 0 && Math.random() < 0.7) {
+        base = DD.choice(factionBases);
+      } else {
+        base = DD.choice(universalBases);
+      }
+    } else {
+      base = DD.choice(ITEM_BASES.filter((b) => !b.faction));
+    }
     const scale = DD.ITEM_RARITY[rarity].scale;
     const mods = {};
     for (const [k, v] of Object.entries(base.mods)) {

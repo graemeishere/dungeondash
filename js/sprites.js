@@ -133,6 +133,107 @@
     }
   }
 
+  function drawGoblin(p, frame, variant) {
+    const bob = frame === 1 ? 1 : 0;
+    const SKIN = "#4a7c4a", SKIN_D = "#2d5e2d";
+    const LEATHER = "#7a5c2e", BELT = "#4a3020";
+    const EYE = "#cc2222", DARK = "#241f33";
+
+    // feet
+    if (frame === 0) {
+      p(5, 13, BELT, 2, 2); p(9, 13, BELT, 2, 2);
+    } else {
+      p(4, 13, BELT, 2, 2); p(9, 14, BELT, 2, 1);
+    }
+
+    // stout torso
+    p(4, 9, LEATHER, 8, 4);
+    p(5, 9, "#8a6c3a", 6, 1); // highlight
+    p(3, 10, SKIN, 1, 2);  // arms
+    p(12, 10, SKIN, 1, 2);
+    p(4, 12, BELT, 8, 1); // belt
+
+    // big round goblin head with protruding ears
+    p(4, 1 + bob, SKIN, 6, 1);
+    p(3, 2 + bob, SKIN, 8, 1);
+    p(3, 3 + bob, SKIN, 10, 6);
+    p(3, 8 + bob, SKIN_D, 10, 1); // chin
+    p(1, 3 + bob, SKIN, 2, 3); p(1, 3 + bob, SKIN_D, 1, 3); // left ear
+    p(13, 3 + bob, SKIN, 2, 3); p(14, 3 + bob, SKIN_D, 1, 3); // right ear
+    p(5, 5 + bob, EYE, 2, 1); p(9, 5 + bob, EYE, 2, 1); // eyes
+    p(7, 6 + bob, SKIN_D, 2, 1); // nose bump
+    p(5, 7 + bob, DARK, 1, 1); p(7, 7 + bob, DARK, 2, 1); p(10, 7 + bob, DARK, 1, 1); // grin
+
+    if (variant === "goblinArcher") {
+      p(13, 7, "#8a5e2e", 1, 6); // bow stave
+      p(12, 6, "#8a5e2e", 1, 1); p(12, 13, "#8a5e2e", 1, 1);
+    } else if (variant === "goblinBerserker") {
+      p(2, 6, "#8b9ab5", 3, 5); // axe head
+      p(2, 6, "#d8d4e6", 1, 5); // blade edge
+      p(4, 8, "#7a4f26", 1, 6); // haft
+    } else if (variant === "goblinShaman") {
+      p(13, 6, "#4a7c4a", 2, 2); // orb
+      p(14, 6, "#88dd88", 1, 1); // shine
+      p(13, 8, "#7a5c2e", 1, 6); // staff
+      p(12, 6, "#88dd88", 1, 1); p(15, 7, "#88dd88", 1, 1); // sparkles
+    }
+  }
+
+  function drawUndead(p, frame, variant) {
+    const bob = frame === 1 ? 1 : 0;
+    const DARK = "#241f33";
+
+    if (variant === "zombie") {
+      const ZSK = "#6a8c6a", ZSD = "#445c44", CLOTH = "#3a3550", ROT = "#4a5c2a";
+      if (frame === 0) {
+        p(5, 13, ZSD, 2, 2); p(9, 13, ZSD, 2, 2);
+      } else {
+        p(4, 13, ZSD, 2, 2); p(9, 14, ZSD, 2, 1);
+      }
+      p(4, 9, CLOTH, 8, 4);
+      p(3, 10, ZSK, 1, 2); p(12, 10, ZSK, 1, 2);
+      p(4, 12, ROT, 8, 1);
+      p(3, 2 + bob, ZSK, 10, 7);
+      p(3, 8 + bob, ZSD, 10, 1);
+      p(5, 4 + bob, "#88dd44", 2, 2); p(9, 4 + bob, "#88dd44", 2, 2); // glowing eyes
+      p(5, 5 + bob, DARK, 1, 1); p(9, 5 + bob, DARK, 1, 1); // pupils
+      p(5, 7 + bob, DARK, 6, 1); // gaping mouth
+      p(6, 7 + bob, ZSK, 1, 1); p(9, 7 + bob, ZSK, 1, 1); // teeth gaps
+
+    } else if (variant === "warlock") {
+      const ROBE = "#220d40", ROBE_L = "#3a1a60", ACCENT = "#9940d0", SKIN = "#c0a890";
+      if (frame === 0) {
+        p(5, 13, ROBE, 2, 2); p(9, 13, ROBE, 2, 2);
+      } else {
+        p(4, 13, ROBE, 2, 2); p(9, 14, ROBE, 2, 1);
+      }
+      p(4, 9, ROBE, 8, 5); p(5, 9, ROBE_L, 6, 1);
+      p(3, 10, ROBE, 2, 3); p(11, 10, ROBE, 2, 3);
+      p(7, 10, ACCENT, 2, 1); p(6, 11, ACCENT, 4, 1); p(7, 12, ACCENT, 2, 1); // glyph
+      p(3, 1 + bob, ROBE, 10, 4); // hood
+      p(4, 2 + bob, SKIN, 8, 5); p(4, 7 + bob, "#a08060", 8, 1);
+      p(3, 4 + bob, ROBE, 1, 4); p(12, 4 + bob, ROBE, 1, 4); // hood sides
+      p(5, 4 + bob, ACCENT, 2, 2); p(9, 4 + bob, ACCENT, 2, 2); // glowing eyes
+
+    } else if (variant === "necromancer") {
+      const ROBE = "#0d1a2e", ROBE_L = "#1a2e48", GLOW = "#4a90d9", ACCENT = "#2060aa", SKIN = "#c8a8d0";
+      if (frame === 0) {
+        p(5, 13, ROBE, 2, 2); p(9, 13, ROBE, 2, 2);
+      } else {
+        p(4, 13, ROBE, 2, 2); p(9, 14, ROBE, 2, 1);
+      }
+      p(4, 9, ROBE, 8, 5); p(5, 9, ROBE_L, 6, 1);
+      p(3, 10, ROBE, 2, 3); p(11, 10, ROBE, 2, 3);
+      p(7, 10, ACCENT, 1, 1); p(8, 11, ACCENT, 1, 1); p(7, 12, ACCENT, 1, 1); // runes
+      p(13, 5, GLOW, 2, 2); p(14, 5, "#88c0ff", 1, 1); // crystal tip
+      p(13, 7, "#6a5a3a", 1, 7); // staff
+      p(6, 0 + bob, ROBE, 4, 2); p(5, 1 + bob, ROBE, 6, 1); // pointed cowl
+      p(4, 2 + bob, SKIN, 8, 5); p(4, 7 + bob, "#a890b0", 8, 1);
+      p(4, 2 + bob, ROBE, 2, 2); p(10, 2 + bob, ROBE, 2, 2); // cowl sides
+      p(5, 4 + bob, GLOW, 2, 1); p(9, 4 + bob, GLOW, 2, 1); // cold blue eyes
+    }
+  }
+
   function makeFrames(drawFn) {
     return [0, 1].map((frame) => {
       const s = surface();
@@ -326,6 +427,17 @@
     return s.canvas;
   }
 
+  function makeItemAxe() {
+    const s = surface(8);
+    const HEAD = "#8b9ab5", EDGE = "#d8d4e6", HAFT = "#7a4f26", SHINE = "#e8eeff";
+    s.p(1, 0, HEAD, 4, 5); // axe head
+    s.p(1, 0, EDGE, 1, 5); // blade edge
+    s.p(1, 0, SHINE, 2, 1); // shine
+    s.p(4, 2, HAFT, 2, 6); // handle
+    s.p(3, 7, HAFT, 1, 1); // butt cap
+    return s.canvas;
+  }
+
   function makeCoin() {
     const s = surface(8);
     const G = "#ffd14a", D = "#c2912a", L = "#fff3b8";
@@ -354,6 +466,13 @@
       this.skeletonArcher = makeFrames((p, f) => drawSkeleton(p, f, "archer"));
       this.skeletonBomber = makeFrames((p, f) => drawSkeleton(p, f, "bomber"));
       this.skeletonShade = makeFrames((p, f) => drawSkeleton(p, f, "shade"));
+      this.goblin = makeFrames((p, f) => drawGoblin(p, f, "goblin"));
+      this.goblinArcher = makeFrames((p, f) => drawGoblin(p, f, "goblinArcher"));
+      this.goblinBerserker = makeFrames((p, f) => drawGoblin(p, f, "goblinBerserker"));
+      this.goblinShaman = makeFrames((p, f) => drawGoblin(p, f, "goblinShaman"));
+      this.zombie = makeFrames((p, f) => drawUndead(p, f, "zombie"));
+      this.warlock = makeFrames((p, f) => drawUndead(p, f, "warlock"));
+      this.necromancer = makeFrames((p, f) => drawUndead(p, f, "necromancer"));
       this.shopkeeper = makeFrames((p, f) => drawHero(p, {
         hat: "hood", hatColor: "#6e4a23", accent: "#6e4a23",
         body: "#8a6a3a", sleeve: "#6e4a23", belt: "#3c2c14", boot: "#3c2c14",
@@ -369,7 +488,7 @@
       this.crown = makeCrown();
       this.spikes = [0, 1, 2].map(makeSpike);
       this.scroll = makeScroll();
-      this.items = { sword: makeItemSword(), armor: makeItemArmor(), ring: makeItemRing() };
+      this.items = { sword: makeItemSword(), armor: makeItemArmor(), ring: makeItemRing(), axe: makeItemAxe() };
     },
   };
 })(window.DD);
