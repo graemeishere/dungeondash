@@ -516,6 +516,15 @@
     return "regular";
   };
 
+  // Which faction an enemy kind belongs to (sprite/loot/death-colour). Used by
+  // multi-faction rooms (the finale) and boss summons.
+  DD.KIND_FACTION = {
+    melee: "skeleton", archer: "skeleton", bomber: "skeleton", shade: "skeleton",
+    goblin: "goblin", goblinArcher: "goblin", goblinBomber: "goblin",
+    goblinBerserker: "goblin", goblinShaman: "goblin",
+    zombie: "undead", warlock: "undead", necromancer: "undead",
+  };
+
   // ---------------- Skeleton (melee / archer / bomber, brute, elite) ----------------
 
   class Skeleton {
@@ -933,6 +942,7 @@
 
     frames() {
       const sp = DD.sprites;
+      if (this.faction === "finale") return sp.bossFinale || sp.bossSkeleton;
       if (this.faction === "goblin") return sp.bossGoblin || sp.skeleton;
       if (this.faction === "undead") return sp.bossLich || sp.skeleton;
       return sp.bossSkeleton || sp.skeleton;
@@ -973,11 +983,13 @@
         }
         if (this.summonCd <= 0 && game.skeletons.filter((s) => !s.dead && !(s instanceof Boss)).length < 5) {
           this.summonCd = enraged ? 6 : 9;
+          const fallback = this.faction === "finale" ? "skeleton" : (this.faction || "skeleton");
           for (let i = 0; i < 2; i++) {
             const pos = DD.room.randomFloorPos(pl.x, pl.y, 120);
+            const kind = i === 0 ? this.summonKind : "melee";
             game.skeletons.push(new Skeleton(pos.x, pos.y, {
-              kind: i === 0 ? this.summonKind : "melee",
-              faction: this.faction || "skeleton",
+              kind,
+              faction: DD.KIND_FACTION[kind] || fallback,
             }));
             DD.audio.spawn();
           }

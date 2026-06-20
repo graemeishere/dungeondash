@@ -104,6 +104,8 @@
       faction: d.faction,
       enemyLabel: d.enemyLabel,
       id: d.id,
+      multiFaction: !!d.multiFaction,
+      bossFaction: d.bossFaction || null,
       boss: tier.bossName, // alias used by Boss constructor
     };
   }
@@ -111,11 +113,13 @@
   // Hero level required to enter each tier (bands are 1-10 / 11-20 / 21-30).
   const TIER_REQ = [1, 11, 21];
 
-  // Champion = every real dungeon cleared at its top tier.
+  // The three "real" dungeons. townRaid + finale are synthetic and excluded
+  // from champion progress.
+  const CORE_DUNGEONS = ["catacombs", "goblinMines", "crypt"];
+
+  // Champion = every core dungeon cleared at its top tier.
   function isChampion(hero) {
-    return Object.keys(DUNGEONS)
-      .filter((id) => id !== "townRaid")
-      .every((id) => DD.profile.hasClear(hero, id, DUNGEONS[id].tiers.length - 1));
+    return CORE_DUNGEONS.every((id) => DD.profile.hasClear(hero, id, DUNGEONS[id].tiers.length - 1));
   }
 
   const ELITE_NAMES = {
@@ -167,6 +171,7 @@
     raidMode: false,
     raidFaction: null,
     justWonGame: false, // set the run you become Champion (first full clear)
+    justWonFinale: false, // set when you beat the Champion-only finale
 
     get localPlayer() { return this.players[this.localIndex]; },
     enemies() { return this.skeletons; },
@@ -339,6 +344,8 @@
     const areaScale = Math.min(1, (DD.ROOM_W * DD.ROOM_H) / (30 * 18) + 0.25);
 
     const faction = cfg.faction || "skeleton";
+    // multi-faction rooms (the finale) tag each enemy by its kind's own faction
+    const factionFor = (kind) => cfg.multiFaction ? (DD.KIND_FACTION[kind] || faction) : faction;
     if (game.roomType === "combat") {
       const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
       const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
@@ -346,28 +353,28 @@
       for (let i = 0; i < count; i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         const kind = i > 1 && Math.random() < 0.4 ? DD.choice(kinds) : kinds[0];
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind, faction });
+        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind, faction: factionFor(kind) });
       }
       const bruteKind = kinds.find((k) => k !== "shade") || "melee";
       for (let i = 0; i < tier + Math.max(0, game.floor - 1); i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind, faction });
+        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind, faction: factionFor(bruteKind) });
       }
     } else if (game.roomType === "elite") {
       const eliteKinds = cfg.eliteKinds || cfg.kinds || ["melee"];
       const eliteKind = DD.choice(eliteKinds);
-      const eliteNames = ELITE_NAMES[faction] || ELITE_NAMES.skeleton || ["ELITE"];
+      const eliteNames = ELITE_NAMES[factionFor(eliteKind)] || ELITE_NAMES.skeleton || ["ELITE"];
       const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
       game.spawnQueue.push({
-        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind, faction,
+        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind, faction: factionFor(eliteKind),
         elite: true, name: DD.choice(eliteNames),
       });
       const minionKinds = (cfg.kinds || ["melee"]).filter((k) => k !== "shade");
       for (let i = 0; i < 2; i++) {
         const mp = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
+        const mk = DD.choice(minionKinds);
         game.spawnQueue.push({
-          x: mp.x, y: mp.y, delay: 1.6 + i * 0.5, big: false,
-          kind: DD.choice(minionKinds), faction,
+          x: mp.x, y: mp.y, delay: 1.6 + i * 0.5, big: false, kind: mk, faction: factionFor(mk),
         });
       }
     } else if (game.roomType === "treasure") {
@@ -393,7 +400,8 @@
       }
     } else if (game.roomType === "boss") {
       game.skeletons.push(new DD.Boss(DD.WIDTH / 2, DD.HEIGHT / 2 - 60, {
-        hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind, faction: cfg.faction,
+        hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
+        faction: cfg.bossFaction || cfg.faction,
       }));
     } else if (game.roomType === "shop") {
       game.roomCleared = true;
@@ -464,6 +472,7 @@
   function endRun(won) {
     clearSave();
     game.justWonGame = false;
+    game.justWonFinale = false;
     if (game.hero) {
       game.hero.level = game.level;
       game.hero.xp = game.xp;
@@ -483,7 +492,10 @@
       // record the dungeon+tier clear and check for game victory
       if (clearedDungeon) {
         DD.profile.markClear(game.hero, game.dungeonId, game.tier);
-        if (!game.hero.victory && isChampion(game.hero)) {
+        if (game.dungeonId === "finale") {
+          game.hero.finaleWon = true;
+          game.justWonFinale = true;
+        } else if (!game.hero.victory && isChampion(game.hero)) {
           game.hero.victory = true;
           game.justWonGame = true;
         }
@@ -508,7 +520,10 @@
 
   function showResult() {
     const won = game.state === "won";
-    if (game.justWonGame) {
+    if (game.justWonFinale) {
+      resultTitle.textContent = "THE REALM IS SAVED!";
+      resultTitle.style.color = "#ff9234";
+    } else if (game.justWonGame) {
       resultTitle.textContent = "DUNGEON DASH CHAMPION!";
       resultTitle.style.color = "#ffd95e";
     } else {
@@ -517,12 +532,17 @@
     }
     const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
     const floorName = (dungeon.floors[game.floor] || {}).name || `Floor ${game.floor + 1}`;
-    const line = game.justWonGame
-      ? `You conquered every dungeon at the highest tier. The realm is yours!`
-      : `${DD.CLASSES[game.classKey].name} Lv ${game.level} &nbsp;•&nbsp; ` +
+    let line;
+    if (game.justWonFinale) {
+      line = `You drove back the siege and felled the World-Eater. A true legend!`;
+    } else if (game.justWonGame) {
+      line = `You conquered every dungeon at the highest tier. The realm is yours!`;
+    } else {
+      line = `${DD.CLASSES[game.classKey].name} Lv ${game.level} &nbsp;•&nbsp; ` +
         `${floorName}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
         `${game.kills} kills &nbsp;•&nbsp; ${game.gold} gold &nbsp;•&nbsp; ` +
         `${game.time.toFixed(1)}s`;
+    }
     resultStats.innerHTML = line;
     resultEl.classList.remove("hidden");
   }
@@ -1056,6 +1076,28 @@
     game.raidMode = true;
   }
 
+  // The Champion-only capstone: a town-themed siege by every faction at once,
+  // ending with a unique final boss. Tougher than any tier-3 run.
+  function buildFinaleDungeon() {
+    return {
+      id: "finale", name: "The Last Stand", faction: "skeleton", bossFaction: "finale",
+      theme: "town", multiFaction: true, enemyLabel: "Raiders",
+      floors: [{
+        name: "Town Under Siege",
+        kinds: ["melee", "goblin", "zombie", "archer", "goblinArcher", "warlock", "goblinBerserker", "goblinBomber"],
+        eliteKinds: ["goblinBerserker", "warlock", "archer"],
+        plan: ["combat", "combat", "combat", "boss"],
+      }],
+      tiers: [{ tier: 0, levelHint: "30+", scale: 8.0, bossHp: 440, bossDmg: 10, bossName: "THE WORLD-EATER", summonKind: "goblinBerserker" }],
+    };
+  }
+
+  function startFinale() {
+    const classKey = (game.hero && game.hero.classKey) || game.classKey;
+    DUNGEONS.finale = buildFinaleDungeon();
+    startRun(classKey, "finale", 0);
+  }
+
   // ---- barkeep stats overlay ----
 
   function buildStatsOverlay(hero) {
@@ -1512,8 +1554,9 @@
   const MAP_LOCS = [
     { id: "catacombs",   name: "Catacombs",    fx: 0.22, fy: 0.27, kind: "dungeon" },
     { id: "goblinMines", name: "Goblin Mines",  fx: 0.26, fy: 0.68, kind: "dungeon" },
-    { id: "town",        name: "Town",          fx: 0.50, fy: 0.50, kind: "town"    },
+    { id: "town",        name: "Town",          fx: 0.50, fy: 0.46, kind: "town"    },
     { id: "crypt",       name: "The Crypt",     fx: 0.75, fy: 0.28, kind: "dungeon" },
+    { id: "finale",      name: "The Last Stand", fx: 0.74, fy: 0.74, kind: "finale", championOnly: true },
   ];
 
   // Draw a small pixel-art icon for each location (48×48 in world pixels).
@@ -1571,6 +1614,21 @@
       ctx.beginPath(); ctx.moveTo(cx - 18, cy - 4); ctx.lineTo(cx, cy - 22); ctx.lineTo(cx + 18, cy - 4); ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#4a3020";
       ctx.fillRect(cx - 5, cy + 2, 10, 14); // door
+    } else if (loc.id === "finale") {
+      // flaming crown over a dark sigil
+      ctx.fillStyle = "#2a1020";
+      ctx.beginPath(); ctx.arc(cx, cy + 2, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ff5a2a";
+      ctx.fillRect(cx - 12, cy - 2, 24, 8); // crown band
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx + i * 9 - 4, cy - 2);
+        ctx.lineTo(cx + i * 9, cy - 14);
+        ctx.lineTo(cx + i * 9 + 4, cy - 2);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = "#ffd14a";
+      ctx.fillRect(cx - 3, cy + 6, 6, 6); // ember
     }
   }
 
@@ -1619,6 +1677,7 @@
 
     // draw locations
     for (const loc of MAP_LOCS) {
+      if (loc.championOnly && !(game.hero && game.hero.victory)) continue;
       const cx = loc.fx * W, cy = loc.fy * H;
       const hovered = DD.dist(mx, my, cx, cy) < 36;
       drawMapIcon(ctx, loc, cx, cy, hovered);
@@ -2133,10 +2192,12 @@
     const wy = (cy - DD.view.oy) / DD.view.scale;
 
     for (const loc of MAP_LOCS) {
+      if (loc.championOnly && !(game.hero && game.hero.victory)) continue;
       const lx = loc.fx * DD.WIDTH, ly = loc.fy * DD.HEIGHT;
       if (DD.dist(wx, wy, lx, ly) < 52) {
         DD.audio.unlock();
         if (loc.kind === "town") showTownRoom();
+        else if (loc.kind === "finale") startFinale();
         else showDungeonLobby(loc.id);
         return true;
       }
