@@ -492,14 +492,6 @@
         ctx.fillStyle = DD.choice(pal.speckles);
         ctx.fillRect(DD.randi(2, 28), DD.randi(2, 28), DD.randi(2, 4), DD.randi(2, 3));
       }
-      if (pal.rail) {
-        // mine cart rails: two parallel lines with sleepers
-        ctx.fillStyle = pal.rail;
-        ctx.fillRect(8, 0, 3, DD.TILE);
-        ctx.fillRect(21, 0, 3, DD.TILE);
-        ctx.fillStyle = pal.sleeper || pal.edge;
-        for (let y = 3; y < DD.TILE; y += 10) ctx.fillRect(6, y, 20, 2);
-      }
       if (pal.crack && variant === 2) {
         ctx.strokeStyle = pal.crack;
         ctx.lineWidth = 2;
@@ -521,6 +513,21 @@
       }
       ctx.fillStyle = "#8a5e2e"; // plank butt joints
       ctx.fillRect((variant * 11) % DD.TILE, 0, 1, DD.TILE);
+    });
+  }
+
+  // A single vertical rail-track segment. Rails sit at fixed x so stacking the
+  // segment down a column produces one continuous track instead of a grid.
+  function makeRailSegment() {
+    return paintTile((ctx) => {
+      ctx.fillStyle = "#3a2a18"; // sleepers (wooden ties) run full width
+      for (let y = 2; y < DD.TILE; y += 11) ctx.fillRect(4, y, 24, 3);
+      ctx.fillStyle = "#6a6a72"; // steel rails
+      ctx.fillRect(9, 0, 3, DD.TILE);
+      ctx.fillRect(20, 0, 3, DD.TILE);
+      ctx.fillStyle = "#8a8a94"; // rail highlight
+      ctx.fillRect(9, 0, 1, DD.TILE);
+      ctx.fillRect(20, 0, 1, DD.TILE);
     });
   }
 
@@ -779,12 +786,12 @@
           wall: mineWall,
           floor: [0, 1, 2].map((v) => makeThemedFloor({
             base: "#3c2e18", edge: "#2a2012", speckles: ["#4a3a20", "#332715", "#52401f"],
-            rail: "#6a6a72", sleeper: "#5a3a1a",
           }, v)),
           doorClosed: makeThemedDoor({ wall: mineWall, bars: "#7a5c2e" }, false),
           doorOpen: makeThemedDoor({ wall: mineWall, glow: "#ffd060" }, true),
           lantern: [makeLantern(0), makeLantern(1)],
           mineCart: makeMineCart(),
+          rail: makeRailSegment(),
         },
         crypt: {
           wall: cryptWall,
