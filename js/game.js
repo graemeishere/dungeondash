@@ -59,10 +59,10 @@
           kinds: ["goblin", "goblinArcher"], eliteKinds: ["goblin"],
           plan: ["combat", "combat", "treasure", "combat", "boss"] },
         { name: "Deep Mines",
-          kinds: ["goblin", "goblinArcher", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblinArcher", "goblinShaman"],
+          kinds: ["goblin", "goblinArcher", "goblinBomber", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblinArcher", "goblinShaman"],
           plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
         { name: "Warlord's Den",
-          kinds: ["goblin", "goblinArcher", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblin", "goblinBerserker", "goblinShaman"],
+          kinds: ["goblin", "goblinArcher", "goblinBomber", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblin", "goblinBerserker", "goblinShaman"],
           plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
       ],
       tiers: [
@@ -108,8 +108,8 @@
     };
   }
 
-  // Hero level required to enter each tier doorway (Tier 1 always open).
-  const TIER_REQ = [0, 10, 20];
+  // Hero level required to enter each tier (bands are 1-10 / 11-20 / 21-30).
+  const TIER_REQ = [1, 11, 21];
 
   const ELITE_NAMES = {
     skeleton: ["GRAVE WARDEN", "TOMB HERALD", "MARROW FIEND"],
@@ -150,6 +150,8 @@
     time: 0,
     mapSelected: null, // dungeon id currently selected on the world map (showing tier buttons)
     peaceful: false,   // town/lobby: player can move but not attack
+    padTi: -1,         // lobby: tier pad the player is currently standing on
+    padDwell: 0,       // lobby: dwell timer toward entering that pad's tier
     lobbyDungeonId: null,
     townNpcs: [],
     nearbyNpc: null,
@@ -379,7 +381,7 @@
       }
     } else if (game.roomType === "boss") {
       game.skeletons.push(new DD.Boss(DD.WIDTH / 2, DD.HEIGHT / 2 - 60, {
-        hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
+        hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind, faction: cfg.faction,
       }));
     } else if (game.roomType === "shop") {
       game.roomCleared = true;
@@ -684,6 +686,8 @@
     DD.room.generateLobby(tierInfo);
     DD.updateView(canvas);
     spawnHeroInRoom();
+    game.padTi = -1;
+    game.padDwell = 0;
   }
 
   function tierLocked(ti) {
@@ -693,8 +697,6 @@
   function enterTierDoor(ti) {
     if (tierLocked(ti)) {
       townToast(`Reach level ${TIER_REQ[ti]} to enter Tier ${ti + 1}`, "#ff6b70");
-      const pl = game.players[0];
-      if (pl) pl.y = DD.TILE * 3; // nudge back from the locked doorway
       return;
     }
     const classKey = (game.hero && game.hero.classKey) || game.classKey;
@@ -1265,10 +1267,18 @@
       if (DD.room.doorOpen && DD.room.inDoorway(pl.x, pl.y - pl.r)) showMap();
     } else if (game.state === "lobby") {
       DD.input.consumeInteract();
-      if (DD.room.tierDoorCols && pl.y < DD.TILE * 1.6) {
-        const col = Math.floor(pl.x / DD.TILE);
-        const ti = DD.room.tierDoorCols.findIndex((cols) => cols.includes(col));
-        if (ti >= 0) { enterTierDoor(ti); return; }
+      const pads = DD.room.tierPads || [];
+      const pad = pads.find((p) => DD.dist(pl.x, pl.y, p.x, p.y) < p.r);
+      if (!pad || pad.locked) {
+        if (pad && pad.locked && game.padTi !== pad.ti) {
+          townToast(`Reach level ${pad.req} to enter Tier ${pad.ti + 1}`, "#ff6b70");
+        }
+        game.padTi = pad ? pad.ti : -1;
+        game.padDwell = 0;
+      } else {
+        if (pad.ti !== game.padTi) { game.padTi = pad.ti; game.padDwell = 0; }
+        game.padDwell += dt;
+        if (game.padDwell >= 0.7) { enterTierDoor(pad.ti); return; }
       }
     }
   }
@@ -1417,9 +1427,50 @@
     ctx.textAlign = "left";
   }
 
+  // A glowing floor pad that starts a tier when you stand on it.
+  function drawTierPad(ctx, pad, time) {
+    const font = "'Trebuchet MS', Verdana, sans-serif";
+    const col = pad.locked ? "#6b6481" : pad.color;
+    const pulse = 0.5 + 0.5 * Math.sin(time * 3 + pad.ti);
+    ctx.save();
+    ctx.globalAlpha = pad.locked ? 0.12 : 0.18 + 0.14 * pulse;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.ellipse(pad.x, pad.y, pad.r, pad.r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = pad.locked ? 0.5 : 0.9;
+    ctx.beginPath();
+    ctx.ellipse(pad.x, pad.y, pad.r, pad.r * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // dwell-to-enter progress ring on the active pad
+    if (!pad.locked && game.padTi === pad.ti && game.padDwell > 0) {
+      const frac = DD.clamp(game.padDwell / 0.7, 0, 1);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(pad.x, pad.y, pad.r, pad.r * 0.5, 0, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.textAlign = "center";
+    ctx.fillStyle = pad.locked ? "#9b90b8" : col;
+    ctx.font = `bold 14px ${font}`;
+    ctx.fillText(pad.label, pad.x, pad.y - pad.r * 0.5 - 14);
+    ctx.fillStyle = pad.locked ? "#ff8a8a" : "#d8cfee";
+    ctx.font = `11px ${font}`;
+    ctx.fillText(pad.locked ? `LOCKED · Lv ${pad.req}` : pad.sub, pad.x, pad.y - pad.r * 0.5 - 1);
+    ctx.textAlign = "left";
+  }
+
   function drawPeaceful(ctx) {
     DD.room.draw(ctx);
     const time = game.time;
+    if (game.state === "lobby" && DD.room.tierPads) {
+      for (const pad of DD.room.tierPads) drawTierPad(ctx, pad, time);
+    }
     const ents = [];
     for (const p of game.players) if (p && !p.dead) ents.push({ y: p.y, render: () => p.draw(ctx) });
     if (game.state === "town" || game.state === "stats") {
@@ -1440,7 +1491,7 @@
     if (game.state === "lobby") {
       const dn = (DUNGEONS[game.lobbyDungeonId] || {}).name || "Dungeon";
       title = dn.toUpperCase();
-      sub = "Walk through a doorway to choose your tier  •  Esc: map";
+      sub = "Stand on a glowing pad to enter that tier  •  Esc: map";
     } else {
       title = "TOWN";
       sub = DD.input.touchSeen

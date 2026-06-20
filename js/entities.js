@@ -464,6 +464,18 @@
         ctx.arc(0, 0, 10, this.t * 8, this.t * 8 + Math.PI * 1.4);
         ctx.stroke();
         ctx.globalAlpha = 1;
+      } else if (this.style === "arrow") {
+        // wooden arrow pointing along its travel direction
+        ctx.rotate(Math.atan2(this.vy, this.vx));
+        ctx.fillStyle = "#7a5c2e"; // shaft
+        ctx.fillRect(-7, -1, 12, 2);
+        ctx.fillStyle = "#cfcfd8"; // steel tip
+        ctx.beginPath();
+        ctx.moveTo(5, -3); ctx.lineTo(9, 0); ctx.lineTo(5, 3); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#d8d0b0"; // fletching
+        ctx.fillRect(-7, -3, 3, 2);
+        ctx.fillRect(-7, 1, 3, 2);
       } else {
         // spinning bone
         ctx.rotate(this.t * 12);
@@ -527,6 +539,7 @@
         this.kind === "shade"           ? 3 :
         this.kind === "goblin"          ? 4 :
         this.kind === "goblinArcher"    ? 4 :
+        this.kind === "goblinBomber"    ? 4 :
         this.kind === "goblinBerserker" ? 5 :
         this.kind === "goblinShaman"    ? 7 :
         this.kind === "zombie"          ? 14 :
@@ -541,6 +554,7 @@
         this.kind === "shade"           ? DD.rand(85, 105) :
         this.kind === "goblin"          ? DD.rand(95, 120) :
         this.kind === "goblinArcher"    ? DD.rand(55, 75) :
+        this.kind === "goblinBomber"    ? DD.rand(110, 130) :
         this.kind === "goblinBerserker" ? DD.rand(120, 145) :
         this.kind === "goblinShaman"    ? DD.rand(30, 45) :
         this.kind === "zombie"          ? DD.rand(35, 55) :
@@ -555,6 +569,7 @@
         this.kind === "melee"           ? 5 :
         this.kind === "goblin"          ? 4 :
         this.kind === "goblinArcher"    ? 5 :
+        this.kind === "goblinBomber"    ? 6 :
         this.kind === "goblinBerserker" ? 7 :
         this.kind === "goblinShaman"    ? 10 :
         this.kind === "zombie"          ? 6 :
@@ -601,6 +616,7 @@
       if (this.kind === "shade")           return sp.skeletonShade;
       if (this.kind === "goblin")          return sp.goblin          || sp.skeleton;
       if (this.kind === "goblinArcher")    return sp.goblinArcher    || sp.skeletonArcher;
+      if (this.kind === "goblinBomber")    return sp.goblinBomber    || sp.skeletonBomber;
       if (this.kind === "goblinBerserker") return sp.goblinBerserker || sp.skeleton;
       if (this.kind === "goblinShaman")    return sp.goblinShaman    || sp.skeleton;
       if (this.kind === "zombie")          return sp.zombie          || sp.skeleton;
@@ -648,7 +664,8 @@
                 const aimAngle = DD.angleTo(this.x, this.y, pl.x, pl.y - 8);
                 if (this.kind === "archer" || this.kind === "goblinArcher") {
                   this.shootCd = DD.rand(1.9, 2.6);
-                  game.enemyShots.push(new EnemyShot(this.x, this.y - 14, aimAngle));
+                  const style = this.kind === "goblinArcher" ? "arrow" : "bone";
+                  game.enemyShots.push(new EnemyShot(this.x, this.y - 14, aimAngle, 240, 1, style));
                   DD.audio.shoot();
                 } else if (this.kind === "goblinShaman") {
                   this.shootCd = DD.rand(3.5, 5.0);
@@ -718,7 +735,7 @@
 
           const isMelee = this.kind === "melee" || this.kind === "shade" ||
             this.kind === "goblin" || this.kind === "goblinBerserker" || this.kind === "zombie";
-          if (this.kind === "bomber") {
+          if (this.kind === "bomber" || this.kind === "goblinBomber") {
             if (d < 60) { this.state = "fuse"; this.stateT = 0.8; }
           } else if (isMelee && d < this.r + 20) {
             this.state = "windup";
@@ -892,6 +909,7 @@
     constructor(x, y, opts = {}) {
       super(x, y, {
         big: true,
+        faction: opts.faction,
         hp: opts.hp ?? 70,
         speed: 55,
         dmg: opts.dmg ?? 2,
@@ -907,6 +925,13 @@
       this.summonCd = 7;
       this.slamT = 0;     // active slam windup
       this.stateT = 1.4;  // longer rise
+    }
+
+    frames() {
+      const sp = DD.sprites;
+      if (this.faction === "goblin") return sp.bossGoblin || sp.skeleton;
+      if (this.faction === "undead") return sp.bossLich || sp.skeleton;
+      return sp.bossSkeleton || sp.skeleton;
     }
 
     update(dt, game) {
@@ -978,11 +1003,6 @@
         ctx.stroke();
       }
       super.draw(ctx);
-      if (this.state !== "spawn") {
-        // crown
-        const bob = Math.floor(this.animT * 8) % 2;
-        ctx.drawImage(DD.sprites.crown, this.x - 14, this.y - this.drawSize + 6 + bob * 2, 28, 14);
-      }
     }
   }
 
