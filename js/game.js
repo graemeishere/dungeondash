@@ -172,6 +172,8 @@
     raidFaction: null,
     justWonGame: false, // set the run you become Champion (first full clear)
     justWonFinale: false, // set when you beat the Champion-only finale
+    coopGuest: false,   // this client is a co-op guest in its own between-runs town
+    coopReward: null,   // last co-op run reward applied to the guest's hero
 
     get localPlayer() { return this.players[this.localIndex]; },
     enemies() { return this.skeletons; },
@@ -253,6 +255,16 @@
     game.state = "play";
   }
 
+  // Build the run party: solo, or host + guest avatar when a co-op guest is
+  // connected. The guest's avatar is driven by RemoteInput (its streamed input).
+  function buildRunParty(classKey, hero) {
+    const party = [new DD.Player(classKey, 0, 0, DD.input, hero)];
+    if (DD.net.role === "host" && DD.net.connected) {
+      party.push(new DD.Player(coopGuestClass || "warrior", 0, 0, new DD.RemoteInput()));
+    }
+    return party;
+  }
+
   function startRun(classKey, dungeonId = "catacombs", tier = 0) {
     clearSave();
     const hero = DD.profile.getOrCreateHero(classKey);
@@ -265,7 +277,7 @@
     game.townNpcs = [];
     game.nearbyNpc = null;
     DD.room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
-    game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
+    game.players = buildRunParty(classKey, hero);
     game.localIndex = 0;
     game.floor = 0;
     game.xp = hero.xp || 0;
@@ -511,8 +523,10 @@
       DD.audio.lose();
     }
     if (DD.net.role === "host" && DD.net.connected) {
+      // the guest earns its own share for its hero: run gold on a win + a little XP
+      const reward = { gold: won ? game.gold : 0, xp: won ? Math.round(game.kills * 1.5) : 0 };
       DD.net.send({
-        t: "end", won,
+        t: "end", won, reward,
         stats: { level: game.level, floor: game.floor, ri: game.roomIndex, kills: game.kills, gold: game.gold, time: game.time },
       });
     }
@@ -542,6 +556,19 @@
         `${floorName}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
         `${game.kills} kills &nbsp;•&nbsp; ${game.gold} gold &nbsp;•&nbsp; ` +
         `${game.time.toFixed(1)}s`;
+    }
+    // co-op guest: can't drive navigation; show its reward + a waiting note
+    const btns = resultEl.querySelector(".buttons");
+    const hint = resultEl.querySelector(".hint");
+    if (DD.net.role === "guest") {
+      if (won && game.coopReward && game.coopReward.gold) {
+        line += ` &nbsp;•&nbsp; you earned ${game.coopReward.gold}g`;
+      }
+      if (btns) btns.style.display = "none";
+      if (hint) hint.textContent = "Waiting for the host to choose the next dungeon…";
+    } else {
+      if (btns) btns.style.display = "";
+      if (hint) hint.textContent = "Enter: play again • Esc: world map";
     }
     resultStats.innerHTML = line;
     resultEl.classList.remove("hidden");
@@ -718,6 +745,7 @@
     document.getElementById("raid-warning").classList.add("hidden");
     document.getElementById("trader").classList.add("hidden");
     document.getElementById("questgiver").classList.add("hidden");
+    document.getElementById("map-coop").classList.add("hidden");
   }
 
   // Themed entry room with three tier doorways. Walk through one to start a run.
@@ -746,6 +774,8 @@
     spawnHeroInRoom();
     game.padTi = -1;
     game.padDwell = 0;
+    game.coopGuest = false;
+    notifyGuestWaiting();
   }
 
   function tierLocked(ti) {
@@ -778,6 +808,7 @@
     hideAllOverlays();
     if (!skipRaid && Math.random() < 0.25) { showRaidWarning(); return; }
     game.state = "town";
+    game.coopGuest = false;
     game.peaceful = true;
     game.raidMode = false;
     game.time = 0;
@@ -789,6 +820,27 @@
     spawnHeroInRoom();
     game.townNpcs = spawnTownNpcs();
     game.shopStock = DD.rollShopStock(5); // fresh trader stock each town visit
+    notifyGuestWaiting();
+  }
+
+  // A co-op guest's own between-runs town: walkable NPCs, no raid, no dungeon
+  // exit (the host drives which dungeon is played next).
+  function enterGuestTown() {
+    hideAllOverlays();
+    lobbyEl.classList.add("hidden");
+    game.state = "town";
+    game.coopGuest = true;
+    game.peaceful = true;
+    game.raidMode = false;
+    game.time = 0;
+    game.nearbyNpc = null;
+    sizeRoomToCanvas();
+    DD.room.setTheme("town");
+    DD.room.generateTown();
+    DD.updateView(canvas);
+    spawnHeroInRoom();
+    game.townNpcs = spawnTownNpcs();
+    game.shopStock = DD.rollShopStock(5);
   }
 
   function showMap() {
@@ -796,10 +848,14 @@
     game.state = "map";
     game.mapSelected = null;
     game.peaceful = false;
+    game.coopGuest = false;
     game.townNpcs = [];
     game.nearbyNpc = null;
     sizeRoomToCanvas();
     DD.updateView(canvas);
+    // offer co-op host/join from the map (hidden once connected)
+    document.getElementById("map-coop").classList.toggle("hidden", DD.net.connected);
+    notifyGuestWaiting();
   }
 
   // ---- town NPC interactions ----
@@ -822,6 +878,8 @@
   }
 
   function openInnkeeperMenu() {
+    // a co-op guest's class is fixed for the session (the host spawns its avatar)
+    if (game.coopGuest) { townToast("Class is locked during co-op.", "#ff6b70"); return; }
     townSwitchClass = true;
     game.state = "menu";
     menuEl.classList.remove("hidden");
@@ -1390,9 +1448,12 @@
   // ---- update ----
 
   function update(dt) {
-    // co-op guests don't simulate: they render host snapshots
+    // co-op guests render host snapshots during a run; between runs they roam
+    // their own local town, so let that loop run.
     if (DD.net.role === "guest") {
       if (guestInGame) DD.particles.update(dt);
+      else if (game.state === "town") updatePeaceful(dt);
+      else DD.particles.update(dt);
       return;
     }
 
@@ -1530,7 +1591,8 @@
       }
       const talk = DD.input.consumeInteract() || DD.input.consumeInvTap();
       if (game.nearbyNpc && talk) { game.nearbyNpc.interact(); return; }
-      if (DD.room.doorOpen && DD.room.inDoorway(pl.x, pl.y - pl.r)) showMap();
+      // a co-op guest can't leave to the map — the host drives the next dungeon
+      if (!game.coopGuest && DD.room.doorOpen && DD.room.inDoorway(pl.x, pl.y - pl.r)) showMap();
     } else if (game.state === "lobby") {
       DD.input.consumeInteract();
       const pads = DD.room.tierPads || [];
@@ -1799,6 +1861,11 @@
       const dn = (DUNGEONS[game.lobbyDungeonId] || {}).name || "Dungeon";
       title = dn.toUpperCase();
       sub = "Stand on a glowing pad to enter that tier  •  Esc: map";
+    } else if (game.coopGuest) {
+      title = "TOWN  ·  CO-OP";
+      sub = DD.input.touchSeen
+        ? "Tap an NPC to manage your hero — the host is choosing the next dungeon"
+        : "Talk to NPCs (E) to manage your hero — the host is choosing the next dungeon";
     } else {
       title = "TOWN";
       sub = DD.input.touchSeen
@@ -1924,7 +1991,8 @@
   // ---- co-op lobby & networking ----
 
   let coopMode = null;     // null | 'host-pick' | 'join-pick'
-  let guestClass = "warrior";
+  let guestClass = "warrior";     // guest side: this client's chosen class
+  let coopGuestClass = null;      // host side: the connected guest's class
   let guestInGame = false;
 
   const lobbyEl = document.getElementById("lobby");
@@ -2007,37 +2075,33 @@
   document.getElementById("btn-accept").addEventListener("click", tryJoin);
   codeIn.addEventListener("keydown", (e) => { if (e.key === "Enter") tryJoin(); });
 
-  function startCoopRun(guestClassKey) {
-    clearSave();
+  // Host: a guest connected. Don't force a run — drop the host on the world map
+  // so they can pick what to play; the guest waits in its own town meanwhile.
+  function hostBeginCoop(guestClassKey) {
+    coopGuestClass = DD.CLASSES[guestClassKey] ? guestClassKey : "warrior";
     const hero = DD.profile.getOrCreateHero(game.classKey);
     game.hero = hero;
-    game.players = [
-      new DD.Player(game.classKey, 0, 0, DD.input, hero),
-      new DD.Player(guestClassKey, 0, 0, new DD.RemoteInput()),
-    ];
-    game.localIndex = 0;
-    game.dungeonId = game.dungeonId || "catacombs";
-    game.tier = game.tier || 0;
-    game.floor = 0;
-    game.xp = hero.xp || 0;
-    game.level = hero.level || 1;
-    game.gold = 0;
-    game.kills = 0;
-    game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
-    game.time = 0;
-    loadRoom(0);
+    game.classKey = hero.classKey;
     lobbyEl.classList.add("hidden");
     setMenuMode(null, "");
-    freshGameState();
+    showMap(); // notifyGuestWaiting() inside tells the guest to wait
+  }
+
+  // Host: tell the guest we're between runs (choosing the next dungeon).
+  function notifyGuestWaiting() {
+    if (DD.net.role === "host" && DD.net.connected) DD.net.send({ t: "wait" });
   }
 
   DD.net.onOpen(() => {
     if (DD.net.role === "guest") {
       DD.net.send({ t: "join", cls: guestClass });
-      lobbyStatus.textContent = "Connected! Waiting for the host to start...";
+      game.hero = DD.profile.getOrCreateHero(guestClass);
+      game.classKey = guestClass;
+      lobbyStatus.textContent = "Connected! Waiting for the host...";
       lobbyIn.classList.add("hidden");
+      enterGuestTown();
     } else {
-      lobbyStatus.textContent = "Friend connected! Starting...";
+      lobbyStatus.textContent = "Friend connected!";
     }
   });
 
@@ -2065,7 +2129,7 @@
   DD.net.onMessage((m) => {
     if (DD.net.role === "host") {
       if (m.t === "join") {
-        startCoopRun(DD.CLASSES[m.cls] ? m.cls : "warrior");
+        hostBeginCoop(m.cls);
       } else if (m.t === "i" && game.players[1]) {
         const inp = game.players[1].input;
         inp.state = { mv: m.mv || { dx: 0, dy: 0 }, aim: m.aim || 0, atk: !!m.atk, dash: !!m.dash };
@@ -2080,7 +2144,12 @@
     }
 
     // guest side
-    if (m.t === "room") {
+    if (m.t === "wait") {
+      // host is between runs choosing a dungeon — wander our own town meanwhile
+      guestInGame = false;
+      enterGuestTown();
+    } else if (m.t === "room") {
+      hideAllOverlays();
       DD.room.setTheme(m.dungeonId || "catacombs");
       DD.room.setData(m.room);
       DD.updateView(canvas);
@@ -2090,12 +2159,11 @@
       game.roomIndex = m.ri;
       game.roomType = m.rt;
       game.localIndex = 1;
+      game.coopGuest = false;
+      game.peaceful = false;
       guestInGame = true;
       DD.particles.clear();
       lobbyEl.classList.add("hidden");
-      menuEl.classList.add("hidden");
-      hubEl.classList.add("hidden");
-      resultEl.classList.add("hidden");
       game.state = "play";
       game.hintT = 6;
     } else if (m.t === "s" && guestInGame) {
@@ -2119,6 +2187,16 @@
         level: m.stats.level, floor: m.stats.floor, roomIndex: m.stats.ri,
         kills: m.stats.kills, gold: m.stats.gold, time: m.stats.time,
       });
+      // apply the guest's share of the run reward to its own hero
+      if (m.reward && game.hero) {
+        if (m.reward.gold) game.hero.gold = (game.hero.gold || 0) + m.reward.gold;
+        if (m.reward.xp) game.hero.xp = (game.hero.xp || 0) + m.reward.xp;
+        DD.profile.save();
+        game.coopReward = m.reward;
+      } else {
+        game.coopReward = null;
+      }
+      guestInGame = false;
       game.state = m.won ? "won" : "lost";
       if (m.won) DD.audio.win(); else DD.audio.lose();
       setTimeout(showResult, 1000);
@@ -2144,14 +2222,14 @@
   // "Play Again" — but a town raid isn't a re-enterable dungeon, so send the
   // player back to the town instead of replaying the raid.
   function playAgain() {
-    if (DD.net.role) DD.net.reset();
+    if (DD.net.role === "guest") return; // the host drives the next run
     if (game.dungeonId === "townRaid") { showTownRoom(true); return; }
     startRun(game.classKey, game.dungeonId, game.tier);
   }
 
   document.getElementById("btn-again").addEventListener("click", playAgain);
   document.getElementById("btn-class").addEventListener("click", () => {
-    if (DD.net.role) DD.net.reset();
+    if (DD.net.role === "guest") return; // the host drives navigation
     if (game.hero) showMap(); else backToMenu();
   });
   continueBtn.addEventListener("click", () => {
@@ -2167,7 +2245,7 @@
     if (game.state === "stats" && e.key === "Escape") { closeStatsOverlay(); return; }
     if (game.state === "trader" && e.key === "Escape") { closeTraderOverlay(); return; }
     if (game.state === "quests" && e.key === "Escape") { closeQuestGiverOverlay(); return; }
-    if ((game.state === "town" || game.state === "lobby") && e.key === "Escape") { showMap(); return; }
+    if ((game.state === "town" || game.state === "lobby") && e.key === "Escape") { if (!game.coopGuest) showMap(); return; }
     if (game.state === "raid-warn" && e.key === "Escape") { document.getElementById("raid-warning").classList.add("hidden"); showMap(); return; }
     if (game.state === "menu" && townSwitchClass && e.key === "Escape") { townSwitchClass = false; showTownRoom(true); return; }
     if (game.state === "map" && e.key === "Escape") { if (game.hero) showHub(game.hero); else backToMenu(); return; }
@@ -2177,8 +2255,9 @@
       return;
     }
     if (resultEl.classList.contains("hidden")) return;
+    if (DD.net.role === "guest") return; // host drives navigation after a run
     if (e.key === "Enter") { playAgain(); }
-    if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); if (game.hero) showMap(); else backToMenu(); }
+    if (e.key === "Escape") { if (game.hero) showMap(); else backToMenu(); }
   });
 
   // ---- world map click / tap handler ----
@@ -2278,6 +2357,15 @@
     openInventory();
   });
 
+  document.getElementById("btn-map-host").addEventListener("click", () => {
+    DD.audio.unlock();
+    if (game.hero) hostWithClass(game.hero.classKey);
+  });
+  document.getElementById("btn-map-join").addEventListener("click", () => {
+    DD.audio.unlock();
+    if (game.hero) joinWithClass(game.hero.classKey);
+  });
+
   // ---- stats overlay + raid buttons ----
 
   document.getElementById("btn-stats-close").addEventListener("click", closeStatsOverlay);
@@ -2341,7 +2429,8 @@
       const interval = DD.net.role === "host" ? 1 / 15 : 1 / 30;
       if (netAccum >= interval) {
         netAccum = 0;
-        if (DD.net.role === "host" && game.state !== "menu" && game.players.length > 1) {
+        const inRun = game.state === "play" || game.state === "transition";
+        if (DD.net.role === "host" && inRun && game.players.length > 1) {
           DD.net.send(DD.netSync.snapshot(game));
         } else if (DD.net.role === "guest" && guestInGame) {
           sendGuestInput();
