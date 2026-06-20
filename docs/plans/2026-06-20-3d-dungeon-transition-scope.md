@@ -86,10 +86,35 @@ untouched by the visual change).
   ~handful of draw calls) is available as obvious headroom but wasn't even needed
   to pass.
 
-**Phase 1 — Static dungeon from the grid (≈3–5 days).**
-- Map `tiles[]` (FLOOR/WALL/DOOR) → GLB pieces; instance them per cell. Start with
-  plain floor + wall + door; ignore corridors/variations.
-- Replace `room.js` floor-canvas baking with mesh assembly. Lighting + camera tuned.
+**Phase 1 — Static dungeon from the grid (≈3–5 days). 🟡 IN PROGRESS.**
+- ✅ `js/render3d.js` (`DungeonRenderer`): builds the dungeon from a `tiles[]`
+  grid (same 0/1/2 model as `room.js`) using **InstancedMesh** on the shared
+  colormap material. **Whole room = 3 draw calls** (floor+wall+door) vs 438 clones,
+  size-independent. Lighting + angled camera done. Headless-verified identical render.
+- ✅ `projectToScreen(gx,gy)` helper added as the Phase 2 billboard bridge.
+- ✅ Wired into the live game behind a **`?3d`** toggle (done together with Phase 2
+  billboarding so the game stays coherent — the chosen approach):
+  - `index.html`: `#game3d` WebGL canvas behind a now-transparent `#game`; importmap
+    + module boot that creates the renderer once the kit loads (`DD.render3d`).
+  - `game.js`: `draw()` takes a 3D path for `state==="play"` — builds the dungeon
+    from `DD.room.getData()` (rebuild keyed on the new `room.version`), billboards
+    every entity, renders, and uses the 2D canvas purely as a screen-space HUD overlay.
+  - `room.js`: bumps `version` in `prerender()` so the mesh rebuilds on room change.
+  - `?dev=combat` jumps straight into a solo combat room for testing.
+- Verified headless: live `?3d&dev=combat` renders dungeon + warrior billboard + HUD
+  correctly, no errors. (The `e.includes` console line is pre-existing peerjs noise.)
+
+**Phase 2 — Entities as billboards (≈3–5 days). 🟡 STARTED (with Phase 1).**
+- ✅ `render3d.js` billboard layer: per-entity `THREE.Sprite` pool, nearest-filtered
+  `CanvasTexture`. `game.js captureEntity()` reuses each entity's existing 2D
+  `draw()` into an offscreen canvas → stood up on the floor via `setEntities()`.
+  Reuses ALL existing sprite art (equipment, healthbars, swings) for free.
+- ⬜ To confirm on a real device: enemy/projectile billboards (same code path as the
+  player, but headless virtual-time doesn't advance spawn timers so they weren't
+  visually captured). Depth-sort vs. wall occlusion, shadow-on-billboard polish.
+- ⬜ Known caveat: pointer-aim screen→world mapping still uses the 2D transform, so
+  mouse aiming is off under the 3D camera (movement/keys fine). Fix with the camera
+  projection next.
 
 **Phase 2 — Entities as billboards (≈3–5 days).**
 - Render player/enemies/projectiles/items as camera-facing textured quads sourced

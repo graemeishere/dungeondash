@@ -9,6 +9,9 @@
 </head>
 <body>
   <div id="wrap">
+    <!-- 3D dungeon layer (only used when the URL has ?3d); sits behind #game,
+         which becomes transparent so the WebGL render shows through. -->
+    <canvas id="game3d"></canvas>
     <canvas id="game" width="960" height="576"></canvas>
 
     <div id="menu" class="overlay">
@@ -152,6 +155,11 @@
     <div id="inv-tooltip" class="inv-tooltip hidden"></div>
   </div>
 
+  <!-- Resolves the bare "three" specifier for the 3D renderer module. -->
+  <script type="importmap">
+  { "imports": { "three": "./js/lib/three/three.module.js" } }
+  </script>
+
   <script src="js/lib/peerjs.min.js"></script>
   <script src="js/util.js"></script>
   <script src="js/sprites.js"></script>
@@ -166,5 +174,17 @@
   <script src="js/items.js"></script>
   <script src="js/hud.js"></script>
   <script src="js/game.js"></script>
+
+  <!-- 3D boot: only spins up when ?3d is present. Creates the renderer and
+       hands it to the (classic-script) game via window.DD; game.js engages the
+       3D path once DD.render3d.proto is loaded. -->
+  <script type="module">
+    if (window.DD && window.DD.use3d) {
+      const { DungeonRenderer } = await import("./js/render3d.js");
+      const dr = new DungeonRenderer(document.getElementById("game3d"));
+      window.DD.render3d = dr;
+      try { await dr.ready; } catch (e) { console.error("3D kit load failed:", e); }
+    }
+  </script>
 </body>
 </html>

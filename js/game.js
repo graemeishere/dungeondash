@@ -3,10 +3,22 @@
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
+  // Opt-in 3D dungeon rendering (?3d). DD.render3d is supplied by the module
+  // boot in index.html once the Kenney kit has loaded. Set before that module
+  // runs so it knows whether to spin up at all.
+  const params = new URLSearchParams(location.search);
+  DD.use3d = params.has("3d");
+  const canvas3d = document.getElementById("game3d");
+
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
     canvas.height = Math.max(320, window.innerHeight);
     ctx.imageSmoothingEnabled = false; // resets on resize
+    if (DD.use3d && canvas3d) {
+      canvas3d.width = canvas.width;
+      canvas3d.height = canvas.height;
+      if (DD.render3d) DD.render3d.resize(canvas.width, canvas.height);
+    }
     DD.updateView(canvas);
   }
 
@@ -1515,7 +1527,66 @@
 
   // ---- draw ----
 
+  // ---- 3D rendering path (?3d) -------------------------------------------
+  // Reuses every entity's existing 2D draw() by capturing it to an offscreen
+  // canvas, then standing that up as a camera-facing billboard on the 3D floor.
+  // The architecture comes from the InstancedMesh dungeon in js/render3d.js.
+  const CAP_W = 96, CAP_H = 128, CAP_AX = 48, CAP_AY = 96; // capture box + (x,y) anchor px
+
+  function captureEntity(ent) {
+    let c = ent.__cap;
+    if (!c) {
+      c = ent.__cap = document.createElement("canvas");
+      c.width = CAP_W; c.height = CAP_H;
+      ent.__capctx = c.getContext("2d");
+    }
+    const cx = ent.__capctx;
+    cx.setTransform(1, 0, 0, 1, 0, 0);
+    cx.clearRect(0, 0, CAP_W, CAP_H);
+    cx.imageSmoothingEnabled = false;
+    cx.translate(CAP_AX - ent.x, CAP_AY - ent.y); // map (ent.x,ent.y) -> (AX,AY)
+    ent.draw(cx);
+    const dr = DD.render3d;
+    const k = dr.CELL / DD.TILE; // px -> world units
+    return {
+      canvas: c, gx: ent.x / DD.TILE, gy: ent.y / DD.TILE,
+      w: CAP_W * k, h: CAP_H * k, cx: CAP_AX / CAP_W, cy: 1 - CAP_AY / CAP_H,
+    };
+  }
+
+  function drawCombat3D() {
+    const dr = DD.render3d;
+    // Rebuild the mesh only when the room layout actually changes.
+    if (dr._builtVersion !== DD.room.version) {
+      const d = DD.room.getData();
+      dr.buildRoom({ tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h });
+      dr._builtVersion = DD.room.version;
+    }
+    const items = [];
+    const add = (e) => { if (e && !e.dead) items.push(captureEntity(e)); };
+    for (const p of game.players) add(p);
+    for (const s of game.skeletons) add(s);
+    for (const c of game.chests) add(c);
+    if (game.shopkeeper) add(game.shopkeeper);
+    for (const pk of game.pickups) add(pk);
+    for (const pr of game.projectiles) add(pr);
+    for (const es of game.enemyShots) add(es);
+    dr.setEntities(items);
+    dr.render();
+
+    // 2D canvas becomes a transparent HUD overlay in screen space.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    DD.hud.draw(ctx, game);
+  }
+
   function draw() {
+    // 3D path drives combat; menus/inventory/results stay on the 2D canvas.
+    if (DD.use3d && DD.render3d && DD.render3d.proto && game.state === "play") {
+      drawCombat3D();
+      return;
+    }
+
     ctx.fillStyle = "#0e0b16";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1992,6 +2063,13 @@
     showMap();
   } else {
     refreshContinueButton();
+  }
+
+  // Dev shortcut for verifying the 3D path: ?dev=combat jumps straight into a
+  // solo combat room (skips menus). Not wired to any UI.
+  if (params.get("dev") === "combat") {
+    document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
+    startRun("warrior");
   }
 
   window.addEventListener("resize", () => {

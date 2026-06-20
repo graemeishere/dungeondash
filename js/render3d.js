@@ -52,6 +52,13 @@ export class DungeonRenderer {
     this.W = 0; this.H = 0;
     this._w = 1; this._h = 1; // viewport px (for projectToScreen)
 
+    // Billboard layer: 2D character sprites stood up as camera-facing quads in
+    // the 3D scene (Phase 2). Kept in its own group so rebuilding the dungeon
+    // architecture never disturbs the entities.
+    this.spriteGroup = new THREE.Group();
+    this.scene.add(this.spriteGroup);
+    this._pool = []; // reused THREE.Sprite slots
+
     // Resolves once the kit pieces are loaded; callers await this before build.
     this.ready = this._loadPieces();
   }
@@ -145,6 +152,40 @@ export class DungeonRenderer {
   }
 
   setOrbit(angle) { this.camAngle = angle; }
+
+  _makeSprite() {
+    const tex = new THREE.CanvasTexture(document.createElement("canvas"));
+    tex.magFilter = THREE.NearestFilter; // keep the pixel art crisp
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const sp = new THREE.Sprite(mat);
+    this.spriteGroup.add(sp);
+    return sp;
+  }
+
+  // Stand up the game's 2D entities as billboards on the 3D floor. Each item:
+  //   { canvas, gx, gy, w, h, cx, cy }
+  //   canvas   - per-entity offscreen render (captured 2D sprite)
+  //   gx, gy   - fractional grid position (entity world px / TILE)
+  //   w, h     - billboard size in world units
+  //   cx, cy   - sprite anchor in [0..1] from lower-left (feet ~ (0.5, low))
+  setEntities(items) {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const sp = this._pool[i] || (this._pool[i] = this._makeSprite());
+      sp.visible = true;
+      const tex = sp.material.map;
+      tex.image = it.canvas;
+      tex.needsUpdate = true;
+      const p = this._cellWorld(it.gx, it.gy);
+      sp.position.set(p.x, 0, p.z);
+      sp.scale.set(it.w, it.h, 1);
+      sp.center.set(it.cx, it.cy);
+    }
+    for (let i = items.length; i < this._pool.length; i++) this._pool[i].visible = false;
+  }
 
   render() {
     const r = (this._span || 10) * 0.52, y = (this._span || 10) * 0.62;

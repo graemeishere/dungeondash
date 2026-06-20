@@ -327,6 +327,8 @@
         const y = d.anchorTop ? d.y : d.y - d.img.height;
         ctx.drawImage(d.img, Math.round(d.x - d.img.width / 2), Math.round(y));
       }
+      // bumped on every (re)build so the 3D layer knows to reassemble the mesh
+      this.version = (this.version || 0) + 1;
     },
 
     drawDecorations(ctx) {
