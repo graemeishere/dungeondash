@@ -177,7 +177,8 @@
         const t = info[ti] || dflt[ti];
         return {
           ti, x: Math.round(DD.ROOM_W * f) * DD.TILE, y: padY, r: DD.TILE * 0.95,
-          label: `TIER ${ti + 1}`, sub: t.sub, color: t.color, locked: !!t.locked, req: t.req || 0,
+          label: `TIER ${ti + 1}`, sub: t.sub, color: t.color,
+          locked: !!t.locked, req: t.req || 0, cleared: !!t.cleared,
         };
       });
       this.addAmbiance();

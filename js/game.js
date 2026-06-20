@@ -111,6 +111,13 @@
   // Hero level required to enter each tier (bands are 1-10 / 11-20 / 21-30).
   const TIER_REQ = [1, 11, 21];
 
+  // Champion = every real dungeon cleared at its top tier.
+  function isChampion(hero) {
+    return Object.keys(DUNGEONS)
+      .filter((id) => id !== "townRaid")
+      .every((id) => DD.profile.hasClear(hero, id, DUNGEONS[id].tiers.length - 1));
+  }
+
   const ELITE_NAMES = {
     skeleton: ["GRAVE WARDEN", "TOMB HERALD", "MARROW FIEND"],
     goblin:   ["RAID CAPTAIN", "CAVE BRUISER", "MINE TYRANT"],
@@ -159,6 +166,7 @@
     shopStock: [],
     raidMode: false,
     raidFaction: null,
+    justWonGame: false, // set the run you become Champion (first full clear)
 
     get localPlayer() { return this.players[this.localIndex]; },
     enemies() { return this.skeletons; },
@@ -455,6 +463,7 @@
 
   function endRun(won) {
     clearSave();
+    game.justWonGame = false;
     if (game.hero) {
       game.hero.level = game.level;
       game.hero.xp = game.xp;
@@ -471,6 +480,14 @@
         clearDungeon: clearedDungeon,
         repelRaid: (won && game.raidMode) ? 1 : 0,
       });
+      // record the dungeon+tier clear and check for game victory
+      if (clearedDungeon) {
+        DD.profile.markClear(game.hero, game.dungeonId, game.tier);
+        if (!game.hero.victory && isChampion(game.hero)) {
+          game.hero.victory = true;
+          game.justWonGame = true;
+        }
+      }
       DD.profile.save();
     }
     game.state = won ? "won" : "lost";
@@ -491,15 +508,22 @@
 
   function showResult() {
     const won = game.state === "won";
-    resultTitle.textContent = won ? "DUNGEON CLEARED!" : "YOU DIED";
-    resultTitle.style.color = won ? "#ffd95e" : "#ff5252";
+    if (game.justWonGame) {
+      resultTitle.textContent = "DUNGEON DASH CHAMPION!";
+      resultTitle.style.color = "#ffd95e";
+    } else {
+      resultTitle.textContent = won ? "DUNGEON CLEARED!" : "YOU DIED";
+      resultTitle.style.color = won ? "#ffd95e" : "#ff5252";
+    }
     const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
     const floorName = (dungeon.floors[game.floor] || {}).name || `Floor ${game.floor + 1}`;
-    resultStats.innerHTML =
-      `${DD.CLASSES[game.classKey].name} Lv ${game.level} &nbsp;•&nbsp; ` +
-      `${floorName}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
-      `${game.kills} kills &nbsp;•&nbsp; ${game.gold} gold &nbsp;•&nbsp; ` +
-      `${game.time.toFixed(1)}s`;
+    const line = game.justWonGame
+      ? `You conquered every dungeon at the highest tier. The realm is yours!`
+      : `${DD.CLASSES[game.classKey].name} Lv ${game.level} &nbsp;•&nbsp; ` +
+        `${floorName}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
+        `${game.kills} kills &nbsp;•&nbsp; ${game.gold} gold &nbsp;•&nbsp; ` +
+        `${game.time.toFixed(1)}s`;
+    resultStats.innerHTML = line;
     resultEl.classList.remove("hidden");
   }
 
@@ -694,7 +718,7 @@
       const req = TIER_REQ[ti] || 0;
       return {
         sub: t.levelHint, color: ["#9affb0", "#ffd95e", "#ff7a7a"][ti] || "#d8cfee",
-        locked: lvl < req, req,
+        locked: lvl < req, req, cleared: DD.profile.hasClear(game.hero, dungeonId, ti),
       };
     });
     DD.room.generateLobby(tierInfo);
@@ -1585,6 +1609,12 @@
     ctx.fillStyle = "#7a6e96";
     ctx.fillText("Click a location to travel there", W / 2, 50);
 
+    if (game.hero && game.hero.victory) {
+      ctx.font = `bold 13px ${font}`;
+      ctx.fillStyle = "#ffd95e";
+      ctx.fillText("★  REALM CHAMPION  ★", W / 2, 68);
+    }
+
     const mx = DD.input.mouse.x, my = DD.input.mouse.y;
 
     // draw locations
@@ -1598,6 +1628,22 @@
       ctx.font = `bold 13px ${font}`;
       ctx.fillStyle = hovered ? "#ffd95e" : "#bdb3d6";
       ctx.fillText(loc.name, cx, cy + 46);
+
+      // per-dungeon tier-clear pips + a star once the top tier is beaten
+      if (loc.kind === "dungeon" && game.hero) {
+        const d = DUNGEONS[loc.id];
+        const top = d.tiers.length - 1;
+        d.tiers.forEach((t, ti) => {
+          const px = cx - 16 + ti * 16;
+          ctx.fillStyle = DD.profile.hasClear(game.hero, loc.id, ti) ? "#ffd14a" : "rgba(120,110,150,0.4)";
+          ctx.beginPath(); ctx.arc(px, cy + 60, 4, 0, Math.PI * 2); ctx.fill();
+        });
+        if (DD.profile.hasClear(game.hero, loc.id, top)) {
+          ctx.fillStyle = "#ffd95e";
+          ctx.font = `16px ${font}`;
+          ctx.fillText("★", cx, cy - 40);
+        }
+      }
     }
     ctx.textAlign = "left";
   }
@@ -1658,10 +1704,12 @@
     ctx.textAlign = "center";
     ctx.fillStyle = pad.locked ? "#9b90b8" : col;
     ctx.font = `bold 14px ${font}`;
-    ctx.fillText(pad.label, pad.x, pad.y - pad.r * 0.5 - 14);
-    ctx.fillStyle = pad.locked ? "#ff8a8a" : "#d8cfee";
+    const title = pad.cleared && !pad.locked ? `${pad.label}  ✓` : pad.label;
+    ctx.fillText(title, pad.x, pad.y - pad.r * 0.5 - 14);
+    ctx.fillStyle = pad.locked ? "#ff8a8a" : (pad.cleared ? "#9affb0" : "#d8cfee");
     ctx.font = `11px ${font}`;
-    ctx.fillText(pad.locked ? `LOCKED · Lv ${pad.req}` : pad.sub, pad.x, pad.y - pad.r * 0.5 - 1);
+    const subText = pad.locked ? `LOCKED · Lv ${pad.req}` : (pad.cleared ? `${pad.sub} · cleared` : pad.sub);
+    ctx.fillText(subText, pad.x, pad.y - pad.r * 0.5 - 1);
     ctx.textAlign = "left";
   }
 
