@@ -155,6 +155,7 @@
     lobbyDungeonId: null,
     townNpcs: [],
     nearbyNpc: null,
+    shopStock: [],
     raidMode: false,
     raidFaction: null,
 
@@ -660,6 +661,7 @@
     menuEl.classList.add("hidden");
     document.getElementById("stats-overlay").classList.add("hidden");
     document.getElementById("raid-warning").classList.add("hidden");
+    document.getElementById("trader").classList.add("hidden");
   }
 
   // Themed entry room with three tier doorways. Walk through one to start a run.
@@ -730,6 +732,7 @@
     DD.updateView(canvas);
     spawnHeroInRoom();
     game.townNpcs = spawnTownNpcs();
+    game.shopStock = DD.rollShopStock(5); // fresh trader stock each town visit
   }
 
   function showMap() {
@@ -770,8 +773,96 @@
     setMenuMode(null, "INNKEEPER — pick a new class. Your level, gold and gear are kept.");
   }
 
+  const traderEl = document.getElementById("trader");
+
   function openTraderMenu() {
-    townToast("Trader — coming soon!", "#ffd95e");
+    if (!game.hero) return;
+    game.state = "trader";
+    buildTraderOverlay(game.hero);
+    traderEl.classList.remove("hidden");
+  }
+
+  function closeTraderOverlay() {
+    traderEl.classList.add("hidden");
+    if (game.hero) rebaseLocalPlayer();
+    game.state = "town";
+  }
+
+  function buildTraderOverlay(hero) {
+    document.getElementById("tr-gold").innerHTML =
+      `<span style="color:#ffd14a">${hero.gold || 0} gold</span>`;
+
+    // FOR SALE — buy into your bag
+    const shopEl = document.getElementById("tr-shop");
+    shopEl.innerHTML = "";
+    const stock = game.shopStock || [];
+    if (stock.length === 0) {
+      shopEl.innerHTML = `<p class="shop-empty">Sold out — come back after your next run.</p>`;
+    } else {
+      for (const item of stock) {
+        const price = DD.buyPrice(item);
+        const bagFull = hero.inventory.length >= DD.INV_CAP;
+        const tooPoor = (hero.gold || 0) < price;
+        const row = document.createElement("div");
+        row.className = `shop-row rarity-${item.rarity}`;
+        row.innerHTML =
+          `<img src="${DD.sprites.items[item.icon].toDataURL()}">` +
+          `<span class="shop-name">${item.name}</span>` +
+          `<span class="shop-price">${price}g</span>`;
+        const btn = document.createElement("button");
+        btn.className = "shop-btn";
+        btn.textContent = "Buy";
+        btn.disabled = bagFull || tooPoor;
+        if (bagFull) btn.title = "Bag full";
+        else if (tooPoor) btn.title = "Not enough gold";
+        btn.onclick = () => {
+          if (hero.inventory.length >= DD.INV_CAP || (hero.gold || 0) < price) return;
+          hero.gold -= price;
+          hero.inventory.push(item);
+          game.shopStock = game.shopStock.filter((s) => s !== item);
+          DD.audio.coin();
+          DD.profile.save();
+          buildTraderOverlay(hero);
+        };
+        row.appendChild(btn);
+        row.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
+        row.onmouseleave = hideInvTooltip;
+        shopEl.appendChild(row);
+      }
+    }
+
+    // YOUR BAG — sell for gold
+    const invEl = document.getElementById("tr-inv");
+    invEl.innerHTML = "";
+    if (hero.inventory.length === 0) {
+      invEl.innerHTML = `<p class="shop-empty">Your bag is empty.</p>`;
+    } else {
+      for (const item of hero.inventory) {
+        const value = DD.sellPrice(item);
+        const row = document.createElement("div");
+        row.className = `shop-row rarity-${item.rarity}`;
+        row.innerHTML =
+          `<img src="${DD.sprites.items[item.icon].toDataURL()}">` +
+          `<span class="shop-name">${item.name}</span>` +
+          `<span class="shop-price">${value}g</span>`;
+        const btn = document.createElement("button");
+        btn.className = "shop-btn sell";
+        btn.textContent = "Sell";
+        btn.onclick = () => {
+          const idx = hero.inventory.indexOf(item);
+          if (idx < 0) return;
+          hero.inventory.splice(idx, 1);
+          hero.gold = (hero.gold || 0) + value;
+          DD.audio.coin();
+          DD.profile.save();
+          buildTraderOverlay(hero);
+        };
+        row.appendChild(btn);
+        row.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
+        row.onmouseleave = hideInvTooltip;
+        invEl.appendChild(row);
+      }
+    }
   }
 
   function openQuestGiverMenu() {
@@ -1137,7 +1228,7 @@
     }
     if (game.state === "lobby" || game.state === "town") { updatePeaceful(dt); return; }
     if (game.state === "map" || game.state === "menu" || game.state === "levelup" ||
-        game.state === "inventory" || game.state === "stats" || game.state === "raid-warn") return;
+        game.state === "inventory" || game.state === "stats" || game.state === "trader" || game.state === "raid-warn") return;
 
     if (game.state === "transition") {
       game.transitionT += dt * 2.6;
@@ -1473,7 +1564,7 @@
     }
     const ents = [];
     for (const p of game.players) if (p && !p.dead) ents.push({ y: p.y, render: () => p.draw(ctx) });
-    if (game.state === "town" || game.state === "stats") {
+    if (game.state === "town" || game.state === "stats" || game.state === "trader") {
       for (const npc of game.townNpcs) ents.push({ y: npc.y, render: () => drawTownNpc(ctx, npc, time) });
     }
     ents.sort((a, b) => a.y - b.y);
@@ -1529,7 +1620,7 @@
       return;
     }
 
-    if (game.state === "lobby" || game.state === "town" || game.state === "stats") {
+    if (game.state === "lobby" || game.state === "town" || game.state === "stats" || game.state === "trader") {
       drawPeaceful(ctx);
       ctx.restore();
       return;
@@ -1856,6 +1947,7 @@
     }
     if (game.state === "inventory" && e.key === "Escape") { closeInventory(); return; }
     if (game.state === "stats" && e.key === "Escape") { closeStatsOverlay(); return; }
+    if (game.state === "trader" && e.key === "Escape") { closeTraderOverlay(); return; }
     if ((game.state === "town" || game.state === "lobby") && e.key === "Escape") { showMap(); return; }
     if (game.state === "raid-warn" && e.key === "Escape") { document.getElementById("raid-warning").classList.add("hidden"); showMap(); return; }
     if (game.state === "menu" && townSwitchClass && e.key === "Escape") { townSwitchClass = false; showTownRoom(true); return; }
@@ -1968,6 +2060,7 @@
   // ---- stats overlay + raid buttons ----
 
   document.getElementById("btn-stats-close").addEventListener("click", closeStatsOverlay);
+  document.getElementById("btn-trader-close").addEventListener("click", closeTraderOverlay);
 
   document.getElementById("btn-fight-back").addEventListener("click", () => {
     DD.audio.unlock();

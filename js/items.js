@@ -2,6 +2,20 @@
 (function (DD) {
   DD.INV_CAP = 15;
 
+  // Trader economy: buy prices the shop charges, sell values it pays (by rarity).
+  // Buy > sell so churning gear is a loss; gold is earned in runs, spent in town.
+  DD.SHOP_BUY  = { common: 25, rare: 70, epic: 150 };
+  DD.SHOP_SELL = { common: 10, rare: 30, epic: 60 };
+  DD.buyPrice  = (item) => DD.SHOP_BUY[item.rarity]  || 25;
+  DD.sellPrice = (item) => DD.SHOP_SELL[item.rarity] || 10;
+
+  // A fresh shop stock of n random items (re-rolled each town visit).
+  DD.rollShopStock = function (n = 5, floor = 0) {
+    const stock = [];
+    for (let i = 0; i < n; i++) stock.push(DD.rollItem({ floor }));
+    return stock;
+  };
+
   DD.ITEM_RARITY = {
     common: { color: "#b0a8cc", weight: 60, scale: 1.0, label: "Common" },
     rare:   { color: "#4a9bff", weight: 28, scale: 1.6, label: "Rare"   },
