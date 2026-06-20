@@ -119,10 +119,23 @@
           this.staticDecor.push({ img, x: tx * DD.TILE + DD.TILE / 2, y: ty * DD.TILE + DD.TILE });
         }
       }
-      if (th && th.mineCart) {
-        const tx = DD.randi(2, DD.ROOM_W - 4), ty = DD.randi(DD.ROOM_H - 5, DD.ROOM_H - 3);
-        if (tileAt(tx, ty) === FLOOR) {
-          this.staticDecor.push({ img: th.mineCart, x: tx * DD.TILE + DD.TILE, y: ty * DD.TILE + DD.TILE });
+      if (th && th.rail) {
+        // one continuous mine-cart track running down a mostly-open column
+        let col = Math.round(DD.ROOM_W * 0.5);
+        for (let off = 0; off <= 4; off++) {
+          const c = Math.round(DD.ROOM_W * 0.5) + (off % 2 === 0 ? off / 2 : -(off + 1) / 2);
+          let open = 0;
+          for (let ty = 1; ty < DD.ROOM_H - 1; ty++) if (tileAt(c, ty) === FLOOR) open++;
+          if (open >= DD.ROOM_H - 4) { col = c; break; }
+        }
+        let lastFloorY = DD.ROOM_H - 3;
+        for (let ty = 1; ty < DD.ROOM_H - 1; ty++) {
+          if (tileAt(col, ty) !== FLOOR) continue;
+          this.staticDecor.push({ img: th.rail, x: col * DD.TILE + DD.TILE / 2, y: ty * DD.TILE, anchorTop: true });
+          lastFloorY = ty;
+        }
+        if (th.mineCart) {
+          this.staticDecor.push({ img: th.mineCart, x: col * DD.TILE + DD.TILE / 2, y: lastFloorY * DD.TILE + DD.TILE });
         }
       }
 
@@ -130,7 +143,8 @@
     },
 
     // A themed entry room with three doorways, one per dungeon tier.
-    generateLobby() {
+    // tierInfo (optional): [{ sub, color, locked }] per tier, from the caller.
+    generateLobby(tierInfo) {
       this.spikes = [];
       this.decorations = [];
       this.staticDecor = [];
@@ -147,8 +161,12 @@
         tiles[y * DD.ROOM_W + DD.ROOM_W - 1] = WALL;
       }
 
-      const labels = ["I  ·  1-10", "II  ·  11-20", "III  ·  21-30"];
-      const colors = ["#9affb0", "#ffd95e", "#ff7a7a"];
+      const dflt = [
+        { sub: "I  ·  1-10", color: "#9affb0", locked: false },
+        { sub: "II  ·  11-20", color: "#ffd95e", locked: false },
+        { sub: "III  ·  21-30", color: "#ff7a7a", locked: false },
+      ];
+      const info = tierInfo || dflt;
       this.tierDoorCols = [];
       this.doorCols = [];
       [0.22, 0.5, 0.78].forEach((f, ti) => {
@@ -157,7 +175,9 @@
         for (const cc of cols) { tiles[cc] = DOOR; this.doorCols.push(cc); }
         this.tierDoorCols.push(cols);
         const x = (c + 1) * DD.TILE;
-        this.decorations.push({ sign: true, text: `TIER ${ti + 1}`, sub: labels[ti], color: colors[ti], x, y: DD.TILE * 2.4 });
+        const t = info[ti] || dflt[ti];
+        const text = t.locked ? "LOCKED" : `TIER ${ti + 1}`;
+        this.decorations.push({ sign: true, text, sub: t.sub, color: t.locked ? "#ff6b70" : t.color, x, y: DD.TILE * 2.4 });
       });
       this.addAmbiance();
       this.prerender();

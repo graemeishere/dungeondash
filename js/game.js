@@ -108,6 +108,9 @@
     };
   }
 
+  // Hero level required to enter each tier doorway (Tier 1 always open).
+  const TIER_REQ = [0, 10, 20];
+
   const ELITE_NAMES = {
     skeleton: ["GRAVE WARDEN", "TOMB HERALD", "MARROW FIEND"],
     goblin:   ["RAID CAPTAIN", "CAVE BRUISER", "MINE TYRANT"],
@@ -244,7 +247,7 @@
     game.raidMode = false;
     game.townNpcs = [];
     game.nearbyNpc = null;
-    DD.room.setTheme(dungeonId);
+    DD.room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
     game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
     game.localIndex = 0;
     game.floor = 0;
@@ -449,7 +452,8 @@
     if (game.hero) {
       game.hero.level = game.level;
       game.hero.xp = game.xp;
-      game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
+      // gold is only banked on a successful run; dying forfeits the run's gold
+      if (won) game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
       game.hero.kills = (game.hero.kills || 0) + game.kills;
       if (!won) game.hero.deaths = (game.hero.deaths || 0) + 1;
       DD.profile.progressQuests({ kills: game.kills, floor: game.floor + (won ? 1 : 0), won });
@@ -621,6 +625,7 @@
   // Called when player picks a class from the class-select screen.
   // Creates/switches the hero profile then goes to the world map.
   function selectClass(classKey) {
+    townSwitchClass = false;
     const hero = DD.profile.getOrCreateHero(classKey);
     game.hero = hero;
     game.classKey = classKey;
@@ -668,12 +673,30 @@
     game.townNpcs = [];
     sizeRoomToCanvas();
     DD.room.setTheme(dungeonId);
-    DD.room.generateLobby();
+    const lvl = (game.hero && game.hero.level) || 1;
+    const tierInfo = DUNGEONS[dungeonId].tiers.map((t, ti) => {
+      const req = TIER_REQ[ti] || 0;
+      return {
+        sub: t.levelHint, color: ["#9affb0", "#ffd95e", "#ff7a7a"][ti] || "#d8cfee",
+        locked: lvl < req, req,
+      };
+    });
+    DD.room.generateLobby(tierInfo);
     DD.updateView(canvas);
     spawnHeroInRoom();
   }
 
+  function tierLocked(ti) {
+    return ((game.hero && game.hero.level) || 1) < (TIER_REQ[ti] || 0);
+  }
+
   function enterTierDoor(ti) {
+    if (tierLocked(ti)) {
+      townToast(`Reach level ${TIER_REQ[ti]} to enter Tier ${ti + 1}`, "#ff6b70");
+      const pl = game.players[0];
+      if (pl) pl.y = DD.TILE * 3; // nudge back from the locked doorway
+      return;
+    }
     const classKey = (game.hero && game.hero.classKey) || game.classKey;
     startRun(classKey, game.lobbyDungeonId, ti);
   }
@@ -787,10 +810,24 @@
     return { goblin: "goblinMines", skeleton: "catacombs", undead: "crypt" }[faction] || "catacombs";
   }
 
+  // A short, town-themed mini-dungeon built from the raiding faction's enemies.
+  // Registered as DUNGEONS.townRaid so all the DUNGEONS[game.dungeonId] lookups work.
+  function buildRaidDungeon(faction) {
+    const src = DUNGEONS[factionDungeon(faction)];
+    const f0 = src.floors[0];
+    return {
+      id: "townRaid", name: "Town Under Siege", faction, theme: "town",
+      enemyLabel: src.enemyLabel,
+      floors: [{ name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds, plan: ["combat", "combat", "boss"] }],
+      tiers: src.tiers.map((t) => ({ ...t, bossName: "RAID CAPTAIN" })),
+    };
+  }
+
   function startRaid() {
     document.getElementById("raid-warning").classList.add("hidden");
     const classKey = (game.hero && game.hero.classKey) || game.classKey;
-    startRun(classKey, factionDungeon(game.raidFaction), game.tier);
+    DUNGEONS.townRaid = buildRaidDungeon(game.raidFaction);
+    startRun(classKey, "townRaid", game.tier);
     game.raidMode = true;
   }
 
@@ -885,6 +922,7 @@
   }
 
   function backToMenu() {
+    townSwitchClass = false;
     resultEl.classList.add("hidden");
     lobbyEl.classList.add("hidden");
     setMenuMode(null, "");
@@ -1222,11 +1260,8 @@
       for (const npc of game.townNpcs) {
         if (DD.dist(pl.x, pl.y, npc.x, npc.y) < npc.r + pl.r + 18) { game.nearbyNpc = npc; break; }
       }
-      if (game.nearbyNpc && (DD.input.consumeInteract() || DD.input.consumeInvTap())) {
-        game.nearbyNpc.interact();
-        return;
-      }
-      DD.input.consumeInteract();
+      const talk = DD.input.consumeInteract() || DD.input.consumeInvTap();
+      if (game.nearbyNpc && talk) { game.nearbyNpc.interact(); return; }
       if (DD.room.doorOpen && DD.room.inDoorway(pl.x, pl.y - pl.r)) showMap();
     } else if (game.state === "lobby") {
       DD.input.consumeInteract();
@@ -1452,6 +1487,7 @@
     if (game.state === "menu" || game.state === "hub") {
       if (!DD.room.prerendered) {
         sizeRoomToCanvas();
+        DD.room.setTheme("catacombs"); // neutral backdrop, not the last dungeon's theme
         DD.room.generate();
         DD.updateView(canvas);
       }
@@ -1562,6 +1598,7 @@
   }
 
   async function hostWithClass(classKey) {
+    townSwitchClass = false;
     game.classKey = classKey;
     showLobby("Creating a room...");
     try {
@@ -1574,6 +1611,7 @@
   }
 
   async function joinWithClass(classKey) {
+    townSwitchClass = false;
     guestClass = classKey;
     game.classKey = classKey;
     codeIn.value = "";
@@ -1743,10 +1781,15 @@
 
   // ---- result buttons / shortcuts ----
 
-  document.getElementById("btn-again").addEventListener("click", () => {
+  // "Play Again" — but a town raid isn't a re-enterable dungeon, so send the
+  // player back to the town instead of replaying the raid.
+  function playAgain() {
     if (DD.net.role) DD.net.reset();
+    if (game.dungeonId === "townRaid") { showTownRoom(true); return; }
     startRun(game.classKey, game.dungeonId, game.tier);
-  });
+  }
+
+  document.getElementById("btn-again").addEventListener("click", playAgain);
   document.getElementById("btn-class").addEventListener("click", () => {
     if (DD.net.role) DD.net.reset();
     if (game.hero) showMap(); else backToMenu();
@@ -1772,7 +1815,7 @@
       return;
     }
     if (resultEl.classList.contains("hidden")) return;
-    if (e.key === "Enter") { if (DD.net.role) DD.net.reset(); startRun(game.classKey, game.dungeonId, game.tier); }
+    if (e.key === "Enter") { playAgain(); }
     if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); if (game.hero) showMap(); else backToMenu(); }
   });
 
