@@ -19,7 +19,8 @@
     theme: "catacombs",
     decorations: [],    // animated/text overlays drawn every frame
     staticDecor: [],    // baked into the floor canvas during prerender
-    tierDoorCols: null, // lobby: [[a,b],[c,d],[e,f]] -> tier index per doorway
+    tierDoorCols: null, // legacy lobby doorways (unused; pads replace them)
+    tierPads: null,     // lobby: [{ti,x,y,r,label,sub,color,locked,req}]
     isLobby: false,
     isTown: false,
 
@@ -59,6 +60,7 @@
       this.decorations = [];
       this.staticDecor = [];
       this.tierDoorCols = null;
+      this.tierPads = null;
       this.isLobby = false;
       this.isTown = false;
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
@@ -142,15 +144,15 @@
       this.prerender();
     },
 
-    // A themed entry room with three doorways, one per dungeon tier.
-    // tierInfo (optional): [{ sub, color, locked }] per tier, from the caller.
+    // A themed entry room with three glowing floor pads, one per dungeon tier.
+    // tierInfo (optional): [{ sub, color, locked, req }] per tier, from the caller.
     generateLobby(tierInfo) {
       this.spikes = [];
       this.decorations = [];
       this.staticDecor = [];
       this.isLobby = true;
       this.isTown = false;
-      this.doorOpen = true;
+      this.doorOpen = false;
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
       for (let x = 0; x < DD.ROOM_W; x++) {
         tiles[x] = WALL;
@@ -161,23 +163,22 @@
         tiles[y * DD.ROOM_W + DD.ROOM_W - 1] = WALL;
       }
 
+      // no wall doorways — entry is via glowing floor pads (drawn + handled in game.js)
+      this.doorCols = [];
+      this.tierDoorCols = null;
       const dflt = [
-        { sub: "I  ·  1-10", color: "#9affb0", locked: false },
-        { sub: "II  ·  11-20", color: "#ffd95e", locked: false },
-        { sub: "III  ·  21-30", color: "#ff7a7a", locked: false },
+        { sub: "1-10", color: "#9affb0", locked: false },
+        { sub: "11-20", color: "#ffd95e", locked: false },
+        { sub: "21-30", color: "#ff7a7a", locked: false },
       ];
       const info = tierInfo || dflt;
-      this.tierDoorCols = [];
-      this.doorCols = [];
-      [0.22, 0.5, 0.78].forEach((f, ti) => {
-        const c = DD.clamp(Math.round(DD.ROOM_W * f), 2, DD.ROOM_W - 3);
-        const cols = [c, c + 1];
-        for (const cc of cols) { tiles[cc] = DOOR; this.doorCols.push(cc); }
-        this.tierDoorCols.push(cols);
-        const x = (c + 1) * DD.TILE;
+      const padY = Math.round(DD.ROOM_H * 0.46) * DD.TILE + DD.TILE / 2;
+      this.tierPads = [0.25, 0.5, 0.75].map((f, ti) => {
         const t = info[ti] || dflt[ti];
-        const text = t.locked ? "LOCKED" : `TIER ${ti + 1}`;
-        this.decorations.push({ sign: true, text, sub: t.sub, color: t.locked ? "#ff6b70" : t.color, x, y: DD.TILE * 2.4 });
+        return {
+          ti, x: Math.round(DD.ROOM_W * f) * DD.TILE, y: padY, r: DD.TILE * 0.95,
+          label: `TIER ${ti + 1}`, sub: t.sub, color: t.color, locked: !!t.locked, req: t.req || 0,
+        };
       });
       this.addAmbiance();
       this.prerender();
@@ -192,6 +193,7 @@
       this.isTown = true;
       this.doorOpen = true;
       this.tierDoorCols = null;
+      this.tierPads = null;
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
       for (let x = 0; x < DD.ROOM_W; x++) {
         tiles[x] = WALL;

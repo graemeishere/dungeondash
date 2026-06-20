@@ -417,14 +417,13 @@ body {
 #so-inv-grid { display: grid; grid-template-columns: repeat(4, 56px); gap: 8px; }
 
 @media (max-width: 720px) {
-  /* stack the three sections and scroll inside the overlay so the title and
-     Close button stay on-screen on phones */
+  /* top-align so the title + stats are reachable: centered flex content taller
+     than the viewport clips at the top and can't be scrolled to */
+  #stats-overlay { justify-content: flex-start; }
   #so-body {
     flex-direction: column;
     flex-wrap: nowrap;
     width: 94vw;
-    max-height: 60vh;
-    overflow-y: auto;
   }
   #so-col-left, #so-col-mid, #so-col-right { width: 100%; min-width: 0; }
   #so-inv-grid { grid-template-columns: repeat(auto-fill, 48px); justify-content: center; }

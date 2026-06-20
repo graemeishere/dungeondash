@@ -176,6 +176,13 @@
       p(14, 6, "#88dd88", 1, 1); // shine
       p(13, 8, "#7a5c2e", 1, 6); // staff
       p(12, 6, "#88dd88", 1, 1); p(15, 7, "#88dd88", 1, 1); // sparkles
+    } else if (variant === "goblinBomber") {
+      p(11, 8, "#1c1a24", 4, 4); // round black bomb clutched at the side
+      p(11, 8, "#3a3750", 2, 1); // bomb highlight
+      p(13, 6, "#5a3a1a", 1, 2); // fuse stem
+      const spark = frame === 0 ? "#ff9234" : "#ffd14a";
+      p(13, 5, spark, 1, 1); // lit fuse spark
+      p(12, 4, "#ffe89a", 1, 1);
     }
   }
 
@@ -231,6 +238,52 @@
       p(4, 2 + bob, SKIN, 8, 5); p(4, 7 + bob, "#a890b0", 8, 1);
       p(4, 2 + bob, ROBE, 2, 2); p(10, 2 + bob, ROBE, 2, 2); // cowl sides
       p(5, 4 + bob, GLOW, 2, 1); p(9, 4 + bob, GLOW, 2, 1); // cold blue eyes
+    }
+  }
+
+  // Distinct boss figures — drawn larger/meaner than mooks, toppers baked in,
+  // so the three faction bosses read as clearly different characters.
+  function drawBoss(p, frame, faction) {
+    const bob = frame === 1 ? 1 : 0;
+    const DARKC = "#1a1626";
+    if (faction === "goblin") {
+      const SKIN = "#3f6e3f", SKIN_D = "#274d27", ARMOR = "#5a4326", IRON = "#6b6b78";
+      p(4, 14, "#2a2016", 3, 2); p(9, 14, "#2a2016", 3, 2);            // boots
+      p(3, 8, ARMOR, 10, 6); p(4, 8, "#7a5c34", 8, 1);                  // armored torso
+      p(2, 9, SKIN, 1, 3); p(13, 9, SKIN, 1, 3);                        // huge arms
+      p(5, 11, "#3a2a18", 6, 1);                                        // belt
+      p(7, 9, "#cc2222", 2, 2);                                         // warpaint mark
+      p(3, 2 + bob, SKIN, 10, 6); p(3, 7 + bob, SKIN_D, 10, 1);         // big head
+      p(1, 4 + bob, SKIN, 2, 3); p(13, 4 + bob, SKIN, 2, 3);           // ears
+      p(5, 4 + bob, "#ffd14a", 2, 1); p(9, 4 + bob, "#ffd14a", 2, 1);  // glowing eyes
+      p(6, 6 + bob, DARKC, 4, 1); p(5, 6 + bob, "#e9e6da", 1, 1); p(10, 6 + bob, "#e9e6da", 1, 1); // tusks
+      p(3, 1 + bob, IRON, 10, 2);                                       // horned helm band
+      p(2, 0 + bob, "#d8d4e6", 1, 2); p(13, 0 + bob, "#d8d4e6", 1, 2); // horns
+      p(14, 5, "#8b9ab5", 2, 4); p(14, 5, "#d8d4e6", 1, 4); p(15, 9, "#7a4f26", 1, 6); // great axe
+    } else if (faction === "undead") {
+      const ROBE = "#0d1a2e", ROBE_L = "#1a2e48", GLOW = "#4a90d9", BONE = "#cfe6ff";
+      p(4, 14, ROBE, 8, 2);                                             // robe hem
+      p(3, 8, ROBE, 10, 6); p(4, 8, ROBE_L, 8, 1);
+      p(2, 9, ROBE, 2, 4); p(12, 9, ROBE, 2, 4);                        // wide sleeves
+      p(7, 10, GLOW, 2, 2);                                             // chest gem
+      p(4, 2 + bob, BONE, 8, 6); p(3, 3 + bob, BONE, 10, 3);            // skull face
+      p(5, 4 + bob, GLOW, 2, 2); p(9, 4 + bob, GLOW, 2, 2);            // glowing eyes
+      p(7, 6 + bob, DARKC, 1, 1); p(5, 7 + bob, DARKC, 1, 1); p(9, 7 + bob, DARKC, 1, 1);
+      p(4, 0 + bob, "#ffd14a", 8, 1);                                   // floating crown
+      p(4, 0 + bob, "#ffd14a", 1, 2); p(7, 0 + bob, "#ffd14a", 1, 2); p(11, 0 + bob, "#ffd14a", 1, 2);
+      p(14, 4, GLOW, 2, 2); p(14, 6, "#6a5a3a", 1, 9);                  // staff
+    } else {
+      const BONE = "#e9e6da", BONE_D = "#b9b4a4", CLOAK = "#5a1f2a";
+      p(4, 14, BONE, 3, 2); p(9, 14, BONE, 3, 2);                       // feet
+      p(2, 8, CLOAK, 12, 6); p(4, 8, "#34304a", 8, 5);                  // cloak + ribcage backing
+      p(4, 9, BONE, 8, 1); p(4, 11, BONE, 8, 1);                        // ribs
+      p(2, 9, BONE_D, 1, 4); p(13, 9, BONE_D, 1, 4);                    // arms
+      p(3, 2 + bob, BONE, 10, 6); p(3, 3 + bob, BONE, 10, 4);           // skull
+      p(5, 4 + bob, "#ffd14a", 2, 2); p(9, 4 + bob, "#ffd14a", 2, 2);  // glowing eyes
+      p(7, 6 + bob, DARKC, 1, 1); p(5, 7 + bob, DARKC, 1, 1); p(7, 7 + bob, DARKC, 1, 1); p(9, 7 + bob, DARKC, 1, 1);
+      p(3, 0 + bob, "#ffd14a", 10, 1);                                  // crown
+      p(3, 0 + bob, "#ffd14a", 1, 2); p(7, 0 + bob, "#ffd14a", 1, 2); p(12, 0 + bob, "#ffd14a", 1, 2);
+      p(7, 0 + bob, "#e8484f", 1, 1);                                   // crown jewel
     }
   }
 
@@ -737,6 +790,10 @@
       this.goblinArcher = makeFrames((p, f) => drawGoblin(p, f, "goblinArcher"));
       this.goblinBerserker = makeFrames((p, f) => drawGoblin(p, f, "goblinBerserker"));
       this.goblinShaman = makeFrames((p, f) => drawGoblin(p, f, "goblinShaman"));
+      this.goblinBomber = makeFrames((p, f) => drawGoblin(p, f, "goblinBomber"));
+      this.bossSkeleton = makeFrames((p, f) => drawBoss(p, f, "skeleton"));
+      this.bossGoblin = makeFrames((p, f) => drawBoss(p, f, "goblin"));
+      this.bossLich = makeFrames((p, f) => drawBoss(p, f, "undead"));
       this.zombie = makeFrames((p, f) => drawUndead(p, f, "zombie"));
       this.warlock = makeFrames((p, f) => drawUndead(p, f, "warlock"));
       this.necromancer = makeFrames((p, f) => drawUndead(p, f, "necromancer"));
