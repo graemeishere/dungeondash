@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Dungeon Dash — 3D Phase 0 Spike</title>
+  <title>Dungeon Dash — 3D renderer harness</title>
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0812; }
     #c { display: block; width: 100vw; height: 100vh; touch-action: none; }
@@ -21,30 +21,23 @@
       font: 13px/1.5 monospace; background: rgba(10,8,18,0.92); padding: 24px; text-align: center; }
   </style>
 
-  <!-- No build step: importmap resolves the bare "three" specifier that the
-       vendored GLTFLoader / BufferGeometryUtils import from. -->
+  <!-- No build step: importmap resolves the bare "three" specifier used by
+       js/render3d.js and the vendored GLTFLoader. -->
   <script type="importmap">
-  {
-    "imports": {
-      "three": "./js/lib/three/three.module.js"
-    }
-  }
+  { "imports": { "three": "./js/lib/three/three.module.js" } }
   </script>
 </head>
 <body>
   <canvas id="c"></canvas>
   <div id="hud">booting…</div>
-  <div id="note">drag = orbit · this is a throwaway Phase 0 perf spike</div>
+  <div id="note">drag = orbit · harness for js/render3d.js (Phase 1)</div>
   <div id="err"></div>
 
   <script type="module">
-    import * as THREE from "three";
-    import { GLTFLoader } from "./js/lib/three/GLTFLoader.js";
+    import { DungeonRenderer } from "./js/render3d.js";
 
-    const KIT = "Kenney Modular Dungeon Kit/Models/GLB format/";
     const hud = document.getElementById("hud");
     const errEl = document.getElementById("err");
-
     function fail(msg) {
       errEl.style.display = "flex";
       errEl.textContent = msg + "\n\n(Serve over http — e.g. `python3 -m http.server 8000` —\nthen open this page. file:// will not load modules/GLBs.)";
@@ -52,14 +45,11 @@
     }
     window.addEventListener("error", (e) => fail("Error: " + (e.message || e)));
 
-    // ---- Dungeon layout (mirrors js/room.js: 0=floor, 1=wall, 2=door) -------
-    // A deliberately large room to stress-test mobile: perimeter walls, a door
-    // at top-centre, and a few 2x2 interior pillars like the real generator.
-    const W = 24, H = 16;
-    const FLOOR = 0, WALL = 1, DOOR = 2;
-    const grid = new Array(W * H).fill(FLOOR);
-    const at = (x, y) => grid[y * W + x];
-    const set = (x, y, v) => { grid[y * W + x] = v; };
+    // Layout mirrors js/room.js (0=floor,1=wall,2=door): a large room to stress
+    // mobile — perimeter walls, top-centre door, four 2x2 pillars.
+    const W = 24, H = 16, FLOOR = 0, WALL = 1, DOOR = 2;
+    const tiles = new Array(W * H).fill(FLOOR);
+    const set = (x, y, v) => { tiles[y * W + x] = v; };
     for (let x = 0; x < W; x++) { set(x, 0, WALL); set(x, H - 1, WALL); }
     for (let y = 0; y < H; y++) { set(0, y, WALL); set(W - 1, y, WALL); }
     set(W / 2 - 1, 0, DOOR); set(W / 2, 0, DOOR);
@@ -67,116 +57,37 @@
       for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) set(px + dx, py + dy, WALL);
     }
 
-    // ---- Renderer / scene ---------------------------------------------------
     const canvas = document.getElementById("c");
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap for mobile
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0812);
-
-    // Top-down ANGLED camera (the chosen Diablo/Hades style).
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
-
-    scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x2a2238, 0.9));
-    const sun = new THREE.DirectionalLight(0xfff1d0, 1.1);
-    sun.position.set(6, 14, 8);
-    scene.add(sun);
-
-    function resize() {
-      const w = window.innerWidth, h = window.innerHeight;
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    }
-    window.addEventListener("resize", resize);
-
-    // ---- Load kit pieces, then build the room -------------------------------
-    const loader = new GLTFLoader();
-    const load = (name) => loader.loadAsync(encodeURI(KIT + name + ".glb")).then((g) => g.scene);
-
-    function bbox(obj) {
-      return new THREE.Box3().setFromObject(obj);
-    }
+    const dr = new DungeonRenderer(canvas);
 
     (async function main() {
-      let floorProto, wallProto, cornerProto, doorProto;
-      try {
-        [floorProto, wallProto, cornerProto, doorProto] = await Promise.all([
-          load("template-floor"), load("template-wall"),
-          load("template-wall-corner"), load("gate-door"),
-        ]);
-      } catch (e) {
-        return fail("Failed to load GLB kit pieces.\n" + (e && e.message ? e.message : e));
-      }
+      try { await dr.ready; } catch (e) { return fail("Failed to load kit: " + (e && e.message ? e.message : e)); }
 
-      // Derive the grid cell size from the floor piece's footprint so layout
-      // is asset-driven rather than guessed.
-      const fb = bbox(floorProto);
-      const CELL = Math.max(fb.max.x - fb.min.x, fb.max.z - fb.min.z) || 1;
-      const wallH = (() => { const b = bbox(wallProto); return b.max.y - b.min.y; })();
+      const built = dr.buildRoom({ tiles, w: W, h: H });
+      const onResize = () => dr.resize(window.innerWidth, window.innerHeight);
+      window.addEventListener("resize", onResize);
+      onResize();
 
-      const dungeon = new THREE.Group();
-      let pieceCount = 0;
-      const place = (proto, gx, gy, ry = 0) => {
-        const m = proto.clone();
-        m.position.set((gx - W / 2 + 0.5) * CELL, 0, (gy - H / 2 + 0.5) * CELL);
-        if (ry) m.rotation.y = ry;
-        dungeon.add(m);
-        pieceCount++;
-      };
-
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          const t = at(x, y);
-          // Every cell gets a floor (walls/doors sit on top of it).
-          place(floorProto, x, y);
-          if (t === WALL) place(wallProto, x, y);
-          else if (t === DOOR) place(doorProto, x, y);
-        }
-      }
-      scene.add(dungeon);
-
-      // Frame the camera on the room with the angled top-down look.
-      const span = Math.max(W, H) * CELL;
-      camera.position.set(0, span * 0.62, span * 0.52); // high, pulled back
-      camera.lookAt(0, 0, 0);
-      let camAngle = 0; // user can orbit horizontally to inspect
-      resize();
-
-      // Simple drag-to-orbit (inspection only; not the shipping control scheme).
-      let dragging = false, lastX = 0;
+      // drag-to-orbit (inspection only)
+      let dragging = false, lastX = 0, angle = 0;
       canvas.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; });
       window.addEventListener("pointerup", () => { dragging = false; });
       window.addEventListener("pointermove", (e) => {
-        if (!dragging) return;
-        camAngle += (e.clientX - lastX) * 0.005;
-        lastX = e.clientX;
+        if (!dragging) return; angle += (e.clientX - lastX) * 0.005; lastX = e.clientX; dr.setOrbit(angle);
       });
 
-      // ---- Render loop + FPS / draw-call instrumentation --------------------
-      let frames = 0, fpsAccum = 0, fps = 0, last = performance.now();
+      let frames = 0, acc = 0, fps = 0, last = performance.now();
       function tick(now) {
         const dt = (now - last) / 1000; last = now;
-        frames++; fpsAccum += dt;
-        if (fpsAccum >= 0.5) { fps = frames / fpsAccum; frames = 0; fpsAccum = 0; }
-
-        const r = span * 0.52;
-        camera.position.x = Math.sin(camAngle) * r;
-        camera.position.z = Math.cos(camAngle) * r;
-        camera.position.y = span * 0.62;
-        camera.lookAt(0, 0, 0);
-
-        renderer.render(scene, camera);
-        const info = renderer.info.render;
+        frames++; acc += dt;
+        if (acc >= 0.5) { fps = frames / acc; frames = 0; acc = 0; }
+        const info = dr.render();
         hud.textContent =
-          `FPS         ${fps.toFixed(0)}\n` +
-          `pieces      ${pieceCount}  (clones, no instancing yet)\n` +
-          `draw calls  ${info.calls}\n` +
-          `triangles   ${info.triangles.toLocaleString()}\n` +
-          `pixelRatio  ${renderer.getPixelRatio().toFixed(2)}\n` +
-          `grid        ${W}x${H}  cell=${CELL.toFixed(2)}  wallH=${wallH.toFixed(2)}`;
+          `FPS            ${fps.toFixed(0)}\n` +
+          `draw calls     ${info.calls}   (was 438 w/ clones)\n` +
+          `triangles      ${info.triangles.toLocaleString()}\n` +
+          `expected calls ${built.drawCalls}  (floor+wall+door instanced)\n` +
+          `grid           ${W}x${H}  cell=${dr.CELL.toFixed(2)}  wallH=${dr.wallH.toFixed(2)}`;
         requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
