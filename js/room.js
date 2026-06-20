@@ -351,7 +351,22 @@
           ctx.textAlign = "left";
           continue;
         }
-        const frame = d.frames[Math.floor(time * 6) % d.frames.length];
+        const frame = d.frames && d.frames.length
+          ? d.frames[Math.floor(time * 6) % d.frames.length]
+          : undefined;
+        if (!frame) {
+          // Should never happen: a decoration was created with an empty/invalid
+          // frames array. Skip it (don't crash the whole render loop) and log
+          // once so we can find the source.
+          if (!DD._decoWarned) {
+            DD._decoWarned = true;
+            console.warn("drawDecorations: decoration with no frame", {
+              theme: this.theme, frames: d.frames,
+              len: d.frames && d.frames.length, keys: Object.keys(d),
+            });
+          }
+          continue;
+        }
         let x = d.x, y = d.y;
         if (d.fly) {
           x = d.bx + Math.sin(time * 1.6 + d.phase) * 40;
