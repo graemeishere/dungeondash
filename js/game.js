@@ -2093,7 +2093,11 @@
   let last = performance.now();
   let netAccum = 0;
   function frame(now) {
-    const dt = Math.min((now - last) / 1000, 1 / 30);
+    // Clamp to >= 0: on the first frame the rAF timestamp can predate the
+    // performance.now() captured at boot, yielding a negative dt that pushes
+    // game.time below zero (which broke decoration frame indexing, and could
+    // corrupt spawn/animation timers).
+    const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 30));
     last = now;
     update(dt);
     draw();

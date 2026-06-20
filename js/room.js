@@ -351,22 +351,11 @@
           ctx.textAlign = "left";
           continue;
         }
-        const frame = d.frames && d.frames.length
-          ? d.frames[Math.floor(time * 6) % d.frames.length]
-          : undefined;
-        if (!frame) {
-          // Should never happen: a decoration was created with an empty/invalid
-          // frames array. Skip it (don't crash the whole render loop) and log
-          // once so we can find the source.
-          if (!DD._decoWarned) {
-            DD._decoWarned = true;
-            console.warn("drawDecorations: decoration with no frame", {
-              theme: this.theme, frames: d.frames,
-              len: d.frames && d.frames.length, keys: Object.keys(d),
-            });
-          }
-          continue;
-        }
+        const n = d.frames ? d.frames.length : 0;
+        if (!n) continue;
+        // Positive modulo: JS's % keeps the dividend's sign, so a negative time
+        // would otherwise yield frames[-1] === undefined and crash on .width.
+        const frame = d.frames[((Math.floor(time * 6) % n) + n) % n];
         let x = d.x, y = d.y;
         if (d.fly) {
           x = d.bx + Math.sin(time * 1.6 + d.phase) * 40;
