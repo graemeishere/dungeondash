@@ -141,6 +141,7 @@
     pendingLevelUps: 0,
     gold: 0,
     kills: 0,
+    killsByFaction: { skeleton: 0, goblin: 0, undead: 0 },
     shake: 0,
     hintT: 0,
     endT: 0,          // delay before showing the result overlay
@@ -258,6 +259,7 @@
     game.level = hero.level || 1;
     game.gold = 0;
     game.kills = 0;
+    game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = 0;
     loadRoom(0);
     freshGameState();
@@ -291,6 +293,7 @@
     game.level = hero ? (hero.level || 1) : (save.level || 1);
     game.gold = save.gold;
     game.kills = save.kills;
+    game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = save.time;
     loadRoom(game.plan().length - 1);
     freshGameState();
@@ -459,7 +462,15 @@
       if (won) game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
       game.hero.kills = (game.hero.kills || 0) + game.kills;
       if (!won) game.hero.deaths = (game.hero.deaths || 0) + 1;
-      DD.profile.progressQuests({ kills: game.kills, floor: game.floor + (won ? 1 : 0), won });
+      const clearedDungeon = won && game.dungeonId !== "townRaid" ? game.dungeonId : null;
+      DD.profile.progressQuests({
+        kills: game.kills,
+        killsByFaction: game.killsByFaction,
+        won,
+        bossKill: clearedDungeon,
+        clearDungeon: clearedDungeon,
+        repelRaid: (won && game.raidMode) ? 1 : 0,
+      });
       DD.profile.save();
     }
     game.state = won ? "won" : "lost";
@@ -581,7 +592,7 @@
     if (questsEl) {
       const active = DD.profile.data.quests.active;
       if (active.length === 0) {
-        questsEl.innerHTML = `<div class="hub-quest-row" style="color:#6b5e96">All quests complete!</div>`;
+        questsEl.innerHTML = `<div class="hub-quest-row" style="color:#6b5e96">No active quests — visit the Quest Giver in town.</div>`;
       } else {
         questsEl.innerHTML = active.slice(0, 3).map((q) => {
           const def = DD.profile.questDefs.find((d) => d.id === q.id);
@@ -662,6 +673,7 @@
     document.getElementById("stats-overlay").classList.add("hidden");
     document.getElementById("raid-warning").classList.add("hidden");
     document.getElementById("trader").classList.add("hidden");
+    document.getElementById("questgiver").classList.add("hidden");
   }
 
   // Themed entry room with three tier doorways. Walk through one to start a run.
@@ -865,8 +877,104 @@
     }
   }
 
+  const questGiverEl = document.getElementById("questgiver");
+
   function openQuestGiverMenu() {
-    townToast("Quest Giver — coming soon!", "#9affb0");
+    if (!game.hero) return;
+    game.state = "quests";
+    buildQuestGiverOverlay(game.hero);
+    questGiverEl.classList.remove("hidden");
+  }
+
+  function closeQuestGiverOverlay() {
+    questGiverEl.classList.add("hidden");
+    game.state = "town";
+  }
+
+  function questRewardText(def) {
+    let t = `Reward: ${def.reward.gold || 0}g`;
+    if (def.reward.xp) t += ` · ${def.reward.xp} XP`;
+    return t;
+  }
+
+  // Progress bar HTML for kill-count quests; other goals are pass/fail.
+  function questProgressHtml(def, q) {
+    const g = def.goal;
+    if (!g.kills) return "";
+    const cur = Math.min((q.progress && q.progress.kills) || 0, g.kills);
+    const pct = Math.round((cur / g.kills) * 100);
+    return `<div class="q-bar-bg"><div class="q-bar-fill" style="width:${pct}%"></div></div>` +
+      `<div class="q-desc">${cur} / ${g.kills}</div>`;
+  }
+
+  function buildQuestGiverOverlay(hero) {
+    const P = DD.profile;
+    const active = P.data.quests.active;
+    const completed = P.data.quests.completed;
+    document.getElementById("qg-sub").textContent =
+      `${active.length}/${P.ACTIVE_CAP} active  •  ${completed.length} completed`;
+
+    const activeEl = document.getElementById("qg-active");
+    activeEl.innerHTML = "";
+    if (active.length === 0) {
+      activeEl.innerHTML = `<p class="shop-empty">No active quests — accept one from the list.</p>`;
+    } else {
+      for (const q of active) {
+        const def = P.questDef(q.id);
+        if (!def) continue;
+        const card = document.createElement("div");
+        card.className = "quest-card";
+        card.innerHTML =
+          `<div class="q-title">${def.title}</div>` +
+          `<div class="q-desc">${def.desc}</div>` +
+          questProgressHtml(def, q) +
+          `<div class="q-reward">${questRewardText(def)}</div>`;
+        const actions = document.createElement("div");
+        actions.className = "q-actions";
+        const btn = document.createElement("button");
+        btn.className = "shop-btn danger";
+        const canAfford = (hero.gold || 0) >= P.ABANDON_COST;
+        btn.textContent = `Abandon (${P.ABANDON_COST}g)`;
+        btn.disabled = !canAfford;
+        if (!canAfford) btn.title = "Not enough gold";
+        btn.onclick = () => {
+          if (P.abandonQuest(q.id, hero)) buildQuestGiverOverlay(hero);
+        };
+        actions.appendChild(btn);
+        card.appendChild(actions);
+        activeEl.appendChild(card);
+      }
+    }
+
+    const availEl = document.getElementById("qg-avail");
+    availEl.innerHTML = "";
+    const avail = P.availableQuests();
+    if (avail.length === 0) {
+      availEl.innerHTML = `<p class="shop-empty">Nothing new right now — come back later.</p>`;
+    } else {
+      const full = active.length >= P.ACTIVE_CAP;
+      for (const def of avail) {
+        const card = document.createElement("div");
+        card.className = "quest-card";
+        card.innerHTML =
+          `<div class="q-title">${def.title}</div>` +
+          `<div class="q-desc">${def.desc}</div>` +
+          `<div class="q-reward">${questRewardText(def)}</div>`;
+        const actions = document.createElement("div");
+        actions.className = "q-actions";
+        const btn = document.createElement("button");
+        btn.className = "shop-btn";
+        btn.textContent = "Accept";
+        btn.disabled = full;
+        if (full) btn.title = `Max ${P.ACTIVE_CAP} active quests`;
+        btn.onclick = () => {
+          if (P.acceptQuest(def.id)) buildQuestGiverOverlay(hero);
+        };
+        actions.appendChild(btn);
+        card.appendChild(actions);
+        availEl.appendChild(card);
+      }
+    }
   }
 
   function townToast(text, color) {
@@ -1228,7 +1336,8 @@
     }
     if (game.state === "lobby" || game.state === "town") { updatePeaceful(dt); return; }
     if (game.state === "map" || game.state === "menu" || game.state === "levelup" ||
-        game.state === "inventory" || game.state === "stats" || game.state === "trader" || game.state === "raid-warn") return;
+        game.state === "inventory" || game.state === "stats" || game.state === "trader" ||
+        game.state === "quests" || game.state === "raid-warn") return;
 
     if (game.state === "transition") {
       game.transitionT += dt * 2.6;
@@ -1564,7 +1673,7 @@
     }
     const ents = [];
     for (const p of game.players) if (p && !p.dead) ents.push({ y: p.y, render: () => p.draw(ctx) });
-    if (game.state === "town" || game.state === "stats" || game.state === "trader") {
+    if (game.state === "town" || game.state === "stats" || game.state === "trader" || game.state === "quests") {
       for (const npc of game.townNpcs) ents.push({ y: npc.y, render: () => drawTownNpc(ctx, npc, time) });
     }
     ents.sort((a, b) => a.y - b.y);
@@ -1620,7 +1729,8 @@
       return;
     }
 
-    if (game.state === "lobby" || game.state === "town" || game.state === "stats" || game.state === "trader") {
+    if (game.state === "lobby" || game.state === "town" || game.state === "stats" ||
+        game.state === "trader" || game.state === "quests") {
       drawPeaceful(ctx);
       ctx.restore();
       return;
@@ -1806,6 +1916,7 @@
     game.level = hero.level || 1;
     game.gold = 0;
     game.kills = 0;
+    game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = 0;
     loadRoom(0);
     lobbyEl.classList.add("hidden");
@@ -1948,6 +2059,7 @@
     if (game.state === "inventory" && e.key === "Escape") { closeInventory(); return; }
     if (game.state === "stats" && e.key === "Escape") { closeStatsOverlay(); return; }
     if (game.state === "trader" && e.key === "Escape") { closeTraderOverlay(); return; }
+    if (game.state === "quests" && e.key === "Escape") { closeQuestGiverOverlay(); return; }
     if ((game.state === "town" || game.state === "lobby") && e.key === "Escape") { showMap(); return; }
     if (game.state === "raid-warn" && e.key === "Escape") { document.getElementById("raid-warning").classList.add("hidden"); showMap(); return; }
     if (game.state === "menu" && townSwitchClass && e.key === "Escape") { townSwitchClass = false; showTownRoom(true); return; }
@@ -2061,6 +2173,7 @@
 
   document.getElementById("btn-stats-close").addEventListener("click", closeStatsOverlay);
   document.getElementById("btn-trader-close").addEventListener("click", closeTraderOverlay);
+  document.getElementById("btn-quest-close").addEventListener("click", closeQuestGiverOverlay);
 
   document.getElementById("btn-fight-back").addEventListener("click", () => {
     DD.audio.unlock();

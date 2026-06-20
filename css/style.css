@@ -445,7 +445,28 @@ body {
 .shop-btn:hover { filter: brightness(1.1); }
 .shop-btn:disabled { background: #3a4a3a; color: #7a8a7a; cursor: not-allowed; }
 .shop-btn.sell { background: #e8c84a; }
+.shop-btn.danger { background: #e8484f; color: #fff; }
 .shop-empty { color: #8b80a8; font-size: 13px; padding: 8px 0; }
+
+/* ---- Quest Giver ---- */
+#qg-body {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 10px 0;
+  width: min(680px, 94vw);
+}
+#qg-col-active, #qg-col-avail { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 240px; }
+#qg-active, #qg-avail { display: flex; flex-direction: column; gap: 8px; }
+.quest-card { background: #16121f; border: 2px solid #443a63; border-radius: 8px; padding: 8px 10px; text-align: left; }
+.quest-card .q-title { font-size: 13px; font-weight: bold; color: #ffd95e; }
+.quest-card .q-desc { font-size: 11px; color: #bdb3d6; margin: 2px 0 4px; }
+.quest-card .q-reward { font-size: 11px; color: #ffd14a; }
+.q-bar-bg { height: 6px; background: #1a1626; border-radius: 3px; overflow: hidden; margin: 5px 0; }
+.q-bar-fill { height: 100%; background: #6fce6f; }
+.q-actions { margin-top: 6px; }
 
 @media (max-width: 720px) {
   /* top-align so the title + stats are reachable: centered flex content taller
@@ -463,6 +484,10 @@ body {
   #trader { justify-content: flex-start; }
   #tr-body { flex-direction: column; flex-wrap: nowrap; width: 94vw; }
   #tr-col-buy, #tr-col-sell { width: 100%; min-width: 0; }
+
+  #questgiver { justify-content: flex-start; }
+  #qg-body { flex-direction: column; flex-wrap: nowrap; width: 94vw; }
+  #qg-col-active, #qg-col-avail { width: 100%; min-width: 0; }
 }
 
 /* Hub quest log */

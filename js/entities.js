@@ -795,6 +795,10 @@
       if (this.dead) return;
       this.dead = true;
       game.kills++;
+      if (game.killsByFaction) {
+        const f = this.faction || "skeleton";
+        game.killsByFaction[f] = (game.killsByFaction[f] || 0) + 1;
+      }
       game.addXP(this.xpValue);
       if (attacker) attacker.onKill();
       DD.audio.bones();
