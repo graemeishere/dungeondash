@@ -17,6 +17,8 @@
       stash: [],
       kills: 0,
       deaths: 0,
+      clears: {},        // "dungeonId:tier" -> true (cleared at that tier)
+      victory: false,    // true once every dungeon is cleared at the top tier
     };
   }
 
@@ -195,6 +197,18 @@
     }
   }
 
+  // ---- dungeon clear tracking (per hero) ----
+
+  function markClear(hero, dungeonId, tier) {
+    if (!hero) return;
+    hero.clears = hero.clears || {};
+    hero.clears[`${dungeonId}:${tier}`] = true;
+  }
+
+  function hasClear(hero, dungeonId, tier) {
+    return !!(hero && hero.clears && hero.clears[`${dungeonId}:${tier}`]);
+  }
+
   DD.profile = {
     load,
     save,
@@ -210,6 +224,8 @@
     acceptQuest,
     abandonQuest,
     progressQuests,
+    markClear,
+    hasClear,
     ABANDON_COST,
     ACTIVE_CAP,
   };
