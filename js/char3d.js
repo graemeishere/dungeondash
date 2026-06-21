@@ -13,7 +13,7 @@ import { GLTFLoader } from "./lib/three/GLTFLoader.js";
 import { clone as skeletonClone } from "./lib/three/SkeletonUtils.js";
 
 const HEROES = "KayKit Adventurers/Characters/gltf/";
-const ANIM = "KayKit Character Animations/Animations/gltf/Rig_Medium/";
+const ANIM_DIR = "KayKit Character Animations/Animations/gltf/Rig_Medium/";
 // Animation packs to pull clips from (Rig_Medium = the hero rig).
 const ANIM_PACKS = ["General", "MovementBasic", "MovementAdvanced", "CombatMelee", "CombatRanged", "Special"];
 
@@ -27,7 +27,7 @@ export class CharacterFactory {
   // Load the clip library; call once before spawning.
   async loadClips() {
     const packs = await Promise.all(
-      ANIM_PACKS.map((f) => this.loader.loadAsync(encodeURI(ANIM + "Rig_Medium_" + f + ".glb")))
+      ANIM_PACKS.map((f) => this.loader.loadAsync(encodeURI(ANIM_DIR + "Rig_Medium_" + f + ".glb")))
     );
     for (const g of packs) {
       for (const clip of g.animations) {
@@ -144,10 +144,19 @@ export class CharacterManager {
     this.chars = new Map(); // entity -> Character
   }
 
-  // Preload every registry model + the clip library.
+  // Preload the clip library + every registry model. Resilient: a single bad
+  // model is logged and skipped rather than disabling all characters.
   async preloadAll() {
     await this.factory.loadClips();
-    await Promise.all(Object.entries(MODELS).map(([k, c]) => this.factory.loadModelByKey(k, c.url)));
+    console.log("char3d: clips loaded:", this.factory.clips.size);
+    const entries = Object.entries(MODELS);
+    const results = await Promise.allSettled(
+      entries.map(([k, c]) => this.factory.loadModelByKey(k, c.url))
+    );
+    results.forEach((r, i) => {
+      if (r.status === "rejected") console.error("char3d: model FAILED", entries[i][0], entries[i][1].url, r.reason);
+    });
+    console.log("char3d: models loaded", results.filter((r) => r.status === "fulfilled").length, "/", entries.length);
     return this;
   }
 
