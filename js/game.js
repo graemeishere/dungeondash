@@ -1611,7 +1611,7 @@
       if (!p || p.dead) continue;
       const mk = C && C.classModelKey(p.classKey);
       if (mgr && mk && mgr.factory.protos.has(mk))
-        asChar(p, mk, faceFromAim(p.aim), playerClip(p), p.swingT > 0 || p.downed);
+        asChar(p, mk, faceFromMove(p), playerClip(p), p.swingT > 0 || p.downed);
       else billboards.push(captureEntity(p));
     }
     for (const s of game.skeletons) {
@@ -1644,7 +1644,7 @@
   function drawCamTest(dr) {
     const deg = (r) => (r * 180 / Math.PI).toFixed(1);
     const mul = DD.charMgr ? DD.charMgr.scaleMul : 1;
-    const heroScale = 1.55 * mul;
+    const heroScale = 1.42 * mul;
     const lines = [
       "CAMERA TEST  (" + camMode3d + ")",
       "elev   " + deg(dr.elev) + "°   [Up/Down]",

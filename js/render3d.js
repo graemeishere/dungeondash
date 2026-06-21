@@ -52,9 +52,10 @@ export class DungeonRenderer {
     this.scene.background = new THREE.Color(0x0a0812);
 
     // Low isometric "diorama" look (KayKit). Perspective for a touch of depth.
-    this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 600);
+    // Tuned values (user-chosen): 25° elevation, 35° FOV.
+    this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 600);
     this.camAngle = 0;        // horizontal orbit offset (spike inspection)
-    this.elev = 0.58;         // camera elevation in radians (~33°)
+    this.elev = 0.436;        // camera elevation in radians (~25°)
     this.camMode = "fixed";   // "fixed" = frame whole room, "follow" = track player
     this.followT = new THREE.Vector3();
     this._camDist = 40;
