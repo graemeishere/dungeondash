@@ -20,10 +20,11 @@ window.DD = window.DD || {};
     DD.HEIGHT = DD.TILE * th;
   };
 
-  DD.roomSizeForCanvas = (canvas) => ({
-    tw: DD.clamp(Math.floor(canvas.width / DD.TILE), 12, 44),
-    th: DD.clamp(Math.floor(canvas.height / DD.TILE), 11, 30),
-  });
+  // Fixed landscape room (designed for mobile + desktop, framed by the 3D iso
+  // camera). We no longer adapt the room to the screen now that we're in 3D —
+  // rooms are a designed size and the camera frames them. ~16:9.5 landscape.
+  DD.FIXED_ROOM = { tw: 22, th: 13 };
+  DD.roomSizeForCanvas = () => ({ tw: DD.FIXED_ROOM.tw, th: DD.FIXED_ROOM.th });
 
   DD.updateView = (canvas) => {
     // may upscale: a co-op guest mirrors the host's room, which can be smaller

@@ -10,6 +10,7 @@
   DD.use3d = params.has("3d");
   const canvas3d = document.getElementById("game3d");
   let lastDt = 0; // most recent frame dt, for 3D animation mixers
+  let camMode3d = params.get("cam") === "follow" ? "follow" : "fixed"; // 'C' toggles
 
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
@@ -1587,6 +1588,13 @@
       dr._builtVersion = DD.room.version;
     }
 
+    // Camera mode (fixed whole-room vs follow the local player).
+    if (dr.camMode !== camMode3d) dr.setCameraMode(camMode3d);
+    if (camMode3d === "follow" && game.localPlayer) {
+      const w = dr.cellToWorld(game.localPlayer.x / DD.TILE, game.localPlayer.y / DD.TILE);
+      dr.setFollowTarget(w.x, w.z);
+    }
+
     const mgr = DD.charMgr, C = DD.char3d;
     const billboards = [];
     const chars = [];
@@ -2119,6 +2127,16 @@
   if (params.get("dev") === "combat") {
     document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
     startRun("warrior");
+  }
+
+  // 'C' toggles the 3D camera between fixed (whole-room) and follow (player).
+  if (DD.use3d) {
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "c" || e.key === "C") {
+        camMode3d = camMode3d === "follow" ? "fixed" : "follow";
+        if (DD.render3d) DD.render3d.setCameraMode(camMode3d);
+      }
+    });
   }
 
   window.addEventListener("resize", () => {

@@ -112,6 +112,8 @@ export const MODELS = {
   "enemy:warrior": { url: "KayKit Skeletons/characters/gltf/Skeleton_Warrior.glb", scale: 1.7 },
   "enemy:rogue":   { url: "KayKit Skeletons/characters/gltf/Skeleton_Rogue.glb",   scale: 1.6 },
   "enemy:mage":    { url: "KayKit Skeletons/characters/gltf/Skeleton_Mage.glb",    scale: 1.6 },
+  // universal last-resort placeholder (shares Rig_Medium) for anything unmapped
+  "fallback":      { url: "KayKit Character Animations/Mannequin Character/characters/Mannequin_Medium.glb", scale: 1.76 },
 };
 
 // Map a hero classKey -> registry key (falls back to warrior/Knight).
@@ -166,9 +168,12 @@ export class CharacterManager {
       seen.add(it.entity);
       let ch = this.chars.get(it.entity);
       if (!ch) {
-        if (!this.factory.protos.has(it.modelKey)) continue; // not loaded yet
-        ch = this.factory.spawn(it.modelKey);
-        ch.root.scale.setScalar((MODELS[it.modelKey] || { scale: 1 }).scale);
+        // use the requested model, else the Mannequin fallback, else wait
+        let key = this.factory.protos.has(it.modelKey) ? it.modelKey
+          : (this.factory.protos.has("fallback") ? "fallback" : null);
+        if (!key) continue;
+        ch = this.factory.spawn(key);
+        ch.root.scale.setScalar((MODELS[key] || { scale: 1 }).scale);
         this.scene.add(ch.root);
         this.chars.set(it.entity, ch);
       }
