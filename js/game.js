@@ -10,7 +10,8 @@
   DD.use3d = params.has("3d");
   const canvas3d = document.getElementById("game3d");
   let lastDt = 0; // most recent frame dt, for 3D animation mixers
-  let camMode3d = params.get("cam") === "follow" ? "follow" : "fixed"; // 'C' toggles
+  let camMode3d = params.get("cam") === "fixed" ? "fixed" : "follow"; // follow default; 'C' toggles
+  const camTest = params.has("camtest"); // live camera-tuning controls + readout
 
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
@@ -1635,6 +1636,31 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     DD.hud.draw(ctx, game);
+    if (camTest) drawCamTest(dr);
+  }
+
+  // Live camera-tuning readout (?camtest). Adjust with arrows (elev/orbit),
+  // [ ] (zoom), - = (fov), 9 0 (character scale).
+  function drawCamTest(dr) {
+    const deg = (r) => (r * 180 / Math.PI).toFixed(1);
+    const mul = DD.charMgr ? DD.charMgr.scaleMul : 1;
+    const heroScale = 1.55 * mul;
+    const lines = [
+      "CAMERA TEST  (" + camMode3d + ")",
+      "elev   " + deg(dr.elev) + "°   [Up/Down]",
+      "orbit  " + deg(dr.camAngle) + "°   [Left/Right]",
+      "dist   " + dr._camDist.toFixed(1) + "   [ [ / ] ]",
+      "fov    " + dr.camera.fov.toFixed(0) + "   [ - / = ]",
+      "scale  " + heroScale.toFixed(2) + " (h~" + (2.54 * heroScale).toFixed(1) + "u)  [9/0]",
+      "C = toggle fixed/follow",
+    ];
+    ctx.font = "12px monospace";
+    const w = 260, h = lines.length * 16 + 12;
+    ctx.fillStyle = "rgba(10,8,18,0.78)";
+    ctx.fillRect(canvas.width - w - 8, 8, w, h);
+    ctx.fillStyle = "#9affb0";
+    ctx.textAlign = "left";
+    lines.forEach((s, i) => ctx.fillText(s, canvas.width - w, 26 + i * 16));
   }
 
   function draw() {
@@ -2130,12 +2156,31 @@
   }
 
   // 'C' toggles the 3D camera between fixed (whole-room) and follow (player).
+  // With ?camtest, arrow/bracket/etc. keys live-tune the camera + character scale
+  // and print the values so we can bake the perfect numbers.
   if (DD.use3d) {
     window.addEventListener("keydown", (e) => {
       if (e.key === "c" || e.key === "C") {
         camMode3d = camMode3d === "follow" ? "fixed" : "follow";
         if (DD.render3d) DD.render3d.setCameraMode(camMode3d);
+        return;
       }
+      if (!camTest) return;
+      const dr = DD.render3d; if (!dr) return;
+      switch (e.key) {
+        case "ArrowUp":    dr.elev = Math.min(1.5, dr.elev + 0.02); break;     // higher/steeper
+        case "ArrowDown":  dr.elev = Math.max(0.1, dr.elev - 0.02); break;     // lower/flatter
+        case "ArrowLeft":  dr.camAngle -= 0.05; break;                          // orbit
+        case "ArrowRight": dr.camAngle += 0.05; break;
+        case "[":          dr._camDist *= 1.05; break;                          // zoom out
+        case "]":          dr._camDist /= 1.05; break;                          // zoom in
+        case "-": case "_": dr.camera.fov = Math.min(90, dr.camera.fov + 1); dr.camera.updateProjectionMatrix(); break;
+        case "=": case "+": dr.camera.fov = Math.max(15, dr.camera.fov - 1); dr.camera.updateProjectionMatrix(); break;
+        case "9": if (DD.charMgr) DD.charMgr.scaleMul = Math.max(0.3, DD.charMgr.scaleMul - 0.03); break;
+        case "0": if (DD.charMgr) DD.charMgr.scaleMul = Math.min(3, DD.charMgr.scaleMul + 0.03); break;
+        default: return;
+      }
+      e.preventDefault();
     });
   }
 

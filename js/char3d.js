@@ -102,18 +102,18 @@ class Character {
 // Skeletons are a temporary stand-in for all enemies (all share Rig_Medium, so
 // the same clip library animates them).
 export const MODELS = {
-  // player classes
-  "class:warrior": { url: "KayKit Adventurers/Characters/gltf/Knight.glb",  scale: 1.76 },
-  "class:mage":    { url: "KayKit Adventurers/Characters/gltf/Mage.glb",    scale: 1.76 },
-  "class:ranger":  { url: "KayKit Adventurers/Characters/gltf/Ranger.glb",  scale: 1.76 },
-  "class:rogue":   { url: "KayKit Adventurers/Characters/gltf/Rogue.glb",   scale: 1.76 },
+  // player classes (heroes ~2.54u native -> ~3.9u at 1.55, just under the 4u wall)
+  "class:warrior": { url: "KayKit Adventurers/Characters/gltf/Knight.glb",  scale: 1.55 },
+  "class:mage":    { url: "KayKit Adventurers/Characters/gltf/Mage.glb",    scale: 1.55 },
+  "class:ranger":  { url: "KayKit Adventurers/Characters/gltf/Ranger.glb",  scale: 1.55 },
+  "class:rogue":   { url: "KayKit Adventurers/Characters/gltf/Rogue.glb",   scale: 1.55 },
   // enemies — KayKit Skeletons (temporary; swap freely)
-  "enemy:default": { url: "KayKit Skeletons/characters/gltf/Skeleton_Minion.glb",  scale: 1.6 },
-  "enemy:warrior": { url: "KayKit Skeletons/characters/gltf/Skeleton_Warrior.glb", scale: 1.7 },
-  "enemy:rogue":   { url: "KayKit Skeletons/characters/gltf/Skeleton_Rogue.glb",   scale: 1.6 },
-  "enemy:mage":    { url: "KayKit Skeletons/characters/gltf/Skeleton_Mage.glb",    scale: 1.6 },
+  "enemy:default": { url: "KayKit Skeletons/characters/gltf/Skeleton_Minion.glb",  scale: 1.45 },
+  "enemy:warrior": { url: "KayKit Skeletons/characters/gltf/Skeleton_Warrior.glb", scale: 1.55 },
+  "enemy:rogue":   { url: "KayKit Skeletons/characters/gltf/Skeleton_Rogue.glb",   scale: 1.45 },
+  "enemy:mage":    { url: "KayKit Skeletons/characters/gltf/Skeleton_Mage.glb",    scale: 1.45 },
   // universal last-resort placeholder (shares Rig_Medium) for anything unmapped
-  "fallback":      { url: "KayKit Character Animations/Mannequin Character/characters/Mannequin_Medium.glb", scale: 1.76 },
+  "fallback":      { url: "KayKit Character Animations/Mannequin Character/characters/Mannequin_Medium.glb", scale: 1.55 },
 };
 
 // Map a hero classKey -> registry key (falls back to warrior/Knight).
@@ -144,6 +144,7 @@ export class CharacterManager {
     this.scene = scene;
     this.factory = factory;
     this.chars = new Map(); // entity -> Character
+    this.scaleMul = 1;      // live global scale multiplier (camera-tuning)
   }
 
   // Preload the clip library + every registry model. Resilient: a single bad
@@ -173,10 +174,11 @@ export class CharacterManager {
           : (this.factory.protos.has("fallback") ? "fallback" : null);
         if (!key) continue;
         ch = this.factory.spawn(key);
-        ch.root.scale.setScalar((MODELS[key] || { scale: 1 }).scale);
+        ch._baseScale = (MODELS[key] || { scale: 1 }).scale;
         this.scene.add(ch.root);
         this.chars.set(it.entity, ch);
       }
+      ch.root.scale.setScalar(ch._baseScale * this.scaleMul); // live-tunable
       ch.root.position.set(it.x, 0, it.z);
       ch.root.rotation.y = it.rotationY;
       ch.play(it.clip, { once: it.once });
