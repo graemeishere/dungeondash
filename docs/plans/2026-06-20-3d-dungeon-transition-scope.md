@@ -104,17 +104,25 @@ untouched by the visual change).
 - Verified headless: live `?3d&dev=combat` renders dungeon + warrior billboard + HUD
   correctly, no errors. (The `e.includes` console line is pre-existing peerjs noise.)
 
-**Phase 2 — Entities as billboards (≈3–5 days). 🟡 STARTED (with Phase 1).**
-- ✅ `render3d.js` billboard layer: per-entity `THREE.Sprite` pool, nearest-filtered
-  `CanvasTexture`. `game.js captureEntity()` reuses each entity's existing 2D
-  `draw()` into an offscreen canvas → stood up on the floor via `setEntities()`.
-  Reuses ALL existing sprite art (equipment, healthbars, swings) for free.
-- ⬜ To confirm on a real device: enemy/projectile billboards (same code path as the
-  player, but headless virtual-time doesn't advance spawn timers so they weren't
-  visually captured). Depth-sort vs. wall occlusion, shadow-on-billboard polish.
-- ⬜ Known caveat: pointer-aim screen→world mapping still uses the 2D transform, so
-  mouse aiming is off under the 3D camera (movement/keys fine). Fix with the camera
-  projection next.
+**Phase 2 — Entities in 3D. PIVOTED to real 3D characters (2026-06-21).**
+Billboards were the interim plan *while we had no character models*. The user added
+the CC0 **KayKit Adventurers** + **Character Animations** packs, so we go straight to
+real animated 3D heroes and the billboard path becomes throwaway scaffolding.
+- ✅ Interim billboard layer still exists in `render3d.js`/`game.js` (`captureEntity`,
+  `setEntities`) — keeps `?3d` coherent until characters are wired in; remove later.
+- ✅ Character spike (de-risk, same as Phase 0): `js/char3d.js` `CharacterFactory`
+  loads the shared `Rig_Medium` clip library once and binds per-character via
+  `AnimationMixer`; `SkeletonUtils.clone` for skinned instancing. `char3d.html`
+  drops a Knight in a room, cycles Idle/Walk/Run/Attack/Hit/Death/Spawn.
+- ✅ Retargeting proven browser-free: heroes carry no clips but share the Mannequin's
+  23-joint rig; all 23 animated bones exist in the Knight (0 missing) → clips bind
+  directly. Character height ~2.54u (feet at y=0), Kenney cell ~4u.
+- ⬜ Next: visual scale/facing pass in the spike; then wire `char3d` into the live
+  `?3d` path — map class→model (warrior→Knight, mage→Mage, ranger→Ranger, rogue→Rogue),
+  drive clips from entity state (idle/move/attack/hit/death), face movement dir,
+  replace the player billboard. Enemies stay billboards until a monster pack is added.
+- ⬜ Still open: pointer-aim screen→world under the 3D camera (movement/keys fine);
+  mobile payload now includes rigged GLBs — watch the budget.
 
 **Phase 2 — Entities as billboards (≈3–5 days).**
 - Render player/enemies/projectiles/items as camera-facing textured quads sourced
