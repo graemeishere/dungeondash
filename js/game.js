@@ -12,6 +12,7 @@
   let lastDt = 0; // most recent frame dt, for 3D animation mixers
   let camMode3d = params.get("cam") === "fixed" ? "fixed" : "follow"; // follow default; 'C' toggles
   const camTest = params.has("camtest"); // live camera-tuning controls + readout
+  const safeMode = camTest || params.has("safe"); // freeze + disarm enemies for tweaking
 
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
@@ -1173,8 +1174,8 @@
     game.hintT -= dt;
     game.shake = Math.max(0, game.shake - 30 * dt);
 
-    // staggered skeleton spawns
-    for (let i = game.spawnQueue.length - 1; i >= 0; i--) {
+    // staggered skeleton spawns (suppressed in safe mode for camera tweaking)
+    for (let i = game.spawnQueue.length - 1; !safeMode && i >= 0; i--) {
       const s = game.spawnQueue[i];
       s.delay -= dt;
       if (s.delay <= 0) {
@@ -1204,13 +1205,14 @@
       }
     }
 
-    for (const sk of game.skeletons) if (!sk.dead) sk.update(dt, game);
+    // safe mode: don't run enemy AI/attacks so they stay frozen and harmless
+    if (!safeMode) for (const sk of game.skeletons) if (!sk.dead) sk.update(dt, game);
     game.skeletons = game.skeletons.filter((s) => !s.dead);
 
     for (const pr of game.projectiles) if (!pr.dead) pr.update(dt, game);
     game.projectiles = game.projectiles.filter((p) => !p.dead);
 
-    for (const es of game.enemyShots) if (!es.dead) es.update(dt, game);
+    if (!safeMode) for (const es of game.enemyShots) if (!es.dead) es.update(dt, game);
     game.enemyShots = game.enemyShots.filter((p) => !p.dead);
 
     for (const pk of game.pickups) if (!pk.dead) pk.update(dt, game);
@@ -1639,8 +1641,34 @@
     if (camTest) drawCamTest(dr);
   }
 
+  // On-screen camera buttons for mobile tuning (?camtest). Touch-friendly DOM
+  // overlay; the live values are shown by drawCamTest().
+  function setupCamButtons() {
+    const bar = document.createElement("div");
+    bar.style.cssText = "position:fixed;left:0;right:0;bottom:8px;z-index:30;display:flex;" +
+      "flex-wrap:wrap;gap:6px;justify-content:center;pointer-events:none;";
+    const mk = (label, fn) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.style.cssText = "pointer-events:auto;min-width:58px;padding:11px 12px;font:bold 13px monospace;" +
+        "background:rgba(20,16,30,0.88);color:#9affb0;border:1px solid #4a4368;border-radius:8px;touch-action:manipulation;";
+      b.addEventListener("click", (e) => { e.preventDefault(); const dr = DD.render3d; if (dr) fn(dr); });
+      bar.appendChild(b);
+    };
+    mk("Zoom−", (dr) => { dr._camDist *= 1.06; });
+    mk("Zoom+", (dr) => { dr._camDist /= 1.06; });
+    mk("FOV−", (dr) => { dr.camera.fov = Math.max(15, dr.camera.fov - 2); dr.camera.updateProjectionMatrix(); });
+    mk("FOV+", (dr) => { dr.camera.fov = Math.min(90, dr.camera.fov + 2); dr.camera.updateProjectionMatrix(); });
+    mk("Tilt−", (dr) => { dr.elev = Math.max(0.1, dr.elev - 0.03); });
+    mk("Tilt+", (dr) => { dr.elev = Math.min(1.5, dr.elev + 0.03); });
+    mk("Scale−", () => { if (DD.charMgr) DD.charMgr.scaleMul = Math.max(0.3, DD.charMgr.scaleMul - 0.03); });
+    mk("Scale+", () => { if (DD.charMgr) DD.charMgr.scaleMul = Math.min(3, DD.charMgr.scaleMul + 0.03); });
+    mk("Cam", () => { camMode3d = camMode3d === "follow" ? "fixed" : "follow"; if (DD.render3d) DD.render3d.setCameraMode(camMode3d); });
+    document.body.appendChild(bar);
+  }
+
   // Live camera-tuning readout (?camtest). Adjust with arrows (elev/orbit),
-  // [ ] (zoom), - = (fov), 9 0 (character scale).
+  // [ ] (zoom), - = (fov), 9 0 (character scale) — or the on-screen buttons.
   function drawCamTest(dr) {
     const deg = (r) => (r * 180 / Math.PI).toFixed(1);
     const mul = DD.charMgr ? DD.charMgr.scaleMul : 1;
@@ -2182,6 +2210,7 @@
       }
       e.preventDefault();
     });
+    if (camTest) setupCamButtons();
   }
 
   window.addEventListener("resize", () => {
