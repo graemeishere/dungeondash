@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Dungeon Dash — KayKit character spike</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0812; }
+    #c { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    #hud { position: fixed; top: 8px; left: 8px; z-index: 10; font: 12px/1.5 monospace;
+      color: #9affb0; background: rgba(10,8,18,0.72); padding: 8px 10px; border-radius: 6px;
+      border: 1px solid #2c2640; white-space: pre; pointer-events: none; text-shadow: 0 1px 2px #000; }
+    #err { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center;
+      color: #ff8a8a; font: 13px/1.5 monospace; background: rgba(10,8,18,0.92); padding: 24px; text-align: center; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "./js/lib/three/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">booting…</div>
+  <div id="err"></div>
+
+  <script type="module">
+    import { DungeonRenderer } from "./js/render3d.js";
+    import { CharacterFactory } from "./js/char3d.js";
+
+    const hud = document.getElementById("hud");
+    const errEl = document.getElementById("err");
+    const fail = (m) => { errEl.style.display = "flex"; errEl.textContent = m + "\n\n(serve over http; file:// won't load modules/GLBs)"; console.error(m); };
+    window.addEventListener("error", (e) => fail("Error: " + (e.message || e)));
+
+    // small room so the hero is prominent
+    const W = 12, H = 9, FLOOR = 0, WALL = 1, DOOR = 2;
+    const tiles = new Array(W * H).fill(FLOOR);
+    const set = (x, y, v) => { tiles[y * W + x] = v; };
+    for (let x = 0; x < W; x++) { set(x, 0, WALL); set(x, H - 1, WALL); }
+    for (let y = 0; y < H; y++) { set(0, y, WALL); set(W - 1, y, WALL); }
+    set(W / 2 - 1, 0, DOOR); set(W / 2, 0, DOOR);
+
+    const canvas = document.getElementById("c");
+    const dr = new DungeonRenderer(canvas);
+
+    // clips to cycle with number keys
+    const CYCLE = ["Idle_A", "Walking_A", "Running_A", "Melee_1H_Attack_Chop", "Hit_A", "Death_A", "Spawn_Ground"];
+    let scale = 1.2, facing = Math.PI, clipIdx = 0;
+
+    (async function main() {
+      try {
+        await dr.ready;
+        dr.buildRoom({ tiles, w: W, h: H });
+        const cf = new CharacterFactory();
+        await cf.loadClips();
+        await cf.loadModel("Knight");
+        var hero = cf.spawn("Knight");
+        hero.root.position.copy(dr.cellToWorld(W / 2, H / 2)); // feet on floor (y=0)
+        hero.root.scale.setScalar(scale);
+        hero.root.rotation.y = facing;
+        dr.scene.add(hero.root);
+        hero.play("Idle_A");
+      } catch (e) { return fail("load failed: " + (e && e.message ? e.message : e)); }
+
+      addEventListener("keydown", (e) => {
+        if (e.key >= "1" && e.key <= "7") { clipIdx = +e.key - 1; const n = CYCLE[clipIdx];
+          hero.play(n, { once: /Attack|Hit|Death|Spawn/.test(n) }); }
+        else if (e.key === "+" || e.key === "=") { scale *= 1.1; hero.root.scale.setScalar(scale); }
+        else if (e.key === "-") { scale /= 1.1; hero.root.scale.setScalar(scale); }
+        else if (e.key === "ArrowLeft") { facing -= 0.2; hero.root.rotation.y = facing; }
+        else if (e.key === "ArrowRight") { facing += 0.2; hero.root.rotation.y = facing; }
+      });
+
+      const onResize = () => dr.resize(innerWidth, innerHeight);
+      addEventListener("resize", onResize); onResize();
+
+      let last = performance.now(), frames = 0, acc = 0, fps = 0;
+      function tick(now) {
+        const dt = Math.max(0, (now - last) / 1000); last = now;
+        frames++; acc += dt; if (acc >= 0.5) { fps = frames / acc; frames = 0; acc = 0; }
+        hero.update(dt);
+        dr.render();
+        hud.textContent =
+          `FPS     ${fps.toFixed(0)}\n` +
+          `clip    ${CYCLE[clipIdx]}  (keys 1-7)\n` +
+          `scale   ${scale.toFixed(2)}  (+/-)\n` +
+          `facing  ${facing.toFixed(2)}  (←/→)\n` +
+          `height  ~${(2.54 * scale).toFixed(2)} units (cell=${dr.CELL.toFixed(1)}, wall=${dr.wallH.toFixed(1)})`;
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

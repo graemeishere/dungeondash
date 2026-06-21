@@ -153,6 +153,9 @@ export class DungeonRenderer {
 
   setOrbit(angle) { this.camAngle = angle; }
 
+  // Public: grid cell (fractional ok) -> world-space position on the floor.
+  cellToWorld(gx, gy) { return this._cellWorld(gx, gy); }
+
   _makeSprite() {
     const tex = new THREE.CanvasTexture(document.createElement("canvas"));
     tex.magFilter = THREE.NearestFilter; // keep the pixel art crisp
