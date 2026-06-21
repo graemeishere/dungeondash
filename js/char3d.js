@@ -45,6 +45,15 @@ export class CharacterFactory {
     return this.protos.get(name);
   }
 
+  // Load a model under an arbitrary key (used by the swappable registry below).
+  async loadModelByKey(key, url) {
+    if (!this.protos.has(key)) {
+      const g = await this.loader.loadAsync(encodeURI(url));
+      this.protos.set(key, g.scene);
+    }
+    return this.protos.get(key);
+  }
+
   clipNames() { return [...this.clips.keys()]; }
 
   // Spawn an independently-animated instance of a previously-loaded model.
@@ -85,4 +94,82 @@ class Character {
   }
 
   update(dt) { this.mixer.update(dt); }
+}
+
+// ---------------------------------------------------------------------------
+// Swappable model registry. To change which 3D model represents a hero class
+// or an enemy, edit MODELS / enemyModelKey() here — nothing else needs to know.
+// Skeletons are a temporary stand-in for all enemies (all share Rig_Medium, so
+// the same clip library animates them).
+export const MODELS = {
+  // player classes
+  "class:warrior": { url: "KayKit Adventurers/Characters/gltf/Knight.glb",  scale: 1.76 },
+  "class:mage":    { url: "KayKit Adventurers/Characters/gltf/Mage.glb",    scale: 1.76 },
+  "class:ranger":  { url: "KayKit Adventurers/Characters/gltf/Ranger.glb",  scale: 1.76 },
+  "class:rogue":   { url: "KayKit Adventurers/Characters/gltf/Rogue.glb",   scale: 1.76 },
+  // enemies — KayKit Skeletons (temporary; swap freely)
+  "enemy:default": { url: "KayKit Skeletons/characters/gltf/Skeleton_Minion.glb",  scale: 1.6 },
+  "enemy:warrior": { url: "KayKit Skeletons/characters/gltf/Skeleton_Warrior.glb", scale: 1.7 },
+  "enemy:rogue":   { url: "KayKit Skeletons/characters/gltf/Skeleton_Rogue.glb",   scale: 1.6 },
+  "enemy:mage":    { url: "KayKit Skeletons/characters/gltf/Skeleton_Mage.glb",    scale: 1.6 },
+};
+
+// Map a hero classKey -> registry key (falls back to warrior/Knight).
+export function classModelKey(classKey) {
+  const k = "class:" + classKey;
+  return MODELS[k] ? k : "class:warrior";
+}
+
+// Map an enemy kind string -> registry key. Pure routing; edit freely.
+export function enemyModelKey(kind = "") {
+  if (/mage|warlock|necromancer|shaman|shade/i.test(kind)) return "enemy:mage";
+  if (/arch|rogue|bomber|bomb/i.test(kind))                return "enemy:rogue";
+  if (/zombie|berserker|brute|warrior|melee|goblin/i.test(kind)) return "enemy:warrior";
+  return "enemy:default";
+}
+
+// Shared clip names per logical animation state (Rig_Medium clip library).
+export const ANIM = {
+  idle: "Idle_A", walk: "Walking_A", run: "Running_A",
+  attack: "Melee_1H_Attack_Chop", hit: "Hit_A", death: "Death_A", spawn: "Spawn_Ground",
+};
+
+// Drives a pool of Characters from a per-frame list of placement items. Each
+// item: { entity, modelKey, x, z, rotationY, clip, once }. Entities not present
+// in a sync() call are removed from the scene.
+export class CharacterManager {
+  constructor(scene, factory) {
+    this.scene = scene;
+    this.factory = factory;
+    this.chars = new Map(); // entity -> Character
+  }
+
+  // Preload every registry model + the clip library.
+  async preloadAll() {
+    await this.factory.loadClips();
+    await Promise.all(Object.entries(MODELS).map(([k, c]) => this.factory.loadModelByKey(k, c.url)));
+    return this;
+  }
+
+  sync(items, dt) {
+    const seen = new Set();
+    for (const it of items) {
+      seen.add(it.entity);
+      let ch = this.chars.get(it.entity);
+      if (!ch) {
+        if (!this.factory.protos.has(it.modelKey)) continue; // not loaded yet
+        ch = this.factory.spawn(it.modelKey);
+        ch.root.scale.setScalar((MODELS[it.modelKey] || { scale: 1 }).scale);
+        this.scene.add(ch.root);
+        this.chars.set(it.entity, ch);
+      }
+      ch.root.position.set(it.x, 0, it.z);
+      ch.root.rotation.y = it.rotationY;
+      ch.play(it.clip, { once: it.once });
+      ch.update(dt);
+    }
+    for (const [ent, ch] of this.chars) {
+      if (!seen.has(ent)) { this.scene.remove(ch.root); this.chars.delete(ent); }
+    }
+  }
 }

@@ -9,6 +9,7 @@
   const params = new URLSearchParams(location.search);
   DD.use3d = params.has("3d");
   const canvas3d = document.getElementById("game3d");
+  let lastDt = 0; // most recent frame dt, for 3D animation mixers
 
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
@@ -1554,6 +1555,29 @@
     };
   }
 
+  // Y-rotation so a model (forward = +Z at rot 0) faces a 2D direction. The 2D
+  // y axis maps to world Z, x to world X, so forward (sin a, cos a) = (dx, dz).
+  function faceFromAim(aim) { return Math.atan2(Math.cos(aim), Math.sin(aim)); }
+  function faceFromMove(e) {
+    const dx = e.x - (e.__px == null ? e.x : e.__px);
+    const dy = e.y - (e.__py == null ? e.y : e.__py);
+    e.__px = e.x; e.__py = e.y;
+    if (dx * dx + dy * dy > 0.02) e.__face = Math.atan2(dx, dy);
+    return e.__face == null ? Math.PI : e.__face;
+  }
+  function playerClip(p) {
+    const A = DD.char3d.ANIM;
+    if (p.downed) return A.death;
+    if (p.swingT > 0) return A.attack;
+    return p.moving ? A.run : A.idle;
+  }
+  function enemyClip(s) {
+    const A = DD.char3d.ANIM;
+    if (s.state === "spawn") return A.spawn;
+    if (s.state === "windup" || s.state === "fuse") return A.attack;
+    return s.state === "chase" ? A.run : A.idle;
+  }
+
   function drawCombat3D() {
     const dr = DD.render3d;
     // Rebuild the mesh only when the room layout actually changes.
@@ -1562,16 +1586,41 @@
       dr.buildRoom({ tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h });
       dr._builtVersion = DD.room.version;
     }
-    const items = [];
-    const add = (e) => { if (e && !e.dead) items.push(captureEntity(e)); };
-    for (const p of game.players) add(p);
-    for (const s of game.skeletons) add(s);
-    for (const c of game.chests) add(c);
-    if (game.shopkeeper) add(game.shopkeeper);
-    for (const pk of game.pickups) add(pk);
-    for (const pr of game.projectiles) add(pr);
-    for (const es of game.enemyShots) add(es);
-    dr.setEntities(items);
+
+    const mgr = DD.charMgr, C = DD.char3d;
+    const billboards = [];
+    const chars = [];
+    const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
+    const asChar = (e, modelKey, rotationY, clip, once) => {
+      const w = worldOf(e);
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip, once });
+    };
+
+    // Players + skeletons render as 3D characters once the models have loaded;
+    // until then (or if a model is missing) they fall back to billboards.
+    for (const p of game.players) {
+      if (!p || p.dead) continue;
+      const mk = C && C.classModelKey(p.classKey);
+      if (mgr && mk && mgr.factory.protos.has(mk))
+        asChar(p, mk, faceFromAim(p.aim), playerClip(p), p.swingT > 0 || p.downed);
+      else billboards.push(captureEntity(p));
+    }
+    for (const s of game.skeletons) {
+      if (!s || s.dead) continue;
+      const mk = C && C.enemyModelKey(s.kind);
+      if (mgr && mk && mgr.factory.protos.has(mk))
+        asChar(s, mk, faceFromMove(s), enemyClip(s), s.state === "spawn" || s.state === "windup" || s.state === "fuse");
+      else billboards.push(captureEntity(s));
+    }
+    // Entities with no 3D model stay as billboards.
+    for (const c of game.chests) if (c && !c.dead) billboards.push(captureEntity(c));
+    if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
+    for (const pk of game.pickups) billboards.push(captureEntity(pk));
+    for (const pr of game.projectiles) billboards.push(captureEntity(pr));
+    for (const es of game.enemyShots) billboards.push(captureEntity(es));
+
+    if (mgr) mgr.sync(chars, lastDt);
+    dr.setEntities(billboards);
     dr.render();
 
     // 2D canvas becomes a transparent HUD overlay in screen space.
@@ -2099,6 +2148,7 @@
     // corrupt spawn/animation timers).
     const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 30));
     last = now;
+    lastDt = dt; // exposed to the 3D draw path for animation mixers
     update(dt);
     draw();
 
