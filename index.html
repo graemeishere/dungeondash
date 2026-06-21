@@ -9,6 +9,9 @@
 </head>
 <body>
   <div id="wrap">
+    <!-- 3D dungeon layer (only used when the URL has ?3d); sits behind #game,
+         which becomes transparent so the WebGL render shows through. -->
+    <canvas id="game3d"></canvas>
     <canvas id="game" width="960" height="576"></canvas>
 
     <div id="menu" class="overlay">
@@ -127,43 +130,6 @@
       <button id="btn-stats-close" class="small-btn">Close</button>
     </div>
 
-    <div id="trader" class="overlay hidden">
-      <h1 class="small">THE TRADER</h1>
-      <p id="tr-gold" class="tagline"></p>
-      <div id="tr-body">
-        <div id="tr-col-buy">
-          <div class="inv-slot-label">FOR SALE</div>
-          <div id="tr-shop"></div>
-        </div>
-        <div id="tr-col-sell">
-          <div class="inv-slot-label">YOUR BAG &mdash; SELL FOR GOLD</div>
-          <div id="tr-inv"></div>
-        </div>
-      </div>
-      <button id="btn-trader-close" class="small-btn">Close</button>
-    </div>
-
-    <div id="questgiver" class="overlay hidden">
-      <h1 class="small">QUEST GIVER</h1>
-      <p id="qg-sub" class="tagline"></p>
-      <div id="qg-body">
-        <div id="qg-col-active">
-          <div class="inv-slot-label">ACTIVE</div>
-          <div id="qg-active"></div>
-        </div>
-        <div id="qg-col-avail">
-          <div class="inv-slot-label">AVAILABLE</div>
-          <div id="qg-avail"></div>
-        </div>
-      </div>
-      <button id="btn-quest-close" class="small-btn">Close</button>
-    </div>
-
-    <div id="map-coop" class="hidden">
-      <button id="btn-map-host" class="small-btn">Host Co-op</button>
-      <button id="btn-map-join" class="small-btn">Join Co-op</button>
-    </div>
-
     <div id="inventory" class="overlay hidden">
       <h1 class="small">INVENTORY</h1>
       <div id="inv-body">
@@ -189,6 +155,11 @@
     <div id="inv-tooltip" class="inv-tooltip hidden"></div>
   </div>
 
+  <!-- Resolves the bare "three" specifier for the 3D renderer module. -->
+  <script type="importmap">
+  { "imports": { "three": "./js/lib/three/three.module.js" } }
+  </script>
+
   <script src="js/lib/peerjs.min.js"></script>
   <script src="js/util.js"></script>
   <script src="js/sprites.js"></script>
@@ -203,5 +174,31 @@
   <script src="js/items.js"></script>
   <script src="js/hud.js"></script>
   <script src="js/game.js"></script>
+
+  <!-- 3D boot: only spins up when ?3d is present. Creates the renderer and
+       hands it to the (classic-script) game via window.DD; game.js engages the
+       3D path once DD.render3d.proto is loaded. -->
+  <script type="module">
+    if (window.DD && window.DD.use3d) {
+      const { DungeonRenderer } = await import("./js/render3d.js");
+      const dr = new DungeonRenderer(document.getElementById("game3d"));
+      window.DD.render3d = dr;
+      try { await dr.ready; } catch (e) { console.error("3D kit load failed:", e); }
+      // Load the KayKit characters/animations in the background; game.js falls
+      // back to billboards for players/enemies until DD.charMgr is ready.
+      try {
+        const m = await import("./js/char3d.js");
+        const mgr = new m.CharacterManager(dr.scene, new m.CharacterFactory());
+        // expose the swappable mappings to the (classic-script) game
+        window.DD.char3d = { classModelKey: m.classModelKey, enemyModelKey: m.enemyModelKey, ANIM: m.ANIM };
+        // Set charMgr immediately and load models in the background, so each
+        // character pops in as its model arrives instead of waiting for all.
+        window.DD.charMgr = mgr;
+        mgr.preloadAll()
+          .then(() => console.log("char3d: ready"))
+          .catch((e) => console.error("3D character preload failed:", e));
+      } catch (e) { console.error("3D character module failed:", e); }
+    }
+  </script>
 </body>
 </html>

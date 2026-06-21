@@ -3,10 +3,25 @@
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
+  // Opt-in 3D dungeon rendering (?3d). DD.render3d is supplied by the module
+  // boot in index.html once the Kenney kit has loaded. Set before that module
+  // runs so it knows whether to spin up at all.
+  const params = new URLSearchParams(location.search);
+  DD.use3d = params.has("3d");
+  const canvas3d = document.getElementById("game3d");
+  let lastDt = 0; // most recent frame dt, for 3D animation mixers
+  let camMode3d = params.get("cam") === "fixed" ? "fixed" : "follow"; // follow default; 'C' toggles
+  const camTest = params.has("camtest"); // live camera-tuning controls + readout
+
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
     canvas.height = Math.max(320, window.innerHeight);
     ctx.imageSmoothingEnabled = false; // resets on resize
+    if (DD.use3d && canvas3d) {
+      canvas3d.width = canvas.width;
+      canvas3d.height = canvas.height;
+      if (DD.render3d) DD.render3d.resize(canvas.width, canvas.height);
+    }
     DD.updateView(canvas);
   }
 
@@ -104,23 +119,12 @@
       faction: d.faction,
       enemyLabel: d.enemyLabel,
       id: d.id,
-      multiFaction: !!d.multiFaction,
-      bossFaction: d.bossFaction || null,
       boss: tier.bossName, // alias used by Boss constructor
     };
   }
 
   // Hero level required to enter each tier (bands are 1-10 / 11-20 / 21-30).
   const TIER_REQ = [1, 11, 21];
-
-  // The three "real" dungeons. townRaid + finale are synthetic and excluded
-  // from champion progress.
-  const CORE_DUNGEONS = ["catacombs", "goblinMines", "crypt"];
-
-  // Champion = every core dungeon cleared at its top tier.
-  function isChampion(hero) {
-    return CORE_DUNGEONS.every((id) => DD.profile.hasClear(hero, id, DUNGEONS[id].tiers.length - 1));
-  }
 
   const ELITE_NAMES = {
     skeleton: ["GRAVE WARDEN", "TOMB HERALD", "MARROW FIEND"],
@@ -152,7 +156,6 @@
     pendingLevelUps: 0,
     gold: 0,
     kills: 0,
-    killsByFaction: { skeleton: 0, goblin: 0, undead: 0 },
     shake: 0,
     hintT: 0,
     endT: 0,          // delay before showing the result overlay
@@ -167,13 +170,8 @@
     lobbyDungeonId: null,
     townNpcs: [],
     nearbyNpc: null,
-    shopStock: [],
     raidMode: false,
     raidFaction: null,
-    justWonGame: false, // set the run you become Champion (first full clear)
-    justWonFinale: false, // set when you beat the Champion-only finale
-    coopGuest: false,   // this client is a co-op guest in its own between-runs town
-    coopReward: null,   // last co-op run reward applied to the guest's hero
 
     get localPlayer() { return this.players[this.localIndex]; },
     enemies() { return this.skeletons; },
@@ -255,16 +253,6 @@
     game.state = "play";
   }
 
-  // Build the run party: solo, or host + guest avatar when a co-op guest is
-  // connected. The guest's avatar is driven by RemoteInput (its streamed input).
-  function buildRunParty(classKey, hero) {
-    const party = [new DD.Player(classKey, 0, 0, DD.input, hero)];
-    if (DD.net.role === "host" && DD.net.connected) {
-      party.push(new DD.Player(coopGuestClass || "warrior", 0, 0, new DD.RemoteInput()));
-    }
-    return party;
-  }
-
   function startRun(classKey, dungeonId = "catacombs", tier = 0) {
     clearSave();
     const hero = DD.profile.getOrCreateHero(classKey);
@@ -277,14 +265,13 @@
     game.townNpcs = [];
     game.nearbyNpc = null;
     DD.room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
-    game.players = buildRunParty(classKey, hero);
+    game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
     game.localIndex = 0;
     game.floor = 0;
     game.xp = hero.xp || 0;
     game.level = hero.level || 1;
     game.gold = 0;
     game.kills = 0;
-    game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = 0;
     loadRoom(0);
     freshGameState();
@@ -318,7 +305,6 @@
     game.level = hero ? (hero.level || 1) : (save.level || 1);
     game.gold = save.gold;
     game.kills = save.kills;
-    game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = save.time;
     loadRoom(game.plan().length - 1);
     freshGameState();
@@ -356,8 +342,6 @@
     const areaScale = Math.min(1, (DD.ROOM_W * DD.ROOM_H) / (30 * 18) + 0.25);
 
     const faction = cfg.faction || "skeleton";
-    // multi-faction rooms (the finale) tag each enemy by its kind's own faction
-    const factionFor = (kind) => cfg.multiFaction ? (DD.KIND_FACTION[kind] || faction) : faction;
     if (game.roomType === "combat") {
       const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
       const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
@@ -365,28 +349,28 @@
       for (let i = 0; i < count; i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         const kind = i > 1 && Math.random() < 0.4 ? DD.choice(kinds) : kinds[0];
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind, faction: factionFor(kind) });
+        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind, faction });
       }
       const bruteKind = kinds.find((k) => k !== "shade") || "melee";
       for (let i = 0; i < tier + Math.max(0, game.floor - 1); i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind, faction: factionFor(bruteKind) });
+        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind, faction });
       }
     } else if (game.roomType === "elite") {
       const eliteKinds = cfg.eliteKinds || cfg.kinds || ["melee"];
       const eliteKind = DD.choice(eliteKinds);
-      const eliteNames = ELITE_NAMES[factionFor(eliteKind)] || ELITE_NAMES.skeleton || ["ELITE"];
+      const eliteNames = ELITE_NAMES[faction] || ELITE_NAMES.skeleton || ["ELITE"];
       const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
       game.spawnQueue.push({
-        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind, faction: factionFor(eliteKind),
+        x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind, faction,
         elite: true, name: DD.choice(eliteNames),
       });
       const minionKinds = (cfg.kinds || ["melee"]).filter((k) => k !== "shade");
       for (let i = 0; i < 2; i++) {
         const mp = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
-        const mk = DD.choice(minionKinds);
         game.spawnQueue.push({
-          x: mp.x, y: mp.y, delay: 1.6 + i * 0.5, big: false, kind: mk, faction: factionFor(mk),
+          x: mp.x, y: mp.y, delay: 1.6 + i * 0.5, big: false,
+          kind: DD.choice(minionKinds), faction,
         });
       }
     } else if (game.roomType === "treasure") {
@@ -412,8 +396,7 @@
       }
     } else if (game.roomType === "boss") {
       game.skeletons.push(new DD.Boss(DD.WIDTH / 2, DD.HEIGHT / 2 - 60, {
-        hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
-        faction: cfg.bossFaction || cfg.faction,
+        hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind, faction: cfg.faction,
       }));
     } else if (game.roomType === "shop") {
       game.roomCleared = true;
@@ -483,8 +466,6 @@
 
   function endRun(won) {
     clearSave();
-    game.justWonGame = false;
-    game.justWonFinale = false;
     if (game.hero) {
       game.hero.level = game.level;
       game.hero.xp = game.xp;
@@ -492,26 +473,7 @@
       if (won) game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
       game.hero.kills = (game.hero.kills || 0) + game.kills;
       if (!won) game.hero.deaths = (game.hero.deaths || 0) + 1;
-      const clearedDungeon = won && game.dungeonId !== "townRaid" ? game.dungeonId : null;
-      DD.profile.progressQuests({
-        kills: game.kills,
-        killsByFaction: game.killsByFaction,
-        won,
-        bossKill: clearedDungeon,
-        clearDungeon: clearedDungeon,
-        repelRaid: (won && game.raidMode) ? 1 : 0,
-      });
-      // record the dungeon+tier clear and check for game victory
-      if (clearedDungeon) {
-        DD.profile.markClear(game.hero, game.dungeonId, game.tier);
-        if (game.dungeonId === "finale") {
-          game.hero.finaleWon = true;
-          game.justWonFinale = true;
-        } else if (!game.hero.victory && isChampion(game.hero)) {
-          game.hero.victory = true;
-          game.justWonGame = true;
-        }
-      }
+      DD.profile.progressQuests({ kills: game.kills, floor: game.floor + (won ? 1 : 0), won });
       DD.profile.save();
     }
     game.state = won ? "won" : "lost";
@@ -523,10 +485,8 @@
       DD.audio.lose();
     }
     if (DD.net.role === "host" && DD.net.connected) {
-      // the guest earns its own share for its hero: run gold on a win + a little XP
-      const reward = { gold: won ? game.gold : 0, xp: won ? Math.round(game.kills * 1.5) : 0 };
       DD.net.send({
-        t: "end", won, reward,
+        t: "end", won,
         stats: { level: game.level, floor: game.floor, ri: game.roomIndex, kills: game.kills, gold: game.gold, time: game.time },
       });
     }
@@ -534,43 +494,15 @@
 
   function showResult() {
     const won = game.state === "won";
-    if (game.justWonFinale) {
-      resultTitle.textContent = "THE REALM IS SAVED!";
-      resultTitle.style.color = "#ff9234";
-    } else if (game.justWonGame) {
-      resultTitle.textContent = "DUNGEON DASH CHAMPION!";
-      resultTitle.style.color = "#ffd95e";
-    } else {
-      resultTitle.textContent = won ? "DUNGEON CLEARED!" : "YOU DIED";
-      resultTitle.style.color = won ? "#ffd95e" : "#ff5252";
-    }
+    resultTitle.textContent = won ? "DUNGEON CLEARED!" : "YOU DIED";
+    resultTitle.style.color = won ? "#ffd95e" : "#ff5252";
     const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
     const floorName = (dungeon.floors[game.floor] || {}).name || `Floor ${game.floor + 1}`;
-    let line;
-    if (game.justWonFinale) {
-      line = `You drove back the siege and felled the World-Eater. A true legend!`;
-    } else if (game.justWonGame) {
-      line = `You conquered every dungeon at the highest tier. The realm is yours!`;
-    } else {
-      line = `${DD.CLASSES[game.classKey].name} Lv ${game.level} &nbsp;•&nbsp; ` +
-        `${floorName}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
-        `${game.kills} kills &nbsp;•&nbsp; ${game.gold} gold &nbsp;•&nbsp; ` +
-        `${game.time.toFixed(1)}s`;
-    }
-    // co-op guest: can't drive navigation; show its reward + a waiting note
-    const btns = resultEl.querySelector(".buttons");
-    const hint = resultEl.querySelector(".hint");
-    if (DD.net.role === "guest") {
-      if (won && game.coopReward && game.coopReward.gold) {
-        line += ` &nbsp;•&nbsp; you earned ${game.coopReward.gold}g`;
-      }
-      if (btns) btns.style.display = "none";
-      if (hint) hint.textContent = "Waiting for the host to choose the next dungeon…";
-    } else {
-      if (btns) btns.style.display = "";
-      if (hint) hint.textContent = "Enter: play again • Esc: world map";
-    }
-    resultStats.innerHTML = line;
+    resultStats.innerHTML =
+      `${DD.CLASSES[game.classKey].name} Lv ${game.level} &nbsp;•&nbsp; ` +
+      `${floorName}, Room ${game.roomIndex + 1} &nbsp;•&nbsp; ` +
+      `${game.kills} kills &nbsp;•&nbsp; ${game.gold} gold &nbsp;•&nbsp; ` +
+      `${game.time.toFixed(1)}s`;
     resultEl.classList.remove("hidden");
   }
 
@@ -663,7 +595,7 @@
     if (questsEl) {
       const active = DD.profile.data.quests.active;
       if (active.length === 0) {
-        questsEl.innerHTML = `<div class="hub-quest-row" style="color:#6b5e96">No active quests — visit the Quest Giver in town.</div>`;
+        questsEl.innerHTML = `<div class="hub-quest-row" style="color:#6b5e96">All quests complete!</div>`;
       } else {
         questsEl.innerHTML = active.slice(0, 3).map((q) => {
           const def = DD.profile.questDefs.find((d) => d.id === q.id);
@@ -743,9 +675,6 @@
     menuEl.classList.add("hidden");
     document.getElementById("stats-overlay").classList.add("hidden");
     document.getElementById("raid-warning").classList.add("hidden");
-    document.getElementById("trader").classList.add("hidden");
-    document.getElementById("questgiver").classList.add("hidden");
-    document.getElementById("map-coop").classList.add("hidden");
   }
 
   // Themed entry room with three tier doorways. Walk through one to start a run.
@@ -766,7 +695,7 @@
       const req = TIER_REQ[ti] || 0;
       return {
         sub: t.levelHint, color: ["#9affb0", "#ffd95e", "#ff7a7a"][ti] || "#d8cfee",
-        locked: lvl < req, req, cleared: DD.profile.hasClear(game.hero, dungeonId, ti),
+        locked: lvl < req, req,
       };
     });
     DD.room.generateLobby(tierInfo);
@@ -774,8 +703,6 @@
     spawnHeroInRoom();
     game.padTi = -1;
     game.padDwell = 0;
-    game.coopGuest = false;
-    notifyGuestWaiting();
   }
 
   function tierLocked(ti) {
@@ -808,7 +735,6 @@
     hideAllOverlays();
     if (!skipRaid && Math.random() < 0.25) { showRaidWarning(); return; }
     game.state = "town";
-    game.coopGuest = false;
     game.peaceful = true;
     game.raidMode = false;
     game.time = 0;
@@ -819,28 +745,6 @@
     DD.updateView(canvas);
     spawnHeroInRoom();
     game.townNpcs = spawnTownNpcs();
-    game.shopStock = DD.rollShopStock(5); // fresh trader stock each town visit
-    notifyGuestWaiting();
-  }
-
-  // A co-op guest's own between-runs town: walkable NPCs, no raid, no dungeon
-  // exit (the host drives which dungeon is played next).
-  function enterGuestTown() {
-    hideAllOverlays();
-    lobbyEl.classList.add("hidden");
-    game.state = "town";
-    game.coopGuest = true;
-    game.peaceful = true;
-    game.raidMode = false;
-    game.time = 0;
-    game.nearbyNpc = null;
-    sizeRoomToCanvas();
-    DD.room.setTheme("town");
-    DD.room.generateTown();
-    DD.updateView(canvas);
-    spawnHeroInRoom();
-    game.townNpcs = spawnTownNpcs();
-    game.shopStock = DD.rollShopStock(5);
   }
 
   function showMap() {
@@ -848,14 +752,10 @@
     game.state = "map";
     game.mapSelected = null;
     game.peaceful = false;
-    game.coopGuest = false;
     game.townNpcs = [];
     game.nearbyNpc = null;
     sizeRoomToCanvas();
     DD.updateView(canvas);
-    // offer co-op host/join from the map (hidden once connected)
-    document.getElementById("map-coop").classList.toggle("hidden", DD.net.connected);
-    notifyGuestWaiting();
   }
 
   // ---- town NPC interactions ----
@@ -878,8 +778,6 @@
   }
 
   function openInnkeeperMenu() {
-    // a co-op guest's class is fixed for the session (the host spawns its avatar)
-    if (game.coopGuest) { townToast("Class is locked during co-op.", "#ff6b70"); return; }
     townSwitchClass = true;
     game.state = "menu";
     menuEl.classList.remove("hidden");
@@ -887,196 +785,12 @@
     setMenuMode(null, "INNKEEPER — pick a new class. Your level, gold and gear are kept.");
   }
 
-  const traderEl = document.getElementById("trader");
-
   function openTraderMenu() {
-    if (!game.hero) return;
-    game.state = "trader";
-    buildTraderOverlay(game.hero);
-    traderEl.classList.remove("hidden");
+    townToast("Trader — coming soon!", "#ffd95e");
   }
-
-  function closeTraderOverlay() {
-    traderEl.classList.add("hidden");
-    if (game.hero) rebaseLocalPlayer();
-    game.state = "town";
-  }
-
-  function buildTraderOverlay(hero) {
-    document.getElementById("tr-gold").innerHTML =
-      `<span style="color:#ffd14a">${hero.gold || 0} gold</span>`;
-
-    // FOR SALE — buy into your bag
-    const shopEl = document.getElementById("tr-shop");
-    shopEl.innerHTML = "";
-    const stock = game.shopStock || [];
-    if (stock.length === 0) {
-      shopEl.innerHTML = `<p class="shop-empty">Sold out — come back after your next run.</p>`;
-    } else {
-      for (const item of stock) {
-        const price = DD.buyPrice(item);
-        const bagFull = hero.inventory.length >= DD.INV_CAP;
-        const tooPoor = (hero.gold || 0) < price;
-        const row = document.createElement("div");
-        row.className = `shop-row rarity-${item.rarity}`;
-        row.innerHTML =
-          `<img src="${DD.sprites.items[item.icon].toDataURL()}">` +
-          `<span class="shop-name">${item.name}</span>` +
-          `<span class="shop-price">${price}g</span>`;
-        const btn = document.createElement("button");
-        btn.className = "shop-btn";
-        btn.textContent = "Buy";
-        btn.disabled = bagFull || tooPoor;
-        if (bagFull) btn.title = "Bag full";
-        else if (tooPoor) btn.title = "Not enough gold";
-        btn.onclick = () => {
-          if (hero.inventory.length >= DD.INV_CAP || (hero.gold || 0) < price) return;
-          hero.gold -= price;
-          hero.inventory.push(item);
-          game.shopStock = game.shopStock.filter((s) => s !== item);
-          DD.audio.coin();
-          DD.profile.save();
-          buildTraderOverlay(hero);
-        };
-        row.appendChild(btn);
-        row.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
-        row.onmouseleave = hideInvTooltip;
-        shopEl.appendChild(row);
-      }
-    }
-
-    // YOUR BAG — sell for gold
-    const invEl = document.getElementById("tr-inv");
-    invEl.innerHTML = "";
-    if (hero.inventory.length === 0) {
-      invEl.innerHTML = `<p class="shop-empty">Your bag is empty.</p>`;
-    } else {
-      for (const item of hero.inventory) {
-        const value = DD.sellPrice(item);
-        const row = document.createElement("div");
-        row.className = `shop-row rarity-${item.rarity}`;
-        row.innerHTML =
-          `<img src="${DD.sprites.items[item.icon].toDataURL()}">` +
-          `<span class="shop-name">${item.name}</span>` +
-          `<span class="shop-price">${value}g</span>`;
-        const btn = document.createElement("button");
-        btn.className = "shop-btn sell";
-        btn.textContent = "Sell";
-        btn.onclick = () => {
-          const idx = hero.inventory.indexOf(item);
-          if (idx < 0) return;
-          hero.inventory.splice(idx, 1);
-          hero.gold = (hero.gold || 0) + value;
-          DD.audio.coin();
-          DD.profile.save();
-          buildTraderOverlay(hero);
-        };
-        row.appendChild(btn);
-        row.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
-        row.onmouseleave = hideInvTooltip;
-        invEl.appendChild(row);
-      }
-    }
-  }
-
-  const questGiverEl = document.getElementById("questgiver");
 
   function openQuestGiverMenu() {
-    if (!game.hero) return;
-    game.state = "quests";
-    buildQuestGiverOverlay(game.hero);
-    questGiverEl.classList.remove("hidden");
-  }
-
-  function closeQuestGiverOverlay() {
-    questGiverEl.classList.add("hidden");
-    game.state = "town";
-  }
-
-  function questRewardText(def) {
-    let t = `Reward: ${def.reward.gold || 0}g`;
-    if (def.reward.xp) t += ` · ${def.reward.xp} XP`;
-    return t;
-  }
-
-  // Progress bar HTML for kill-count quests; other goals are pass/fail.
-  function questProgressHtml(def, q) {
-    const g = def.goal;
-    if (!g.kills) return "";
-    const cur = Math.min((q.progress && q.progress.kills) || 0, g.kills);
-    const pct = Math.round((cur / g.kills) * 100);
-    return `<div class="q-bar-bg"><div class="q-bar-fill" style="width:${pct}%"></div></div>` +
-      `<div class="q-desc">${cur} / ${g.kills}</div>`;
-  }
-
-  function buildQuestGiverOverlay(hero) {
-    const P = DD.profile;
-    const active = P.data.quests.active;
-    const completed = P.data.quests.completed;
-    document.getElementById("qg-sub").textContent =
-      `${active.length}/${P.ACTIVE_CAP} active  •  ${completed.length} completed`;
-
-    const activeEl = document.getElementById("qg-active");
-    activeEl.innerHTML = "";
-    if (active.length === 0) {
-      activeEl.innerHTML = `<p class="shop-empty">No active quests — accept one from the list.</p>`;
-    } else {
-      for (const q of active) {
-        const def = P.questDef(q.id);
-        if (!def) continue;
-        const card = document.createElement("div");
-        card.className = "quest-card";
-        card.innerHTML =
-          `<div class="q-title">${def.title}</div>` +
-          `<div class="q-desc">${def.desc}</div>` +
-          questProgressHtml(def, q) +
-          `<div class="q-reward">${questRewardText(def)}</div>`;
-        const actions = document.createElement("div");
-        actions.className = "q-actions";
-        const btn = document.createElement("button");
-        btn.className = "shop-btn danger";
-        const canAfford = (hero.gold || 0) >= P.ABANDON_COST;
-        btn.textContent = `Abandon (${P.ABANDON_COST}g)`;
-        btn.disabled = !canAfford;
-        if (!canAfford) btn.title = "Not enough gold";
-        btn.onclick = () => {
-          if (P.abandonQuest(q.id, hero)) buildQuestGiverOverlay(hero);
-        };
-        actions.appendChild(btn);
-        card.appendChild(actions);
-        activeEl.appendChild(card);
-      }
-    }
-
-    const availEl = document.getElementById("qg-avail");
-    availEl.innerHTML = "";
-    const avail = P.availableQuests();
-    if (avail.length === 0) {
-      availEl.innerHTML = `<p class="shop-empty">Nothing new right now — come back later.</p>`;
-    } else {
-      const full = active.length >= P.ACTIVE_CAP;
-      for (const def of avail) {
-        const card = document.createElement("div");
-        card.className = "quest-card";
-        card.innerHTML =
-          `<div class="q-title">${def.title}</div>` +
-          `<div class="q-desc">${def.desc}</div>` +
-          `<div class="q-reward">${questRewardText(def)}</div>`;
-        const actions = document.createElement("div");
-        actions.className = "q-actions";
-        const btn = document.createElement("button");
-        btn.className = "shop-btn";
-        btn.textContent = "Accept";
-        btn.disabled = full;
-        if (full) btn.title = `Max ${P.ACTIVE_CAP} active quests`;
-        btn.onclick = () => {
-          if (P.acceptQuest(def.id)) buildQuestGiverOverlay(hero);
-        };
-        actions.appendChild(btn);
-        card.appendChild(actions);
-        availEl.appendChild(card);
-      }
-    }
+    townToast("Quest Giver — coming soon!", "#9affb0");
   }
 
   function townToast(text, color) {
@@ -1132,28 +846,6 @@
     DUNGEONS.townRaid = buildRaidDungeon(game.raidFaction);
     startRun(classKey, "townRaid", game.tier);
     game.raidMode = true;
-  }
-
-  // The Champion-only capstone: a town-themed siege by every faction at once,
-  // ending with a unique final boss. Tougher than any tier-3 run.
-  function buildFinaleDungeon() {
-    return {
-      id: "finale", name: "The Last Stand", faction: "skeleton", bossFaction: "finale",
-      theme: "town", multiFaction: true, enemyLabel: "Raiders",
-      floors: [{
-        name: "Town Under Siege",
-        kinds: ["melee", "goblin", "zombie", "archer", "goblinArcher", "warlock", "goblinBerserker", "goblinBomber"],
-        eliteKinds: ["goblinBerserker", "warlock", "archer"],
-        plan: ["combat", "combat", "combat", "boss"],
-      }],
-      tiers: [{ tier: 0, levelHint: "30+", scale: 8.0, bossHp: 440, bossDmg: 10, bossName: "THE WORLD-EATER", summonKind: "goblinBerserker" }],
-    };
-  }
-
-  function startFinale() {
-    const classKey = (game.hero && game.hero.classKey) || game.classKey;
-    DUNGEONS.finale = buildFinaleDungeon();
-    startRun(classKey, "finale", 0);
   }
 
   // ---- barkeep stats overlay ----
@@ -1448,12 +1140,9 @@
   // ---- update ----
 
   function update(dt) {
-    // co-op guests render host snapshots during a run; between runs they roam
-    // their own local town, so let that loop run.
+    // co-op guests don't simulate: they render host snapshots
     if (DD.net.role === "guest") {
       if (guestInGame) DD.particles.update(dt);
-      else if (game.state === "town") updatePeaceful(dt);
-      else DD.particles.update(dt);
       return;
     }
 
@@ -1463,8 +1152,7 @@
     }
     if (game.state === "lobby" || game.state === "town") { updatePeaceful(dt); return; }
     if (game.state === "map" || game.state === "menu" || game.state === "levelup" ||
-        game.state === "inventory" || game.state === "stats" || game.state === "trader" ||
-        game.state === "quests" || game.state === "raid-warn") return;
+        game.state === "inventory" || game.state === "stats" || game.state === "raid-warn") return;
 
     if (game.state === "transition") {
       game.transitionT += dt * 2.6;
@@ -1591,8 +1279,7 @@
       }
       const talk = DD.input.consumeInteract() || DD.input.consumeInvTap();
       if (game.nearbyNpc && talk) { game.nearbyNpc.interact(); return; }
-      // a co-op guest can't leave to the map — the host drives the next dungeon
-      if (!game.coopGuest && DD.room.doorOpen && DD.room.inDoorway(pl.x, pl.y - pl.r)) showMap();
+      if (DD.room.doorOpen && DD.room.inDoorway(pl.x, pl.y - pl.r)) showMap();
     } else if (game.state === "lobby") {
       DD.input.consumeInteract();
       const pads = DD.room.tierPads || [];
@@ -1616,9 +1303,8 @@
   const MAP_LOCS = [
     { id: "catacombs",   name: "Catacombs",    fx: 0.22, fy: 0.27, kind: "dungeon" },
     { id: "goblinMines", name: "Goblin Mines",  fx: 0.26, fy: 0.68, kind: "dungeon" },
-    { id: "town",        name: "Town",          fx: 0.50, fy: 0.46, kind: "town"    },
+    { id: "town",        name: "Town",          fx: 0.50, fy: 0.50, kind: "town"    },
     { id: "crypt",       name: "The Crypt",     fx: 0.75, fy: 0.28, kind: "dungeon" },
-    { id: "finale",      name: "The Last Stand", fx: 0.74, fy: 0.74, kind: "finale", championOnly: true },
   ];
 
   // Draw a small pixel-art icon for each location (48×48 in world pixels).
@@ -1676,21 +1362,6 @@
       ctx.beginPath(); ctx.moveTo(cx - 18, cy - 4); ctx.lineTo(cx, cy - 22); ctx.lineTo(cx + 18, cy - 4); ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#4a3020";
       ctx.fillRect(cx - 5, cy + 2, 10, 14); // door
-    } else if (loc.id === "finale") {
-      // flaming crown over a dark sigil
-      ctx.fillStyle = "#2a1020";
-      ctx.beginPath(); ctx.arc(cx, cy + 2, 15, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#ff5a2a";
-      ctx.fillRect(cx - 12, cy - 2, 24, 8); // crown band
-      for (let i = -1; i <= 1; i++) {
-        ctx.beginPath();
-        ctx.moveTo(cx + i * 9 - 4, cy - 2);
-        ctx.lineTo(cx + i * 9, cy - 14);
-        ctx.lineTo(cx + i * 9 + 4, cy - 2);
-        ctx.closePath(); ctx.fill();
-      }
-      ctx.fillStyle = "#ffd14a";
-      ctx.fillRect(cx - 3, cy + 6, 6, 6); // ember
     }
   }
 
@@ -1729,17 +1400,10 @@
     ctx.fillStyle = "#7a6e96";
     ctx.fillText("Click a location to travel there", W / 2, 50);
 
-    if (game.hero && game.hero.victory) {
-      ctx.font = `bold 13px ${font}`;
-      ctx.fillStyle = "#ffd95e";
-      ctx.fillText("★  REALM CHAMPION  ★", W / 2, 68);
-    }
-
     const mx = DD.input.mouse.x, my = DD.input.mouse.y;
 
     // draw locations
     for (const loc of MAP_LOCS) {
-      if (loc.championOnly && !(game.hero && game.hero.victory)) continue;
       const cx = loc.fx * W, cy = loc.fy * H;
       const hovered = DD.dist(mx, my, cx, cy) < 36;
       drawMapIcon(ctx, loc, cx, cy, hovered);
@@ -1749,22 +1413,6 @@
       ctx.font = `bold 13px ${font}`;
       ctx.fillStyle = hovered ? "#ffd95e" : "#bdb3d6";
       ctx.fillText(loc.name, cx, cy + 46);
-
-      // per-dungeon tier-clear pips + a star once the top tier is beaten
-      if (loc.kind === "dungeon" && game.hero) {
-        const d = DUNGEONS[loc.id];
-        const top = d.tiers.length - 1;
-        d.tiers.forEach((t, ti) => {
-          const px = cx - 16 + ti * 16;
-          ctx.fillStyle = DD.profile.hasClear(game.hero, loc.id, ti) ? "#ffd14a" : "rgba(120,110,150,0.4)";
-          ctx.beginPath(); ctx.arc(px, cy + 60, 4, 0, Math.PI * 2); ctx.fill();
-        });
-        if (DD.profile.hasClear(game.hero, loc.id, top)) {
-          ctx.fillStyle = "#ffd95e";
-          ctx.font = `16px ${font}`;
-          ctx.fillText("★", cx, cy - 40);
-        }
-      }
     }
     ctx.textAlign = "left";
   }
@@ -1825,12 +1473,10 @@
     ctx.textAlign = "center";
     ctx.fillStyle = pad.locked ? "#9b90b8" : col;
     ctx.font = `bold 14px ${font}`;
-    const title = pad.cleared && !pad.locked ? `${pad.label}  ✓` : pad.label;
-    ctx.fillText(title, pad.x, pad.y - pad.r * 0.5 - 14);
-    ctx.fillStyle = pad.locked ? "#ff8a8a" : (pad.cleared ? "#9affb0" : "#d8cfee");
+    ctx.fillText(pad.label, pad.x, pad.y - pad.r * 0.5 - 14);
+    ctx.fillStyle = pad.locked ? "#ff8a8a" : "#d8cfee";
     ctx.font = `11px ${font}`;
-    const subText = pad.locked ? `LOCKED · Lv ${pad.req}` : (pad.cleared ? `${pad.sub} · cleared` : pad.sub);
-    ctx.fillText(subText, pad.x, pad.y - pad.r * 0.5 - 1);
+    ctx.fillText(pad.locked ? `LOCKED · Lv ${pad.req}` : pad.sub, pad.x, pad.y - pad.r * 0.5 - 1);
     ctx.textAlign = "left";
   }
 
@@ -1842,7 +1488,7 @@
     }
     const ents = [];
     for (const p of game.players) if (p && !p.dead) ents.push({ y: p.y, render: () => p.draw(ctx) });
-    if (game.state === "town" || game.state === "stats" || game.state === "trader" || game.state === "quests") {
+    if (game.state === "town" || game.state === "stats") {
       for (const npc of game.townNpcs) ents.push({ y: npc.y, render: () => drawTownNpc(ctx, npc, time) });
     }
     ents.sort((a, b) => a.y - b.y);
@@ -1861,11 +1507,6 @@
       const dn = (DUNGEONS[game.lobbyDungeonId] || {}).name || "Dungeon";
       title = dn.toUpperCase();
       sub = "Stand on a glowing pad to enter that tier  •  Esc: map";
-    } else if (game.coopGuest) {
-      title = "TOWN  ·  CO-OP";
-      sub = DD.input.touchSeen
-        ? "Tap an NPC to manage your hero — the host is choosing the next dungeon"
-        : "Talk to NPCs (E) to manage your hero — the host is choosing the next dungeon";
     } else {
       title = "TOWN";
       sub = DD.input.touchSeen
@@ -1889,7 +1530,146 @@
 
   // ---- draw ----
 
+  // ---- 3D rendering path (?3d) -------------------------------------------
+  // Reuses every entity's existing 2D draw() by capturing it to an offscreen
+  // canvas, then standing that up as a camera-facing billboard on the 3D floor.
+  // The architecture comes from the InstancedMesh dungeon in js/render3d.js.
+  const CAP_W = 96, CAP_H = 128, CAP_AX = 48, CAP_AY = 96; // capture box + (x,y) anchor px
+
+  function captureEntity(ent) {
+    let c = ent.__cap;
+    if (!c) {
+      c = ent.__cap = document.createElement("canvas");
+      c.width = CAP_W; c.height = CAP_H;
+      ent.__capctx = c.getContext("2d");
+    }
+    const cx = ent.__capctx;
+    cx.setTransform(1, 0, 0, 1, 0, 0);
+    cx.clearRect(0, 0, CAP_W, CAP_H);
+    cx.imageSmoothingEnabled = false;
+    cx.translate(CAP_AX - ent.x, CAP_AY - ent.y); // map (ent.x,ent.y) -> (AX,AY)
+    ent.draw(cx);
+    const dr = DD.render3d;
+    const k = dr.CELL / DD.TILE; // px -> world units
+    return {
+      canvas: c, gx: ent.x / DD.TILE, gy: ent.y / DD.TILE,
+      w: CAP_W * k, h: CAP_H * k, cx: CAP_AX / CAP_W, cy: 1 - CAP_AY / CAP_H,
+    };
+  }
+
+  // Y-rotation so a model (forward = +Z at rot 0) faces a 2D direction. The 2D
+  // y axis maps to world Z, x to world X, so forward (sin a, cos a) = (dx, dz).
+  function faceFromAim(aim) { return Math.atan2(Math.cos(aim), Math.sin(aim)); }
+  function faceFromMove(e) {
+    const dx = e.x - (e.__px == null ? e.x : e.__px);
+    const dy = e.y - (e.__py == null ? e.y : e.__py);
+    e.__px = e.x; e.__py = e.y;
+    if (dx * dx + dy * dy > 0.02) e.__face = Math.atan2(dx, dy);
+    return e.__face == null ? Math.PI : e.__face;
+  }
+  function playerClip(p) {
+    const A = DD.char3d.ANIM;
+    if (p.downed) return A.death;
+    if (p.swingT > 0) return A.attack;
+    return p.moving ? A.run : A.idle;
+  }
+  function enemyClip(s) {
+    const A = DD.char3d.ANIM;
+    if (s.state === "spawn") return A.spawn;
+    if (s.state === "windup" || s.state === "fuse") return A.attack;
+    return s.state === "chase" ? A.run : A.idle;
+  }
+
+  function drawCombat3D() {
+    const dr = DD.render3d;
+    // Rebuild the mesh only when the room layout actually changes.
+    if (dr._builtVersion !== DD.room.version) {
+      const d = DD.room.getData();
+      dr.buildRoom({ tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h });
+      dr._builtVersion = DD.room.version;
+    }
+
+    // Camera mode (fixed whole-room vs follow the local player).
+    if (dr.camMode !== camMode3d) dr.setCameraMode(camMode3d);
+    if (camMode3d === "follow" && game.localPlayer) {
+      const w = dr.cellToWorld(game.localPlayer.x / DD.TILE, game.localPlayer.y / DD.TILE);
+      dr.setFollowTarget(w.x, w.z);
+    }
+
+    const mgr = DD.charMgr, C = DD.char3d;
+    const billboards = [];
+    const chars = [];
+    const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
+    const asChar = (e, modelKey, rotationY, clip, once) => {
+      const w = worldOf(e);
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip, once });
+    };
+
+    // Players + skeletons render as 3D characters once the models have loaded;
+    // until then (or if a model is missing) they fall back to billboards.
+    for (const p of game.players) {
+      if (!p || p.dead) continue;
+      const mk = C && C.classModelKey(p.classKey);
+      if (mgr && mk && mgr.factory.protos.has(mk))
+        asChar(p, mk, faceFromMove(p), playerClip(p), p.swingT > 0 || p.downed);
+      else billboards.push(captureEntity(p));
+    }
+    for (const s of game.skeletons) {
+      if (!s || s.dead) continue;
+      const mk = C && C.enemyModelKey(s.kind);
+      if (mgr && mk && mgr.factory.protos.has(mk))
+        asChar(s, mk, faceFromMove(s), enemyClip(s), s.state === "spawn" || s.state === "windup" || s.state === "fuse");
+      else billboards.push(captureEntity(s));
+    }
+    // Entities with no 3D model stay as billboards.
+    for (const c of game.chests) if (c && !c.dead) billboards.push(captureEntity(c));
+    if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
+    for (const pk of game.pickups) billboards.push(captureEntity(pk));
+    for (const pr of game.projectiles) billboards.push(captureEntity(pr));
+    for (const es of game.enemyShots) billboards.push(captureEntity(es));
+
+    if (mgr) mgr.sync(chars, lastDt);
+    dr.setEntities(billboards);
+    dr.render();
+
+    // 2D canvas becomes a transparent HUD overlay in screen space.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    DD.hud.draw(ctx, game);
+    if (camTest) drawCamTest(dr);
+  }
+
+  // Live camera-tuning readout (?camtest). Adjust with arrows (elev/orbit),
+  // [ ] (zoom), - = (fov), 9 0 (character scale).
+  function drawCamTest(dr) {
+    const deg = (r) => (r * 180 / Math.PI).toFixed(1);
+    const mul = DD.charMgr ? DD.charMgr.scaleMul : 1;
+    const heroScale = 1.42 * mul;
+    const lines = [
+      "CAMERA TEST  (" + camMode3d + ")",
+      "elev   " + deg(dr.elev) + "°   [Up/Down]",
+      "orbit  " + deg(dr.camAngle) + "°   [Left/Right]",
+      "dist   " + dr._camDist.toFixed(1) + "   [ [ / ] ]",
+      "fov    " + dr.camera.fov.toFixed(0) + "   [ - / = ]",
+      "scale  " + heroScale.toFixed(2) + " (h~" + (2.54 * heroScale).toFixed(1) + "u)  [9/0]",
+      "C = toggle fixed/follow",
+    ];
+    ctx.font = "12px monospace";
+    const w = 260, h = lines.length * 16 + 12;
+    ctx.fillStyle = "rgba(10,8,18,0.78)";
+    ctx.fillRect(canvas.width - w - 8, 8, w, h);
+    ctx.fillStyle = "#9affb0";
+    ctx.textAlign = "left";
+    lines.forEach((s, i) => ctx.fillText(s, canvas.width - w, 26 + i * 16));
+  }
+
   function draw() {
+    // 3D path drives combat; menus/inventory/results stay on the 2D canvas.
+    if (DD.use3d && DD.render3d && DD.render3d.proto && game.state === "play") {
+      drawCombat3D();
+      return;
+    }
+
     ctx.fillStyle = "#0e0b16";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1903,8 +1683,7 @@
       return;
     }
 
-    if (game.state === "lobby" || game.state === "town" || game.state === "stats" ||
-        game.state === "trader" || game.state === "quests") {
+    if (game.state === "lobby" || game.state === "town" || game.state === "stats") {
       drawPeaceful(ctx);
       ctx.restore();
       return;
@@ -1991,8 +1770,7 @@
   // ---- co-op lobby & networking ----
 
   let coopMode = null;     // null | 'host-pick' | 'join-pick'
-  let guestClass = "warrior";     // guest side: this client's chosen class
-  let coopGuestClass = null;      // host side: the connected guest's class
+  let guestClass = "warrior";
   let guestInGame = false;
 
   const lobbyEl = document.getElementById("lobby");
@@ -2075,33 +1853,36 @@
   document.getElementById("btn-accept").addEventListener("click", tryJoin);
   codeIn.addEventListener("keydown", (e) => { if (e.key === "Enter") tryJoin(); });
 
-  // Host: a guest connected. Don't force a run — drop the host on the world map
-  // so they can pick what to play; the guest waits in its own town meanwhile.
-  function hostBeginCoop(guestClassKey) {
-    coopGuestClass = DD.CLASSES[guestClassKey] ? guestClassKey : "warrior";
+  function startCoopRun(guestClassKey) {
+    clearSave();
     const hero = DD.profile.getOrCreateHero(game.classKey);
     game.hero = hero;
-    game.classKey = hero.classKey;
+    game.players = [
+      new DD.Player(game.classKey, 0, 0, DD.input, hero),
+      new DD.Player(guestClassKey, 0, 0, new DD.RemoteInput()),
+    ];
+    game.localIndex = 0;
+    game.dungeonId = game.dungeonId || "catacombs";
+    game.tier = game.tier || 0;
+    game.floor = 0;
+    game.xp = hero.xp || 0;
+    game.level = hero.level || 1;
+    game.gold = 0;
+    game.kills = 0;
+    game.time = 0;
+    loadRoom(0);
     lobbyEl.classList.add("hidden");
     setMenuMode(null, "");
-    showMap(); // notifyGuestWaiting() inside tells the guest to wait
-  }
-
-  // Host: tell the guest we're between runs (choosing the next dungeon).
-  function notifyGuestWaiting() {
-    if (DD.net.role === "host" && DD.net.connected) DD.net.send({ t: "wait" });
+    freshGameState();
   }
 
   DD.net.onOpen(() => {
     if (DD.net.role === "guest") {
       DD.net.send({ t: "join", cls: guestClass });
-      game.hero = DD.profile.getOrCreateHero(guestClass);
-      game.classKey = guestClass;
-      lobbyStatus.textContent = "Connected! Waiting for the host...";
+      lobbyStatus.textContent = "Connected! Waiting for the host to start...";
       lobbyIn.classList.add("hidden");
-      enterGuestTown();
     } else {
-      lobbyStatus.textContent = "Friend connected!";
+      lobbyStatus.textContent = "Friend connected! Starting...";
     }
   });
 
@@ -2129,7 +1910,7 @@
   DD.net.onMessage((m) => {
     if (DD.net.role === "host") {
       if (m.t === "join") {
-        hostBeginCoop(m.cls);
+        startCoopRun(DD.CLASSES[m.cls] ? m.cls : "warrior");
       } else if (m.t === "i" && game.players[1]) {
         const inp = game.players[1].input;
         inp.state = { mv: m.mv || { dx: 0, dy: 0 }, aim: m.aim || 0, atk: !!m.atk, dash: !!m.dash };
@@ -2144,12 +1925,7 @@
     }
 
     // guest side
-    if (m.t === "wait") {
-      // host is between runs choosing a dungeon — wander our own town meanwhile
-      guestInGame = false;
-      enterGuestTown();
-    } else if (m.t === "room") {
-      hideAllOverlays();
+    if (m.t === "room") {
       DD.room.setTheme(m.dungeonId || "catacombs");
       DD.room.setData(m.room);
       DD.updateView(canvas);
@@ -2159,11 +1935,12 @@
       game.roomIndex = m.ri;
       game.roomType = m.rt;
       game.localIndex = 1;
-      game.coopGuest = false;
-      game.peaceful = false;
       guestInGame = true;
       DD.particles.clear();
       lobbyEl.classList.add("hidden");
+      menuEl.classList.add("hidden");
+      hubEl.classList.add("hidden");
+      resultEl.classList.add("hidden");
       game.state = "play";
       game.hintT = 6;
     } else if (m.t === "s" && guestInGame) {
@@ -2187,16 +1964,6 @@
         level: m.stats.level, floor: m.stats.floor, roomIndex: m.stats.ri,
         kills: m.stats.kills, gold: m.stats.gold, time: m.stats.time,
       });
-      // apply the guest's share of the run reward to its own hero
-      if (m.reward && game.hero) {
-        if (m.reward.gold) game.hero.gold = (game.hero.gold || 0) + m.reward.gold;
-        if (m.reward.xp) game.hero.xp = (game.hero.xp || 0) + m.reward.xp;
-        DD.profile.save();
-        game.coopReward = m.reward;
-      } else {
-        game.coopReward = null;
-      }
-      guestInGame = false;
       game.state = m.won ? "won" : "lost";
       if (m.won) DD.audio.win(); else DD.audio.lose();
       setTimeout(showResult, 1000);
@@ -2222,14 +1989,14 @@
   // "Play Again" — but a town raid isn't a re-enterable dungeon, so send the
   // player back to the town instead of replaying the raid.
   function playAgain() {
-    if (DD.net.role === "guest") return; // the host drives the next run
+    if (DD.net.role) DD.net.reset();
     if (game.dungeonId === "townRaid") { showTownRoom(true); return; }
     startRun(game.classKey, game.dungeonId, game.tier);
   }
 
   document.getElementById("btn-again").addEventListener("click", playAgain);
   document.getElementById("btn-class").addEventListener("click", () => {
-    if (DD.net.role === "guest") return; // the host drives navigation
+    if (DD.net.role) DD.net.reset();
     if (game.hero) showMap(); else backToMenu();
   });
   continueBtn.addEventListener("click", () => {
@@ -2243,9 +2010,7 @@
     }
     if (game.state === "inventory" && e.key === "Escape") { closeInventory(); return; }
     if (game.state === "stats" && e.key === "Escape") { closeStatsOverlay(); return; }
-    if (game.state === "trader" && e.key === "Escape") { closeTraderOverlay(); return; }
-    if (game.state === "quests" && e.key === "Escape") { closeQuestGiverOverlay(); return; }
-    if ((game.state === "town" || game.state === "lobby") && e.key === "Escape") { if (!game.coopGuest) showMap(); return; }
+    if ((game.state === "town" || game.state === "lobby") && e.key === "Escape") { showMap(); return; }
     if (game.state === "raid-warn" && e.key === "Escape") { document.getElementById("raid-warning").classList.add("hidden"); showMap(); return; }
     if (game.state === "menu" && townSwitchClass && e.key === "Escape") { townSwitchClass = false; showTownRoom(true); return; }
     if (game.state === "map" && e.key === "Escape") { if (game.hero) showHub(game.hero); else backToMenu(); return; }
@@ -2255,9 +2020,8 @@
       return;
     }
     if (resultEl.classList.contains("hidden")) return;
-    if (DD.net.role === "guest") return; // host drives navigation after a run
     if (e.key === "Enter") { playAgain(); }
-    if (e.key === "Escape") { if (game.hero) showMap(); else backToMenu(); }
+    if (e.key === "Escape") { if (DD.net.role) DD.net.reset(); if (game.hero) showMap(); else backToMenu(); }
   });
 
   // ---- world map click / tap handler ----
@@ -2271,12 +2035,10 @@
     const wy = (cy - DD.view.oy) / DD.view.scale;
 
     for (const loc of MAP_LOCS) {
-      if (loc.championOnly && !(game.hero && game.hero.victory)) continue;
       const lx = loc.fx * DD.WIDTH, ly = loc.fy * DD.HEIGHT;
       if (DD.dist(wx, wy, lx, ly) < 52) {
         DD.audio.unlock();
         if (loc.kind === "town") showTownRoom();
-        else if (loc.kind === "finale") startFinale();
         else showDungeonLobby(loc.id);
         return true;
       }
@@ -2357,20 +2119,9 @@
     openInventory();
   });
 
-  document.getElementById("btn-map-host").addEventListener("click", () => {
-    DD.audio.unlock();
-    if (game.hero) hostWithClass(game.hero.classKey);
-  });
-  document.getElementById("btn-map-join").addEventListener("click", () => {
-    DD.audio.unlock();
-    if (game.hero) joinWithClass(game.hero.classKey);
-  });
-
   // ---- stats overlay + raid buttons ----
 
   document.getElementById("btn-stats-close").addEventListener("click", closeStatsOverlay);
-  document.getElementById("btn-trader-close").addEventListener("click", closeTraderOverlay);
-  document.getElementById("btn-quest-close").addEventListener("click", closeQuestGiverOverlay);
 
   document.getElementById("btn-fight-back").addEventListener("click", () => {
     DD.audio.unlock();
@@ -2397,6 +2148,42 @@
     refreshContinueButton();
   }
 
+  // Dev shortcut for verifying the 3D path: ?dev=combat jumps straight into a
+  // solo combat room (skips menus). Not wired to any UI.
+  if (params.get("dev") === "combat") {
+    document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
+    startRun("warrior");
+  }
+
+  // 'C' toggles the 3D camera between fixed (whole-room) and follow (player).
+  // With ?camtest, arrow/bracket/etc. keys live-tune the camera + character scale
+  // and print the values so we can bake the perfect numbers.
+  if (DD.use3d) {
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "c" || e.key === "C") {
+        camMode3d = camMode3d === "follow" ? "fixed" : "follow";
+        if (DD.render3d) DD.render3d.setCameraMode(camMode3d);
+        return;
+      }
+      if (!camTest) return;
+      const dr = DD.render3d; if (!dr) return;
+      switch (e.key) {
+        case "ArrowUp":    dr.elev = Math.min(1.5, dr.elev + 0.02); break;     // higher/steeper
+        case "ArrowDown":  dr.elev = Math.max(0.1, dr.elev - 0.02); break;     // lower/flatter
+        case "ArrowLeft":  dr.camAngle -= 0.05; break;                          // orbit
+        case "ArrowRight": dr.camAngle += 0.05; break;
+        case "[":          dr._camDist *= 1.05; break;                          // zoom out
+        case "]":          dr._camDist /= 1.05; break;                          // zoom in
+        case "-": case "_": dr.camera.fov = Math.min(90, dr.camera.fov + 1); dr.camera.updateProjectionMatrix(); break;
+        case "=": case "+": dr.camera.fov = Math.max(15, dr.camera.fov - 1); dr.camera.updateProjectionMatrix(); break;
+        case "9": if (DD.charMgr) DD.charMgr.scaleMul = Math.max(0.3, DD.charMgr.scaleMul - 0.03); break;
+        case "0": if (DD.charMgr) DD.charMgr.scaleMul = Math.min(3, DD.charMgr.scaleMul + 0.03); break;
+        default: return;
+      }
+      e.preventDefault();
+    });
+  }
+
   window.addEventListener("resize", () => {
     fitCanvas();
     // regenerate the backdrop room to fill the new shape; mid-run rooms keep
@@ -2418,8 +2205,13 @@
   let last = performance.now();
   let netAccum = 0;
   function frame(now) {
-    const dt = Math.min((now - last) / 1000, 1 / 30);
+    // Clamp to >= 0: on the first frame the rAF timestamp can predate the
+    // performance.now() captured at boot, yielding a negative dt that pushes
+    // game.time below zero (which broke decoration frame indexing, and could
+    // corrupt spawn/animation timers).
+    const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 30));
     last = now;
+    lastDt = dt; // exposed to the 3D draw path for animation mixers
     update(dt);
     draw();
 
@@ -2429,8 +2221,7 @@
       const interval = DD.net.role === "host" ? 1 / 15 : 1 / 30;
       if (netAccum >= interval) {
         netAccum = 0;
-        const inRun = game.state === "play" || game.state === "transition";
-        if (DD.net.role === "host" && inRun && game.players.length > 1) {
+        if (DD.net.role === "host" && game.state !== "menu" && game.players.length > 1) {
           DD.net.send(DD.netSync.snapshot(game));
         } else if (DD.net.role === "guest" && guestInGame) {
           sendGuestInput();
