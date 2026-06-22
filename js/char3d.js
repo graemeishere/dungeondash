@@ -81,14 +81,16 @@ export class CharacterFactory {
       if (!wproto) {
         console.warn("char3d: weapon NOT loaded:", wname, "for", modelName);
       } else {
+        // GLTFLoader strips reserved chars (".") from node names, so the bone
+        // "handslot.r" is loaded as "handslotr". Match on the normalised name.
+        const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
         let hand = null;
-        root.traverse((o) => { if (!hand && o.name === "handslot.r") hand = o; });
-        if (!hand) root.traverse((o) => { if (!hand && o.name === "hand.r") hand = o; });
+        root.traverse((o) => { if (!hand && norm(o.name) === "handslotr") hand = o; });
+        if (!hand) root.traverse((o) => { if (!hand && norm(o.name) === "handr") hand = o; });
         if (hand) {
           hand.add(wproto.clone(true)); // follows the rig through animations
-          if (!CharacterFactory._wlogged) { CharacterFactory._wlogged = true; console.log("char3d: weapon attached", wname, "->", hand.name); }
         } else {
-          console.warn("char3d: no hand bone (handslot.r/hand.r) found for", modelName);
+          console.warn("char3d: no hand bone found for", modelName);
         }
       }
     }
