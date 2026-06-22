@@ -1572,14 +1572,20 @@
   function playerClip(p) {
     const C = DD.char3d, A = C.ANIM;
     if (p.downed) return A.death;
-    if (p.swingT > 0) return (C.ATTACK && C.ATTACK[C.classModelKey(p.classKey)]) || A.attack;
+    // Hold the attack clip for a window once a swing starts, so it reads as a
+    // full attack (swingT is only ~0.14s, far shorter than the clip).
+    if (p.swingT > 0) p.__atkUntil = game.time + 0.55;
+    if (p.__atkUntil && game.time < p.__atkUntil) {
+      return (C.ATTACK && C.ATTACK[C.classModelKey(p.classKey)]) || A.attack;
+    }
     return p.moving ? A.run : A.idle;
   }
   function enemyClip(s) {
-    const A = DD.char3d.ANIM;
-    if (s.state === "spawn") return A.spawn;
-    if (s.state === "windup" || s.state === "fuse") return A.attack;
-    return s.state === "chase" ? A.run : A.idle;
+    const E = DD.char3d.ENEMY_ANIM;
+    if (s.state === "spawn") return E.spawn;
+    if (s.state === "windup" || s.state === "fuse") { s.__atkUntil = game.time + 0.55; }
+    if (s.__atkUntil && game.time < s.__atkUntil) return E.attack;
+    return s.state === "chase" ? E.run : E.idle;
   }
 
   function drawCombat3D() {
@@ -2193,7 +2199,8 @@
   // solo combat room (skips menus). Not wired to any UI.
   if (params.get("dev") === "combat") {
     document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
-    startRun("warrior");
+    const cls = params.get("class"); // ?class=mage|ranger|rogue|warrior
+    startRun(DD.CLASSES[cls] ? cls : "warrior");
   }
 
   // 'C' toggles the 3D camera between fixed (whole-room) and follow (player).
