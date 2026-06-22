@@ -1570,9 +1570,9 @@
     return e.__face == null ? Math.PI : e.__face;
   }
   function playerClip(p) {
-    const A = DD.char3d.ANIM;
+    const C = DD.char3d, A = C.ANIM;
     if (p.downed) return A.death;
-    if (p.swingT > 0) return A.attack;
+    if (p.swingT > 0) return (C.ATTACK && C.ATTACK[C.classModelKey(p.classKey)]) || A.attack;
     return p.moving ? A.run : A.idle;
   }
   function enemyClip(s) {
@@ -1633,7 +1633,9 @@
     }
     for (const pk of game.pickups) {
       if (!pk) continue;
-      const key = ITEM_FOR[pk.kind];
+      // coins/hearts by kind; gear drops by their item icon (sword/axe -> 3D)
+      let key = ITEM_FOR[pk.kind];
+      if (!key && pk.kind === "item" && pk.item) key = pk.item.icon;
       if (key && dr.hasItem(key)) asItem(pk, key); else billboards.push(captureEntity(pk));
     }
     if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
