@@ -25,15 +25,15 @@ export class CharacterFactory {
     this.weaponProtos = {};   // weapon name -> loaded scene (held weapons)
   }
 
-  // Load the held-weapon models referenced by WEAPONS.
+  // Load the held-weapon models referenced by WEAPONS (keyed by url).
   async loadWeapons() {
-    const names = [...new Set(Object.values(WEAPONS))];
-    await Promise.allSettled(names.map((n) =>
-      this.loader.loadAsync(encodeURI(WEAPON_DIR + n + ".gltf"))
-        .then((g) => { this.weaponProtos[n] = g.scene; })
-        .catch((e) => console.error("weapon load failed:", n, e))
+    const urls = [...new Set(Object.values(WEAPONS))];
+    await Promise.allSettled(urls.map((u) =>
+      this.loader.loadAsync(encodeURI(u))
+        .then((g) => { this.weaponProtos[u] = g.scene; })
+        .catch((e) => console.error("weapon load failed:", u, e))
     ));
-    console.log("char3d: weapons loaded:", Object.keys(this.weaponProtos));
+    console.log("char3d: weapons loaded:", Object.keys(this.weaponProtos).length);
     return this;
   }
 
@@ -75,11 +75,11 @@ export class CharacterFactory {
     const proto = this.protos.get(modelName);
     if (!proto) throw new Error("model not loaded: " + modelName);
     const root = skeletonClone(proto); // proper clone for skinned meshes
-    const wname = WEAPONS[modelName];
-    if (wname) {
-      const wproto = this.weaponProtos[wname];
+    const wurl = WEAPONS[modelName];
+    if (wurl) {
+      const wproto = this.weaponProtos[wurl];
       if (!wproto) {
-        console.warn("char3d: weapon NOT loaded:", wname, "for", modelName);
+        console.warn("char3d: weapon NOT loaded:", wurl, "for", modelName);
       } else {
         // GLTFLoader strips reserved chars (".") from node names, so the bone
         // "handslot.r" is loaded as "handslotr". Match on the normalised name.
@@ -169,13 +169,15 @@ export const ANIM = {
   attack: "Melee_1H_Attack_Chop", hit: "Hit_A", death: "Death_A", spawn: "Spawn_Ground",
 };
 
-// Weapon each hero class holds, attached to the rig's handslot.r bone.
-const WEAPON_DIR = "KayKit Adventurers/Assets/gltf/";
+// Weapon (full url) each model holds, attached to the rig's handslot.r bone.
 const WEAPONS = {
-  "class:warrior": "sword_1handed",
-  "class:rogue":   "dagger",
-  "class:mage":    "staff",
-  "class:ranger":  "bow",
+  "class:warrior": "KayKit Adventurers/Assets/gltf/sword_1handed.gltf",
+  "class:rogue":   "KayKit Adventurers/Assets/gltf/dagger.gltf",
+  "class:mage":    "KayKit Adventurers/Assets/gltf/staff.gltf",
+  "class:ranger":  "KayKit Adventurers/Assets/gltf/bow.gltf",
+  "enemy:default": "KayKit Skeletons/assets/gltf/Skeleton_Blade.gltf",
+  "enemy:warrior": "KayKit Skeletons/assets/gltf/Skeleton_Blade.gltf",
+  "enemy:rogue":   "KayKit Skeletons/assets/gltf/Skeleton_Axe.gltf",
 };
 // Attack clip per class (overrides the generic ANIM.attack); swappable.
 export const ATTACK = {
@@ -183,6 +185,12 @@ export const ATTACK = {
   "class:rogue":   "Melee_1H_Attack_Stab",
   "class:mage":    "Ranged_Magic_Shoot",
   "class:ranger":  "Ranged_Bow_Release",
+};
+
+// Skeleton enemies use their own (Rig_Medium_Special) clips.
+export const ENEMY_ANIM = {
+  idle: "Skeletons_Idle", run: "Skeletons_Walking",
+  attack: "Melee_1H_Attack_Chop", spawn: "Skeletons_Spawn_Ground", death: "Skeletons_Death",
 };
 
 // Drives a pool of Characters from a per-frame list of placement items. Each
