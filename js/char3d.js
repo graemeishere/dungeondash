@@ -33,6 +33,7 @@ export class CharacterFactory {
         .then((g) => { this.weaponProtos[n] = g.scene; })
         .catch((e) => console.error("weapon load failed:", n, e))
     ));
+    console.log("char3d: weapons loaded:", Object.keys(this.weaponProtos));
     return this;
   }
 
@@ -75,10 +76,21 @@ export class CharacterFactory {
     if (!proto) throw new Error("model not loaded: " + modelName);
     const root = skeletonClone(proto); // proper clone for skinned meshes
     const wname = WEAPONS[modelName];
-    if (wname && this.weaponProtos[wname]) {
-      let hand = null;
-      root.traverse((o) => { if (!hand && o.name === "handslot.r") hand = o; });
-      if (hand) hand.add(this.weaponProtos[wname].clone(true)); // follows the rig
+    if (wname) {
+      const wproto = this.weaponProtos[wname];
+      if (!wproto) {
+        console.warn("char3d: weapon NOT loaded:", wname, "for", modelName);
+      } else {
+        let hand = null;
+        root.traverse((o) => { if (!hand && o.name === "handslot.r") hand = o; });
+        if (!hand) root.traverse((o) => { if (!hand && o.name === "hand.r") hand = o; });
+        if (hand) {
+          hand.add(wproto.clone(true)); // follows the rig through animations
+          if (!CharacterFactory._wlogged) { CharacterFactory._wlogged = true; console.log("char3d: weapon attached", wname, "->", hand.name); }
+        } else {
+          console.warn("char3d: no hand bone (handslot.r/hand.r) found for", modelName);
+        }
+      }
     }
     return new Character(root, this.clips);
   }
