@@ -22,6 +22,18 @@ export class CharacterFactory {
     this.loader = new GLTFLoader();
     this.clips = new Map();   // name -> THREE.AnimationClip (shared library)
     this.protos = new Map();  // modelName -> loaded gltf.scene (prototype to clone)
+    this.weaponProtos = {};   // weapon name -> loaded scene (held weapons)
+  }
+
+  // Load the held-weapon models referenced by WEAPONS.
+  async loadWeapons() {
+    const names = [...new Set(Object.values(WEAPONS))];
+    await Promise.allSettled(names.map((n) =>
+      this.loader.loadAsync(encodeURI(WEAPON_DIR + n + ".gltf"))
+        .then((g) => { this.weaponProtos[n] = g.scene; })
+        .catch((e) => console.error("weapon load failed:", n, e))
+    ));
+    return this;
   }
 
   // Load the clip library; call once before spawning.
@@ -56,11 +68,18 @@ export class CharacterFactory {
 
   clipNames() { return [...this.clips.keys()]; }
 
-  // Spawn an independently-animated instance of a previously-loaded model.
+  // Spawn an independently-animated instance of a previously-loaded model,
+  // attaching its class weapon to the handslot.r bone if one is configured.
   spawn(modelName) {
     const proto = this.protos.get(modelName);
     if (!proto) throw new Error("model not loaded: " + modelName);
     const root = skeletonClone(proto); // proper clone for skinned meshes
+    const wname = WEAPONS[modelName];
+    if (wname && this.weaponProtos[wname]) {
+      let hand = null;
+      root.traverse((o) => { if (!hand && o.name === "handslot.r") hand = o; });
+      if (hand) hand.add(this.weaponProtos[wname].clone(true)); // follows the rig
+    }
     return new Character(root, this.clips);
   }
 }
@@ -136,6 +155,22 @@ export const ANIM = {
   attack: "Melee_1H_Attack_Chop", hit: "Hit_A", death: "Death_A", spawn: "Spawn_Ground",
 };
 
+// Weapon each hero class holds, attached to the rig's handslot.r bone.
+const WEAPON_DIR = "KayKit Adventurers/Assets/gltf/";
+const WEAPONS = {
+  "class:warrior": "sword_1handed",
+  "class:rogue":   "dagger",
+  "class:mage":    "staff",
+  "class:ranger":  "bow",
+};
+// Attack clip per class (overrides the generic ANIM.attack); swappable.
+export const ATTACK = {
+  "class:warrior": "Melee_1H_Attack_Chop",
+  "class:rogue":   "Melee_1H_Attack_Stab",
+  "class:mage":    "Ranged_Magic_Shoot",
+  "class:ranger":  "Ranged_Bow_Release",
+};
+
 // Drives a pool of Characters from a per-frame list of placement items. Each
 // item: { entity, modelKey, x, z, rotationY, clip, once }. Entities not present
 // in a sync() call are removed from the scene.
@@ -151,6 +186,7 @@ export class CharacterManager {
   // model is logged and skipped rather than disabling all characters.
   async preloadAll() {
     await this.factory.loadClips();
+    await this.factory.loadWeapons();
     console.log("char3d: clips loaded:", this.factory.clips.size);
     const entries = Object.entries(MODELS);
     const results = await Promise.allSettled(

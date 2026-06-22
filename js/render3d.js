@@ -40,6 +40,9 @@ const ITEMS = {
   coin:  { url: ITEM_DIR + "coin.gltf",           scale: 4.0, spin: true, bob: true },
   heart: { url: ITEM_DIR + "bottle_A_green.gltf", scale: 1.6, bob: true },
   chest: { url: ITEM_DIR + "chest.gltf",          scale: 1.3 },
+  // weapon/gear drops (KayKit Adventurers assets); keyed by item.icon
+  sword: { url: "KayKit Adventurers/Assets/gltf/sword_1handed.gltf", scale: 1.3, spin: true, bob: true },
+  axe:   { url: "KayKit Adventurers/Assets/gltf/axe_1handed.gltf",   scale: 1.3, spin: true, bob: true },
 };
 
 // Pull the first renderable mesh out of a loaded GLB scene. Kenney pieces are a
