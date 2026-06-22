@@ -34,6 +34,14 @@ const DUNGEON_KITS = {
 const ACTIVE_KIT = "kaykit";
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
+// 3D pickups/props (from the KayKit dungeon pack). Swappable like the kits.
+const ITEM_DIR = "KayKit Dungeon Remastered/Assets/gltf/";
+const ITEMS = {
+  coin:  { url: ITEM_DIR + "coin.gltf",           scale: 4.0, spin: true, bob: true },
+  heart: { url: ITEM_DIR + "bottle_A_green.gltf", scale: 1.6, bob: true },
+  chest: { url: ITEM_DIR + "chest.gltf",          scale: 1.3 },
+};
+
 // Pull the first renderable mesh out of a loaded GLB scene. Kenney pieces are a
 // single mesh sharing the colormap material, so this is all we need to instance.
 function firstMesh(root) {
@@ -81,6 +89,12 @@ export class DungeonRenderer {
     this.spriteGroup = new THREE.Group();
     this.scene.add(this.spriteGroup);
     this._pool = []; // reused THREE.Sprite slots
+
+    // 3D items/pickups (coins, potions, chests).
+    this.itemGroup = new THREE.Group();
+    this.scene.add(this.itemGroup);
+    this.itemProtos = {};       // key -> loaded scene prototype
+    this.itemMap = new Map();   // entity -> { mesh, cfg }
 
     // Resolves once the kit pieces are loaded; callers await this before build.
     this.ready = this._loadPieces();
@@ -280,6 +294,50 @@ export class DungeonRenderer {
     }
     for (let i = items.length; i < this._pool.length; i++) this._pool[i].visible = false;
   }
+
+  // Load the 3D pickup/prop models (call once, in the background).
+  async loadItems() {
+    const entries = Object.entries(ITEMS);
+    const res = await Promise.allSettled(
+      entries.map(([, c]) => this.loader.loadAsync(encodeURI(c.url)).then((g) => g.scene))
+    );
+    res.forEach((r, i) => {
+      if (r.status === "fulfilled") this.itemProtos[entries[i][0]] = r.value;
+      else console.error("item load failed:", entries[i][0], r.reason);
+    });
+    return this;
+  }
+
+  // Place 3D items on the floor from a per-frame list: { entity, key, gx, gy }.
+  // Static meshes (no rig) with optional spin/bob. Entities not present are removed.
+  setItems(list) {
+    const now = performance.now() * 0.001;
+    const seen = new Set();
+    for (const it of list) {
+      seen.add(it.entity);
+      let rec = this.itemMap.get(it.entity);
+      if (!rec) {
+        const proto = this.itemProtos[it.key];
+        if (!proto) continue; // not loaded (or unknown) -> caller billboards it
+        const cfg = ITEMS[it.key];
+        const mesh = proto.clone(true);
+        mesh.scale.setScalar(cfg.scale);
+        this.itemGroup.add(mesh);
+        rec = { mesh, cfg };
+        this.itemMap.set(it.entity, rec);
+      }
+      const p = this.cellToWorld(it.gx, it.gy);
+      const bob = rec.cfg.bob ? 0.25 + Math.sin(now * 3 + it.gx) * 0.15 : 0;
+      rec.mesh.position.set(p.x, bob, p.z);
+      if (rec.cfg.spin) rec.mesh.rotation.y = now * 2.5;
+    }
+    for (const [ent, rec] of this.itemMap) {
+      if (!seen.has(ent)) { this.itemGroup.remove(rec.mesh); this.itemMap.delete(ent); }
+    }
+  }
+
+  // True if a given item key has a loaded 3D model.
+  hasItem(key) { return !!this.itemProtos[key]; }
 
   render() {
     const tgt = this.camMode === "follow" ? this.followT : ORIGIN;

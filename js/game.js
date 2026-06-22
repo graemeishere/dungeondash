@@ -1623,14 +1623,25 @@
         asChar(s, mk, faceFromMove(s), enemyClip(s), s.state === "spawn" || s.state === "windup" || s.state === "fuse");
       else billboards.push(captureEntity(s));
     }
-    // Entities with no 3D model stay as billboards.
-    for (const c of game.chests) if (c && !c.dead) billboards.push(captureEntity(c));
+    // 3D items (coins/potions/chests); everything else stays a billboard.
+    const items = [];
+    const asItem = (e, key) => items.push({ entity: e, key, gx: e.x / DD.TILE, gy: e.y / DD.TILE });
+    const ITEM_FOR = { coin: "coin", heart: "heart" };
+    for (const c of game.chests) {
+      if (!c || c.dead) continue;
+      if (dr.hasItem("chest")) asItem(c, "chest"); else billboards.push(captureEntity(c));
+    }
+    for (const pk of game.pickups) {
+      if (!pk) continue;
+      const key = ITEM_FOR[pk.kind];
+      if (key && dr.hasItem(key)) asItem(pk, key); else billboards.push(captureEntity(pk));
+    }
     if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
-    for (const pk of game.pickups) billboards.push(captureEntity(pk));
     for (const pr of game.projectiles) billboards.push(captureEntity(pr));
     for (const es of game.enemyShots) billboards.push(captureEntity(es));
 
     if (mgr) mgr.sync(chars, lastDt);
+    dr.setItems(items);
     dr.setEntities(billboards);
     dr.render();
 
