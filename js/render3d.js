@@ -216,7 +216,7 @@ export class DungeonRenderer {
   // "fixed" frames the whole room; "follow" tracks the player at a closer zoom.
   setCameraMode(mode) {
     this.camMode = mode === "follow" ? "follow" : "fixed";
-    this._camDist = this.camMode === "follow" ? this.CELL * 8 : (this._fixedDist || this._span * 1.15);
+    this._camDist = this.camMode === "follow" ? this.CELL * 5 : (this._fixedDist || this._span * 1.15);
   }
   setFollowTarget(x, z) { this.followT.set(x, 0, z); }
 
@@ -230,7 +230,7 @@ export class DungeonRenderer {
   // gx,gy may be fractional (entity world position in cells) -> screen px + depth.
   // This is the bridge Phase 2 will use to billboard 2D character sprites.
   projectToScreen(gx, gy, gridYUp = 0) {
-    const v = this._cellWorld(gx, gy);
+    const v = this.cellToWorld(gx, gy);
     v.y = gridYUp;
     v.project(this.camera);
     return { x: (v.x * 0.5 + 0.5) * this._w, y: (-v.y * 0.5 + 0.5) * this._h, depth: v.z };
@@ -238,8 +238,14 @@ export class DungeonRenderer {
 
   setOrbit(angle) { this.camAngle = angle; }
 
-  // Public: grid cell (fractional ok) -> world-space position on the floor.
-  cellToWorld(gx, gy) { return this._cellWorld(gx, gy); }
+  // Continuous entity position (cx,cy = px/TILE) -> world. Entities already
+  // encode their fractional position, so unlike _cellWorld (which takes integer
+  // tile indices and centres them with +0.5) we must NOT add the half-cell
+  // offset — doing so pushed characters half a cell (2u) off the floor/wall
+  // grid, which read as walking into / not reaching the walls.
+  cellToWorld(cx, cy) {
+    return new THREE.Vector3((cx - this.W / 2) * this.CELL, 0, (cy - this.H / 2) * this.CELL);
+  }
 
   _makeSprite() {
     const tex = new THREE.CanvasTexture(document.createElement("canvas"));
@@ -267,7 +273,7 @@ export class DungeonRenderer {
       const tex = sp.material.map;
       tex.image = it.canvas;
       tex.needsUpdate = true;
-      const p = this._cellWorld(it.gx, it.gy);
+      const p = this.cellToWorld(it.gx, it.gy); // continuous entity mapping
       sp.position.set(p.x, 0, p.z);
       sp.scale.set(it.w, it.h, 1);
       sp.center.set(it.cx, it.cy);
