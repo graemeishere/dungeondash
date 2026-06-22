@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Dungeon Dash — animation test</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0812; }
+    #c { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    #hud { position: fixed; top: 8px; left: 8px; z-index: 10; font: 13px/1.5 monospace;
+      color: #9affb0; background: rgba(10,8,18,0.78); padding: 10px 12px; border-radius: 6px;
+      border: 1px solid #2c2640; white-space: pre; pointer-events: none; text-shadow: 0 1px 2px #000; }
+    #bar { position: fixed; left: 0; right: 0; bottom: 8px; z-index: 20; display: flex;
+      flex-wrap: wrap; gap: 6px; justify-content: center; pointer-events: none; }
+    #bar button { pointer-events: auto; min-width: 60px; padding: 11px 12px; font: bold 13px monospace;
+      background: rgba(20,16,30,0.9); color: #9affb0; border: 1px solid #4a4368; border-radius: 8px; touch-action: manipulation; }
+    #err { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center;
+      color: #ff8a8a; font: 13px monospace; background: rgba(10,8,18,0.92); padding: 24px; text-align: center; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "./js/lib/three/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">loading…</div>
+  <div id="bar"></div>
+  <div id="err"></div>
+
+  <script type="module">
+    import { DungeonRenderer } from "./js/render3d.js";
+    import { CharacterFactory, MODELS } from "./js/char3d.js";
+
+    const hud = document.getElementById("hud");
+    const errEl = document.getElementById("err");
+    const fail = (m) => { errEl.style.display = "flex"; errEl.textContent = m + "\n\n(serve over http; file:// won't load modules/GLBs)"; console.error(m); };
+    window.addEventListener("error", (e) => fail("Error: " + (e.message || e)));
+
+    // small room for context
+    const W = 7, H = 7, FLOOR = 0, WALL = 1;
+    const tiles = new Array(W * H).fill(FLOOR);
+    for (let x = 0; x < W; x++) { tiles[x] = WALL; tiles[(H - 1) * W + x] = WALL; }
+    for (let y = 0; y < H; y++) { tiles[y * W] = WALL; tiles[y * W + W - 1] = WALL; }
+
+    const canvas = document.getElementById("c");
+    const dr = new DungeonRenderer(canvas);
+
+    const modelKeys = Object.keys(MODELS);
+    let modelIdx = 0, clipIdx = 0, speed = 1, weaponOn = true, paused = false, auto = false;
+    let clipNames = [], char = null, autoT = 0;
+
+    function center() { return dr.cellToWorld(W / 2, H / 2); }
+
+    function spawnChar() {
+      if (char) dr.scene.remove(char.root);
+      const key = modelKeys[modelIdx];
+      char = factory.spawn(key);
+      char.root.scale.setScalar(MODELS[key].scale || 1);
+      const p = center();
+      char.root.position.set(p.x, 0, p.z);
+      dr.scene.add(char.root);
+      applyWeapon();
+      playClip();
+    }
+    function applyWeapon() {
+      char.root.traverse((o) => { if (o.userData && o.userData.weapon) o.visible = weaponOn; });
+    }
+    function playClip() {
+      if (!clipNames.length) return;
+      clipIdx = (clipIdx + clipNames.length) % clipNames.length;
+      char.play(clipNames[clipIdx], { fade: 0.12 });
+      char.mixer.timeScale = paused ? 0 : speed;
+    }
+
+    let factory;
+    (async function main() {
+      try {
+        await dr.ready;
+        dr.buildRoom({ tiles, w: W, h: H });
+        dr.setCameraMode("follow");
+        const c = center(); dr.setFollowTarget(c.x, c.z);
+        factory = new CharacterFactory();
+        await factory.loadClips();
+        await factory.loadWeapons();
+        for (const k of modelKeys) await factory.loadModelByKey(k, MODELS[k].url);
+        clipNames = factory.clipNames().sort();
+        spawnChar();
+      } catch (e) { return fail("load failed: " + (e && e.message ? e.message : e)); }
+
+      // ---- controls ----
+      const step = (d) => { clipIdx += d; playClip(); };
+      const model = (d) => { modelIdx = (modelIdx + d + modelKeys.length) % modelKeys.length; spawnChar(); };
+      const spd = (m) => { speed = Math.max(0.1, Math.min(4, +(speed * m).toFixed(2))); if (char) char.mixer.timeScale = paused ? 0 : speed; };
+      const togglePause = () => { paused = !paused; if (char) char.mixer.timeScale = paused ? 0 : speed; };
+      const toggleWeapon = () => { weaponOn = !weaponOn; if (char) applyWeapon(); };
+      const toggleAuto = () => { auto = !auto; autoT = 0; };
+
+      const keys = {
+        ArrowRight: () => step(1), ArrowLeft: () => step(-1),
+        ArrowUp: () => model(1), ArrowDown: () => model(-1),
+        " ": togglePause, "=": () => spd(1.25), "+": () => spd(1.25), "-": () => spd(0.8),
+        w: toggleWeapon, W: toggleWeapon, a: toggleAuto, A: toggleAuto,
+      };
+      addEventListener("keydown", (e) => { if (keys[e.key]) { e.preventDefault(); keys[e.key](); } });
+
+      const bar = document.getElementById("bar");
+      const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label;
+        b.addEventListener("click", (e) => { e.preventDefault(); fn(); }); bar.appendChild(b); };
+      mk("◀ clip", () => step(-1)); mk("clip ▶", () => step(1));
+      mk("model", () => model(1)); mk("⏯", togglePause);
+      mk("slow", () => spd(0.8)); mk("fast", () => spd(1.25));
+      mk("weapon", toggleWeapon); mk("auto", toggleAuto);
+
+      // drag to orbit (inspect)
+      let drag = false, lx = 0, ang = 0;
+      canvas.addEventListener("pointerdown", (e) => { drag = true; lx = e.clientX; });
+      addEventListener("pointerup", () => { drag = false; });
+      addEventListener("pointermove", (e) => { if (drag) { ang += (e.clientX - lx) * 0.005; lx = e.clientX; dr.setOrbit(ang); } });
+
+      const onResize = () => dr.resize(innerWidth, innerHeight);
+      addEventListener("resize", onResize); onResize();
+
+      let last = performance.now();
+      function tick(now) {
+        const dt = Math.max(0, (now - last) / 1000); last = now;
+        if (char && !paused) char.update(dt);
+        if (auto) { autoT += dt; if (autoT > 2.2) { autoT = 0; step(1); } }
+        dr.render();
+        const name = clipNames[clipIdx] || "-";
+        const dur = (factory.clips.get(name)?.duration || 0).toFixed(2);
+        hud.textContent =
+          `MODEL   ${modelKeys[modelIdx]}   [↑/↓]\n` +
+          `CLIP    ${clipIdx + 1}/${clipNames.length}   [←/→]\n` +
+          `  ${name}\n` +
+          `length  ${dur}s   speed x${speed.toFixed(2)}   [-/+]\n` +
+          `weapon  ${weaponOn ? "on" : "off"} [w]   ${paused ? "PAUSED" : "playing"} [space]   auto ${auto ? "on" : "off"} [a]`;
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

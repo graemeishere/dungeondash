@@ -88,7 +88,9 @@ export class CharacterFactory {
         root.traverse((o) => { if (!hand && norm(o.name) === "handslotr") hand = o; });
         if (!hand) root.traverse((o) => { if (!hand && norm(o.name) === "handr") hand = o; });
         if (hand) {
-          hand.add(wproto.clone(true)); // follows the rig through animations
+          const w = wproto.clone(true);
+          w.userData.weapon = true; // tag so tools (anim test) can toggle it
+          hand.add(w); // follows the rig through animations
         } else {
           console.warn("char3d: no hand bone found for", modelName);
         }
