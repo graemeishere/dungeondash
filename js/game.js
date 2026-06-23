@@ -1575,7 +1575,8 @@
   // combos cycle one clip per swing; seq rigs play their clips in order across
   // the window (e.g. bow Draw -> Release). Attacks are triggered by atkAnimAt.
   function comboAttack(ent, rig) {
-    if (ent.atkAnimAt !== ent.__lastAtk) {
+    const fresh = ent.atkAnimAt != null && ent.atkAnimAt !== ent.__lastAtk;
+    if (fresh) {
       ent.__lastAtk = ent.atkAnimAt;
       ent.__atkIdx = ent.__atkIdx == null ? 0 : ent.__atkIdx + 1;
     }
@@ -1583,16 +1584,19 @@
     const t = game.time - ent.atkAnimAt;
     const win = rig.seq ? ATK_WIN_SEQ : ATK_WIN;
     if (t < 0 || t >= win) return null;
+    let clip;
     if (rig.seq) {
       const n = rig.attacks.length;
-      return rig.attacks[Math.min(n - 1, Math.floor((t / win) * n))];
+      clip = rig.attacks[Math.min(n - 1, Math.floor((t / win) * n))];
+    } else {
+      clip = rig.attacks[(ent.__atkIdx || 0) % rig.attacks.length];
     }
-    return rig.attacks[(ent.__atkIdx || 0) % rig.attacks.length];
+    return { clip, fresh }; // fresh -> force the one-shot to restart
   }
   function rigClip(ent, rig, opts) {
     if (opts.spawn) return { clip: rig.spawn, once: true, timeScale: 1 };
     const atk = comboAttack(ent, rig);
-    if (atk) return { clip: atk, once: true, timeScale: rig.attackSpeed || 1 };
+    if (atk) return { clip: atk.clip, once: true, timeScale: rig.attackSpeed || 1, restart: atk.fresh };
     return { clip: opts.moving ? rig.run : rig.idle, once: false, timeScale: 1 };
   }
   function playerClip(p) {
@@ -1630,7 +1634,7 @@
     const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
     const asChar = (e, modelKey, rotationY, anim) => {
       const w = worldOf(e);
-      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale });
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart });
     };
 
     // Players + skeletons render as 3D characters once the models have loaded;

@@ -42,6 +42,7 @@ export const RIG = {
   },
   "class:ranger": {
     model: HERO + "Ranger.glb", scale: 1.42, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
+    weaponRot: [0, 0, Math.PI / 2], // stand the bow upright; fine-tune in anim3d
     idle: "Idle_A", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
     attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
   },
@@ -60,6 +61,7 @@ export const RIG = {
   },
   "enemy:archer": {
     model: SKEL + "Skeleton_Rogue.glb", scale: 1.33, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
+    weaponRot: [0, 0, Math.PI / 2],
     idle: "Skeletons_Idle", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
@@ -148,6 +150,8 @@ export class CharacterFactory {
         if (hand) {
           const w = wproto.clone(true);
           w.userData.weapon = true; // tag so tools (anim test) can toggle it
+          if (rig.weaponRot) w.rotation.set(rig.weaponRot[0], rig.weaponRot[1], rig.weaponRot[2]);
+          if (rig.weaponPos) w.position.set(rig.weaponPos[0], rig.weaponPos[1], rig.weaponPos[2]);
           hand.add(w);
         } else {
           console.warn("char3d: no hand bone found for", key);
@@ -169,8 +173,11 @@ class Character {
   }
 
   // Crossfade to a clip. once=true plays a one-shot (clamped on last frame).
-  play(name, { fade = 0.15, once = false, timeScale = 1 } = {}) {
-    if (this.currentName === name) { if (this.current) this.current.timeScale = timeScale; return this.current; }
+  // restart=true forces a replay even if the same clip is already current — used
+  // to re-trigger a one-shot attack whose name didn't change (e.g. mage casting
+  // the same clip every swing), which would otherwise clamp and freeze.
+  play(name, { fade = 0.15, once = false, timeScale = 1, restart = false } = {}) {
+    if (this.currentName === name && !restart) { if (this.current) this.current.timeScale = timeScale; return this.current; }
     const clip = this.clips.get(name);
     if (!clip) return null;
     let action = this.actions.get(name);
@@ -227,7 +234,7 @@ export class CharacterManager {
       ch.root.scale.setScalar(ch._baseScale * this.scaleMul);
       ch.root.position.set(it.x, 0, it.z);
       ch.root.rotation.y = it.rotationY;
-      ch.play(it.clip, { once: it.once, timeScale: it.timeScale || 1 });
+      ch.play(it.clip, { once: it.once, timeScale: it.timeScale || 1, restart: it.restart });
       ch.update(dt);
     }
     for (const [ent, ch] of this.chars) {

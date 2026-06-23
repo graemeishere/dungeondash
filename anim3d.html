@@ -62,8 +62,16 @@
       applyWeapon();
       playClip();
     }
+    let weaponObj = null, wrot = [0, 0, 0];
     function applyWeapon() {
-      char.root.traverse((o) => { if (o.userData && o.userData.weapon) o.visible = weaponOn; });
+      weaponObj = null;
+      char.root.traverse((o) => { if (o.userData && o.userData.weapon) { o.visible = weaponOn; weaponObj = o; } });
+      if (weaponObj) wrot = [weaponObj.rotation.x, weaponObj.rotation.y, weaponObj.rotation.z];
+    }
+    function rotWeapon(axis, d) {
+      if (!weaponObj) return;
+      wrot[axis] += d;
+      weaponObj.rotation.set(wrot[0], wrot[1], wrot[2]);
     }
     function playClip() {
       if (!clipNames.length) return;
@@ -110,6 +118,8 @@
       mk("model", () => model(1)); mk("⏯", togglePause);
       mk("slow", () => spd(0.8)); mk("fast", () => spd(1.25));
       mk("weapon", toggleWeapon); mk("auto", toggleAuto);
+      // weapon rotation tuning (read the values off the HUD)
+      mk("Wx", () => rotWeapon(0, Math.PI / 12)); mk("Wy", () => rotWeapon(1, Math.PI / 12)); mk("Wz", () => rotWeapon(2, Math.PI / 12));
 
       // drag to orbit (inspect)
       let drag = false, lx = 0, ang = 0;
@@ -133,7 +143,8 @@
           `CLIP    ${clipIdx + 1}/${clipNames.length}   [←/→]\n` +
           `  ${name}\n` +
           `length  ${dur}s   speed x${speed.toFixed(2)}   [-/+]\n` +
-          `weapon  ${weaponOn ? "on" : "off"} [w]   ${paused ? "PAUSED" : "playing"} [space]   auto ${auto ? "on" : "off"} [a]`;
+          `weapon  ${weaponOn ? "on" : "off"} [w]   ${paused ? "PAUSED" : "playing"} [space]   auto ${auto ? "on" : "off"} [a]\n` +
+          `wRot    [${wrot.map((v) => v.toFixed(2)).join(", ")}]  (Wx/Wy/Wz +15°)`;
         requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
