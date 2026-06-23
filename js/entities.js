@@ -217,6 +217,7 @@
     performAttack(game) {
       const c = this.stats;
       this.attackCd = c.cooldown;
+      this.atkAnimAt = game.time; // 3D attack-animation trigger (all classes, incl. ranged)
       if (c.attack === "melee") {
         this.swingT = 0.14;
         this.swingAngle = this.aim;
