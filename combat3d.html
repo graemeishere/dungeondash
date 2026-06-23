@@ -52,6 +52,11 @@
       "class:rogue":   { cooldown: 0.22, sound: "swing", attackSpeed: 1.6 },
       "class:mage":    { cooldown: 0.5,  sound: "bolt",  attackSpeed: 1.0 },
       "class:ranger":  { cooldown: 0.32, sound: "shoot", attackSpeed: 1.0 },
+      // skeletons (cooldowns approximate the real state-driven rhythm)
+      "enemy:minion":  { cooldown: 0.9,  sound: "swing", attackSpeed: 1.0 },
+      "enemy:warrior": { cooldown: 1.1,  sound: "swing", attackSpeed: 1.0 },
+      "enemy:archer":  { cooldown: 1.0,  sound: "shoot", attackSpeed: 1.0 },
+      "enemy:mage":    { cooldown: 1.2,  sound: "bolt",  attackSpeed: 1.0 },
     };
     const keys = Object.keys(CLASSES);
     const ATK_WIN = 0.5, ATK_WIN_SEQ = 0.85;
@@ -65,7 +70,7 @@
     const dr = new DungeonRenderer(canvas);
 
     let idx = 0, auto = true, char = null, factory;
-    let cd = 0, atkAt = -1, atkIdx = -1, cooldownMul = 1;
+    let cd = 0, atkAt = -1, atkIdx = -1, cooldownMul = 1, pendingRestart = false;
     const cur = () => keys[idx];
     const prof = () => CLASSES[cur()];
     const rig = () => RIG[cur()];
@@ -96,7 +101,7 @@
       return r.idle;
     }
     function doAttack(t) {
-      atkAt = t; atkIdx++;
+      atkAt = t; atkIdx++; pendingRestart = true;
       DD.audio.unlock(); DD.audio[prof().sound] && DD.audio[prof().sound]();
       flash.style.transition = "none"; flash.style.opacity = "0.9";
       requestAnimationFrame(() => { flash.style.transition = "opacity 0.25s"; flash.style.opacity = "0"; });
@@ -145,7 +150,8 @@
         if (char) {
           const name = currentClip(t);
           const isAtk = name !== rig().idle;
-          char.play(name, { once: isAtk, timeScale: isAtk ? prof().attackSpeed : 1, fade: 0.1 });
+          char.play(name, { once: isAtk, timeScale: isAtk ? prof().attackSpeed : 1, fade: 0.1, restart: pendingRestart });
+          pendingRestart = false;
           char.update(dt);
         }
         dr.render();
