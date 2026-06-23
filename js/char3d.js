@@ -1,64 +1,122 @@
 "use strict";
-// KayKit 3D character loading + animation (Phase 2, the real version that
-// replaces the 2D-sprite billboards).
+// KayKit 3D character loading + animation.
 //
-// Key fact that makes this cheap: the Adventurer meshes and the Character
-// Animation "Mannequin" share the SAME 23-joint rig, so the animation clips
-// retarget onto any hero by bone name with no remapping. We load the clips
-// once into a shared library, then bind them per-character via AnimationMixer.
+// Key fact that makes this cheap: the Adventurer meshes, the Skeletons and the
+// "Mannequin" all share the SAME 23-joint Rig_Medium, so every clip retargets
+// onto any model by bone name. We load the clip library once and bind per
+// character via AnimationMixer.
 //
 // ES module; the host page's importmap resolves the bare "three" specifier.
 import * as THREE from "three";
 import { GLTFLoader } from "./lib/three/GLTFLoader.js";
 import { clone as skeletonClone } from "./lib/three/SkeletonUtils.js";
 
-const HEROES = "KayKit Adventurers/Characters/gltf/";
 const ANIM_DIR = "KayKit Character Animations/Animations/gltf/Rig_Medium/";
-// Animation packs to pull clips from (Rig_Medium = the hero rig).
 const ANIM_PACKS = ["General", "MovementBasic", "MovementAdvanced", "CombatMelee", "CombatRanged", "Special"];
+
+const HERO = "KayKit Adventurers/Characters/gltf/";
+const GEAR = "KayKit Adventurers/Assets/gltf/";
+const SKEL = "KayKit Skeletons/characters/gltf/";
+const SKGEAR = "KayKit Skeletons/assets/gltf/";
+const MANNEQUIN = "KayKit Character Animations/Mannequin Character/characters/Mannequin_Medium.glb";
+
+// ---------------------------------------------------------------------------
+// One registry per "rig": model + held weapon + which hand + the clip names for
+// each logical state. attacks[] is a COMBO (cycled one per swing) unless seq:true
+// (played in order as a single attack, e.g. bow Draw -> Release). Edit freely.
+export const RIG = {
+  "class:warrior": {
+    model: HERO + "Knight.glb", scale: 1.42, weapon: GEAR + "sword_1handed.gltf", hand: "r",
+    idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
+    attacks: ["Melee_1H_Attack_Slice_Diagonal", "Melee_1H_Attack_Stab", "Melee_2H_Attack_Chop", "Melee_Unarmed_Attack_Punch_A"],
+  },
+  "class:rogue": {
+    model: HERO + "Rogue.glb", scale: 1.42, weapon: GEAR + "dagger.gltf", hand: "r",
+    idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1.6,
+    attacks: ["Melee_Unarmed_Attack_Punch_A", "Melee_Unarmed_Attack_Kick", "Melee_1H_Attack_Slice_Horizontal", "Melee_1H_Attack_Stab"],
+  },
+  "class:mage": {
+    model: HERO + "Mage.glb", scale: 1.42, weapon: GEAR + "staff.gltf", hand: "r", ranged: true,
+    idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
+    attacks: ["Ranged_Magic_Shoot"],
+  },
+  "class:ranger": {
+    model: HERO + "Ranger.glb", scale: 1.42, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
+    idle: "Idle_A", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
+    attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
+  },
+  // ---- skeleton enemies (share Rig_Medium) ----
+  "enemy:minion": {
+    model: SKEL + "Skeleton_Minion.glb", scale: 1.33, weapon: SKGEAR + "Skeleton_Blade.gltf", hand: "r",
+    idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
+    inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
+    attacks: ["Melee_1H_Attack_Stab", "Melee_1H_Attack_Slice_Horizontal"],
+  },
+  "enemy:warrior": {
+    model: SKEL + "Skeleton_Warrior.glb", scale: 1.42, weapon: SKGEAR + "Skeleton_Axe.gltf", hand: "r",
+    idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
+    inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
+    attacks: ["Melee_1H_Attack_Chop", "Melee_2H_Attack_Chop"],
+  },
+  "enemy:archer": {
+    model: SKEL + "Skeleton_Rogue.glb", scale: 1.33, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
+    idle: "Skeletons_Idle", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
+    inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
+    attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
+  },
+  "enemy:mage": {
+    model: SKEL + "Skeleton_Mage.glb", scale: 1.33, weapon: SKGEAR + "Skeleton_Staff.gltf", hand: "r", ranged: true,
+    idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
+    inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
+    attacks: ["Ranged_Magic_Shoot"],
+  },
+  "fallback": {
+    model: MANNEQUIN, scale: 1.42, weapon: null, hand: "r",
+    idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
+    attacks: ["Melee_1H_Attack_Chop"],
+  },
+};
+
+// Map a hero classKey / enemy kind -> rig key.
+export function classModelKey(classKey) {
+  const k = "class:" + classKey;
+  return RIG[k] ? k : "class:warrior";
+}
+export function enemyModelKey(kind = "") {
+  if (/mage|warlock|necromancer|shaman|shade/i.test(kind)) return "enemy:mage";
+  if (/arch|bow|ranger|rogue/i.test(kind))                 return "enemy:archer";
+  if (/zombie|berserker|brute|warrior|goblin/i.test(kind)) return "enemy:warrior";
+  return "enemy:minion";
+}
 
 export class CharacterFactory {
   constructor() {
     this.loader = new GLTFLoader();
     this.clips = new Map();   // name -> THREE.AnimationClip (shared library)
-    this.protos = new Map();  // modelName -> loaded gltf.scene (prototype to clone)
-    this.weaponProtos = {};   // weapon name -> loaded scene (held weapons)
+    this.protos = new Map();  // rig key -> loaded gltf.scene (prototype to clone)
+    this.weaponProtos = {};   // weapon url -> loaded scene
   }
 
-  // Load the held-weapon models referenced by WEAPONS (keyed by url).
+  async loadClips() {
+    const packs = await Promise.all(
+      ANIM_PACKS.map((f) => this.loader.loadAsync(encodeURI(ANIM_DIR + "Rig_Medium_" + f + ".glb")))
+    );
+    for (const g of packs) for (const clip of g.animations) {
+      if (!this.clips.has(clip.name)) this.clips.set(clip.name, clip);
+    }
+    return this;
+  }
+
   async loadWeapons() {
-    const urls = [...new Set(Object.values(WEAPONS))];
+    const urls = [...new Set(Object.values(RIG).map((r) => r.weapon).filter(Boolean))];
     await Promise.allSettled(urls.map((u) =>
       this.loader.loadAsync(encodeURI(u))
         .then((g) => { this.weaponProtos[u] = g.scene; })
         .catch((e) => console.error("weapon load failed:", u, e))
     ));
-    console.log("char3d: weapons loaded:", Object.keys(this.weaponProtos).length);
     return this;
   }
 
-  // Load the clip library; call once before spawning.
-  async loadClips() {
-    const packs = await Promise.all(
-      ANIM_PACKS.map((f) => this.loader.loadAsync(encodeURI(ANIM_DIR + "Rig_Medium_" + f + ".glb")))
-    );
-    for (const g of packs) {
-      for (const clip of g.animations) {
-        if (!this.clips.has(clip.name)) this.clips.set(clip.name, clip);
-      }
-    }
-    return this;
-  }
-
-  async loadModel(name) {
-    if (!this.protos.has(name)) {
-      const g = await this.loader.loadAsync(encodeURI(HEROES + name + ".glb"));
-      this.protos.set(name, g.scene);
-    }
-    return this.protos.get(name);
-  }
-
-  // Load a model under an arbitrary key (used by the swappable registry below).
   async loadModelByKey(key, url) {
     if (!this.protos.has(key)) {
       const g = await this.loader.loadAsync(encodeURI(url));
@@ -69,30 +127,30 @@ export class CharacterFactory {
 
   clipNames() { return [...this.clips.keys()]; }
 
-  // Spawn an independently-animated instance of a previously-loaded model,
-  // attaching its class weapon to the handslot.r bone if one is configured.
-  spawn(modelName) {
-    const proto = this.protos.get(modelName);
-    if (!proto) throw new Error("model not loaded: " + modelName);
-    const root = skeletonClone(proto); // proper clone for skinned meshes
-    const wurl = WEAPONS[modelName];
-    if (wurl) {
-      const wproto = this.weaponProtos[wurl];
+  // Spawn an independently-animated instance, attaching the rig's weapon to the
+  // configured hand bone (handslot.r / handslot.l -> sanitised "handslotr"/"l").
+  spawn(key) {
+    const rig = RIG[key];
+    const proto = this.protos.get(key);
+    if (!proto) throw new Error("model not loaded: " + key);
+    const root = skeletonClone(proto);
+    if (rig && rig.weapon) {
+      const wproto = this.weaponProtos[rig.weapon];
       if (!wproto) {
-        console.warn("char3d: weapon NOT loaded:", wurl, "for", modelName);
+        console.warn("char3d: weapon NOT loaded:", rig.weapon, "for", key);
       } else {
-        // GLTFLoader strips reserved chars (".") from node names, so the bone
-        // "handslot.r" is loaded as "handslotr". Match on the normalised name.
         const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const want = rig.hand === "l" ? "handslotl" : "handslotr";
+        const alt = rig.hand === "l" ? "handl" : "handr";
         let hand = null;
-        root.traverse((o) => { if (!hand && norm(o.name) === "handslotr") hand = o; });
-        if (!hand) root.traverse((o) => { if (!hand && norm(o.name) === "handr") hand = o; });
+        root.traverse((o) => { if (!hand && norm(o.name) === want) hand = o; });
+        if (!hand) root.traverse((o) => { if (!hand && norm(o.name) === alt) hand = o; });
         if (hand) {
           const w = wproto.clone(true);
           w.userData.weapon = true; // tag so tools (anim test) can toggle it
-          hand.add(w); // follows the rig through animations
+          hand.add(w);
         } else {
-          console.warn("char3d: no hand bone found for", modelName);
+          console.warn("char3d: no hand bone found for", key);
         }
       }
     }
@@ -111,8 +169,8 @@ class Character {
   }
 
   // Crossfade to a clip. once=true plays a one-shot (clamped on last frame).
-  play(name, { fade = 0.2, once = false, timeScale = 1 } = {}) {
-    if (this.currentName === name) return this.current;
+  play(name, { fade = 0.15, once = false, timeScale = 1 } = {}) {
+    if (this.currentName === name) { if (this.current) this.current.timeScale = timeScale; return this.current; }
     const clip = this.clips.get(name);
     if (!clip) return null;
     let action = this.actions.get(name);
@@ -131,73 +189,8 @@ class Character {
   update(dt) { this.mixer.update(dt); }
 }
 
-// ---------------------------------------------------------------------------
-// Swappable model registry. To change which 3D model represents a hero class
-// or an enemy, edit MODELS / enemyModelKey() here — nothing else needs to know.
-// Skeletons are a temporary stand-in for all enemies (all share Rig_Medium, so
-// the same clip library animates them).
-export const MODELS = {
-  // player classes (heroes ~2.54u native -> ~3.6u at 1.42, user-tuned)
-  "class:warrior": { url: "KayKit Adventurers/Characters/gltf/Knight.glb",  scale: 1.42 },
-  "class:mage":    { url: "KayKit Adventurers/Characters/gltf/Mage.glb",    scale: 1.42 },
-  "class:ranger":  { url: "KayKit Adventurers/Characters/gltf/Ranger.glb",  scale: 1.42 },
-  "class:rogue":   { url: "KayKit Adventurers/Characters/gltf/Rogue.glb",   scale: 1.42 },
-  // enemies — KayKit Skeletons (temporary; swap freely), proportional to heroes
-  "enemy:default": { url: "KayKit Skeletons/characters/gltf/Skeleton_Minion.glb",  scale: 1.33 },
-  "enemy:warrior": { url: "KayKit Skeletons/characters/gltf/Skeleton_Warrior.glb", scale: 1.42 },
-  "enemy:rogue":   { url: "KayKit Skeletons/characters/gltf/Skeleton_Rogue.glb",   scale: 1.33 },
-  "enemy:mage":    { url: "KayKit Skeletons/characters/gltf/Skeleton_Mage.glb",    scale: 1.33 },
-  // universal last-resort placeholder (shares Rig_Medium) for anything unmapped
-  "fallback":      { url: "KayKit Character Animations/Mannequin Character/characters/Mannequin_Medium.glb", scale: 1.42 },
-};
-
-// Map a hero classKey -> registry key (falls back to warrior/Knight).
-export function classModelKey(classKey) {
-  const k = "class:" + classKey;
-  return MODELS[k] ? k : "class:warrior";
-}
-
-// Map an enemy kind string -> registry key. Pure routing; edit freely.
-export function enemyModelKey(kind = "") {
-  if (/mage|warlock|necromancer|shaman|shade/i.test(kind)) return "enemy:mage";
-  if (/arch|rogue|bomber|bomb/i.test(kind))                return "enemy:rogue";
-  if (/zombie|berserker|brute|warrior|melee|goblin/i.test(kind)) return "enemy:warrior";
-  return "enemy:default";
-}
-
-// Shared clip names per logical animation state (Rig_Medium clip library).
-export const ANIM = {
-  idle: "Idle_A", walk: "Walking_A", run: "Running_A",
-  attack: "Melee_1H_Attack_Chop", hit: "Hit_A", death: "Death_A", spawn: "Spawn_Ground",
-};
-
-// Weapon (full url) each model holds, attached to the rig's handslot.r bone.
-const WEAPONS = {
-  "class:warrior": "KayKit Adventurers/Assets/gltf/sword_1handed.gltf",
-  "class:rogue":   "KayKit Adventurers/Assets/gltf/dagger.gltf",
-  "class:mage":    "KayKit Adventurers/Assets/gltf/staff.gltf",
-  "class:ranger":  "KayKit Adventurers/Assets/gltf/bow.gltf",
-  "enemy:default": "KayKit Skeletons/assets/gltf/Skeleton_Blade.gltf",
-  "enemy:warrior": "KayKit Skeletons/assets/gltf/Skeleton_Blade.gltf",
-  "enemy:rogue":   "KayKit Skeletons/assets/gltf/Skeleton_Axe.gltf",
-};
-// Attack clip per class (overrides the generic ANIM.attack); swappable.
-export const ATTACK = {
-  "class:warrior": "Melee_1H_Attack_Chop",
-  "class:rogue":   "Melee_1H_Attack_Stab",
-  "class:mage":    "Ranged_Magic_Shoot",
-  "class:ranger":  "Ranged_Bow_Release",
-};
-
-// Skeleton enemies use their own (Rig_Medium_Special) clips.
-export const ENEMY_ANIM = {
-  idle: "Skeletons_Idle", run: "Skeletons_Walking",
-  attack: "Melee_1H_Attack_Chop", spawn: "Skeletons_Spawn_Ground", death: "Skeletons_Death",
-};
-
-// Drives a pool of Characters from a per-frame list of placement items. Each
-// item: { entity, modelKey, x, z, rotationY, clip, once }. Entities not present
-// in a sync() call are removed from the scene.
+// Drives a pool of Characters from a per-frame list of placement items:
+//   { entity, modelKey, x, z, rotationY, clip, once, timeScale }
 export class CharacterManager {
   constructor(scene, factory) {
     this.scene = scene;
@@ -206,20 +199,14 @@ export class CharacterManager {
     this.scaleMul = 1;      // live global scale multiplier (camera-tuning)
   }
 
-  // Preload the clip library + every registry model. Resilient: a single bad
-  // model is logged and skipped rather than disabling all characters.
   async preloadAll() {
     await this.factory.loadClips();
     await this.factory.loadWeapons();
-    console.log("char3d: clips loaded:", this.factory.clips.size);
-    const entries = Object.entries(MODELS);
-    const results = await Promise.allSettled(
-      entries.map(([k, c]) => this.factory.loadModelByKey(k, c.url))
-    );
-    results.forEach((r, i) => {
-      if (r.status === "rejected") console.error("char3d: model FAILED", entries[i][0], entries[i][1].url, r.reason);
-    });
-    console.log("char3d: models loaded", results.filter((r) => r.status === "fulfilled").length, "/", entries.length);
+    console.log("char3d: clips", this.factory.clips.size, "weapons", Object.keys(this.factory.weaponProtos).length);
+    const keys = Object.keys(RIG);
+    const results = await Promise.allSettled(keys.map((k) => this.factory.loadModelByKey(k, RIG[k].model)));
+    results.forEach((r, i) => { if (r.status === "rejected") console.error("char3d: model FAILED", keys[i], r.reason); });
+    console.log("char3d: models", results.filter((r) => r.status === "fulfilled").length, "/", keys.length);
     return this;
   }
 
@@ -229,19 +216,18 @@ export class CharacterManager {
       seen.add(it.entity);
       let ch = this.chars.get(it.entity);
       if (!ch) {
-        // use the requested model, else the Mannequin fallback, else wait
-        let key = this.factory.protos.has(it.modelKey) ? it.modelKey
+        const key = this.factory.protos.has(it.modelKey) ? it.modelKey
           : (this.factory.protos.has("fallback") ? "fallback" : null);
         if (!key) continue;
         ch = this.factory.spawn(key);
-        ch._baseScale = (MODELS[key] || { scale: 1 }).scale;
+        ch._baseScale = (RIG[key] || { scale: 1 }).scale;
         this.scene.add(ch.root);
         this.chars.set(it.entity, ch);
       }
-      ch.root.scale.setScalar(ch._baseScale * this.scaleMul); // live-tunable
+      ch.root.scale.setScalar(ch._baseScale * this.scaleMul);
       ch.root.position.set(it.x, 0, it.z);
       ch.root.rotation.y = it.rotationY;
-      ch.play(it.clip, { once: it.once });
+      ch.play(it.clip, { once: it.once, timeScale: it.timeScale || 1 });
       ch.update(dt);
     }
     for (const [ent, ch] of this.chars) {

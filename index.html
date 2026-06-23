@@ -191,7 +191,7 @@
         const m = await import("./js/char3d.js");
         const mgr = new m.CharacterManager(dr.scene, new m.CharacterFactory());
         // expose the swappable mappings to the (classic-script) game
-        window.DD.char3d = { classModelKey: m.classModelKey, enemyModelKey: m.enemyModelKey, ANIM: m.ANIM, ATTACK: m.ATTACK, ENEMY_ANIM: m.ENEMY_ANIM };
+        window.DD.char3d = { classModelKey: m.classModelKey, enemyModelKey: m.enemyModelKey, RIG: m.RIG };
         // Set charMgr immediately and load models in the background, so each
         // character pops in as its model arrives instead of waiting for all.
         window.DD.charMgr = mgr;

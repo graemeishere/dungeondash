@@ -29,7 +29,7 @@
 
   <script type="module">
     import { DungeonRenderer } from "./js/render3d.js";
-    import { CharacterFactory, MODELS } from "./js/char3d.js";
+    import { CharacterFactory, RIG } from "./js/char3d.js";
 
     const hud = document.getElementById("hud");
     const errEl = document.getElementById("err");
@@ -45,7 +45,7 @@
     const canvas = document.getElementById("c");
     const dr = new DungeonRenderer(canvas);
 
-    const modelKeys = Object.keys(MODELS);
+    const modelKeys = Object.keys(RIG);
     let modelIdx = 0, clipIdx = 0, speed = 1, weaponOn = true, paused = false, auto = false;
     let clipNames = [], char = null, autoT = 0;
 
@@ -55,7 +55,7 @@
       if (char) dr.scene.remove(char.root);
       const key = modelKeys[modelIdx];
       char = factory.spawn(key);
-      char.root.scale.setScalar(MODELS[key].scale || 1);
+      char.root.scale.setScalar(RIG[key].scale || 1);
       const p = center();
       char.root.position.set(p.x, 0, p.z);
       dr.scene.add(char.root);
@@ -82,7 +82,7 @@
         factory = new CharacterFactory();
         await factory.loadClips();
         await factory.loadWeapons();
-        for (const k of modelKeys) await factory.loadModelByKey(k, MODELS[k].url);
+        for (const k of modelKeys) await factory.loadModelByKey(k, RIG[k].model);
         clipNames = factory.clipNames().sort();
         spawnChar();
       } catch (e) { return fail("load failed: " + (e && e.message ? e.message : e)); }

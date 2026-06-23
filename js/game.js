@@ -1569,23 +1569,43 @@
     if (dx * dx + dy * dy > 0.02) e.__face = Math.atan2(dx, dy);
     return e.__face == null ? Math.PI : e.__face;
   }
-  function playerClip(p) {
-    const C = DD.char3d, A = C.ANIM;
-    if (p.downed) return A.death;
-    // Hold the attack clip for a window once a swing starts, so it reads as a
-    // full attack (swingT is only ~0.14s, far shorter than the clip).
-    if (p.swingT > 0) p.__atkUntil = game.time + 0.55;
-    if (p.__atkUntil && game.time < p.__atkUntil) {
-      return (C.ATTACK && C.ATTACK[C.classModelKey(p.classKey)]) || A.attack;
+  const ATK_WIN = 0.5, ATK_WIN_SEQ = 0.85; // attack-animation hold windows (s)
+
+  // Pick the current attack clip (or null) for an entity using its rig:
+  // combos cycle one clip per swing; seq rigs play their clips in order across
+  // the window (e.g. bow Draw -> Release). Attacks are triggered by atkAnimAt.
+  function comboAttack(ent, rig) {
+    if (ent.atkAnimAt !== ent.__lastAtk) {
+      ent.__lastAtk = ent.atkAnimAt;
+      ent.__atkIdx = ent.__atkIdx == null ? 0 : ent.__atkIdx + 1;
     }
-    return p.moving ? A.run : A.idle;
+    if (ent.atkAnimAt == null) return null;
+    const t = game.time - ent.atkAnimAt;
+    const win = rig.seq ? ATK_WIN_SEQ : ATK_WIN;
+    if (t < 0 || t >= win) return null;
+    if (rig.seq) {
+      const n = rig.attacks.length;
+      return rig.attacks[Math.min(n - 1, Math.floor((t / win) * n))];
+    }
+    return rig.attacks[(ent.__atkIdx || 0) % rig.attacks.length];
+  }
+  function rigClip(ent, rig, opts) {
+    if (opts.spawn) return { clip: rig.spawn, once: true, timeScale: 1 };
+    const atk = comboAttack(ent, rig);
+    if (atk) return { clip: atk, once: true, timeScale: rig.attackSpeed || 1 };
+    return { clip: opts.moving ? rig.run : rig.idle, once: false, timeScale: 1 };
+  }
+  function playerClip(p) {
+    const rig = DD.char3d.RIG[DD.char3d.classModelKey(p.classKey)];
+    if (p.downed) return { clip: rig.death, once: true, timeScale: 1 };
+    return rigClip(p, rig, { moving: p.moving });
   }
   function enemyClip(s) {
-    const E = DD.char3d.ENEMY_ANIM;
-    if (s.state === "spawn") return E.spawn;
-    if (s.state === "windup" || s.state === "fuse") { s.__atkUntil = game.time + 0.55; }
-    if (s.__atkUntil && game.time < s.__atkUntil) return E.attack;
-    return s.state === "chase" ? E.run : E.idle;
+    const rig = DD.char3d.RIG[DD.char3d.enemyModelKey(s.kind)];
+    const atking = s.state === "windup" || s.state === "fuse";
+    if (atking && !s.__wasAtk) s.atkAnimAt = game.time; // rising edge of a strike
+    s.__wasAtk = atking;
+    return rigClip(s, rig, { moving: s.state === "chase", spawn: s.state === "spawn" });
   }
 
   function drawCombat3D() {
@@ -1608,9 +1628,9 @@
     const billboards = [];
     const chars = [];
     const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
-    const asChar = (e, modelKey, rotationY, clip, once) => {
+    const asChar = (e, modelKey, rotationY, anim) => {
       const w = worldOf(e);
-      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip, once });
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale });
     };
 
     // Players + skeletons render as 3D characters once the models have loaded;
@@ -1618,15 +1638,13 @@
     for (const p of game.players) {
       if (!p || p.dead) continue;
       const mk = C && C.classModelKey(p.classKey);
-      if (mgr && mk && mgr.factory.protos.has(mk))
-        asChar(p, mk, faceFromMove(p), playerClip(p), p.swingT > 0 || p.downed);
+      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(p, mk, faceFromMove(p), playerClip(p));
       else billboards.push(captureEntity(p));
     }
     for (const s of game.skeletons) {
       if (!s || s.dead) continue;
       const mk = C && C.enemyModelKey(s.kind);
-      if (mgr && mk && mgr.factory.protos.has(mk))
-        asChar(s, mk, faceFromMove(s), enemyClip(s), s.state === "spawn" || s.state === "windup" || s.state === "fuse");
+      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(s, mk, faceFromMove(s), enemyClip(s));
       else billboards.push(captureEntity(s));
     }
     // 3D items (coins/potions/chests); everything else stays a billboard.
