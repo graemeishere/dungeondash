@@ -42,7 +42,7 @@ export const RIG = {
   },
   "class:ranger": {
     model: HERO + "Ranger.glb", scale: 1.42, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
-    weaponRot: [0, 0, Math.PI / 2], // stand the bow upright; fine-tune in anim3d
+    weaponRot: [4.97, 9.69, 6.28], // user-tuned in anim3d
     idle: "Idle_A", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
     attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
   },
@@ -61,7 +61,7 @@ export const RIG = {
   },
   "enemy:archer": {
     model: SKEL + "Skeleton_Rogue.glb", scale: 1.33, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
-    weaponRot: [0, 0, Math.PI / 2],
+    weaponRot: [4.97, 9.69, 6.28],
     idle: "Skeletons_Idle", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
