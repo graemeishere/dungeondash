@@ -95,7 +95,6 @@ export class CharacterFactory {
   constructor() {
     this.loader = new GLTFLoader();
     this.clips = new Map();    // name -> THREE.AnimationClip (shared library)
-    this.additive = new Map(); // attack name -> additive variant clip
     this.protos = new Map();   // rig key -> loaded gltf.scene (prototype to clone)
     this.weaponProtos = {};    // weapon url -> loaded scene
   }
@@ -107,24 +106,7 @@ export class CharacterFactory {
     for (const g of packs) for (const clip of g.animations) {
       if (!this.clips.has(clip.name)) this.clips.set(clip.name, clip);
     }
-    this._buildAdditive();
     return this;
-  }
-
-  // Build additive variants of every attack clip (delta from the clip's own
-  // rest frame). Played on top of a locomotion base, the legs keep moving while
-  // the arms perform the attack — no more sliding while attacking.
-  _buildAdditive() {
-    const names = new Set();
-    for (const k in RIG) for (const a of (RIG[k].attacks || [])) names.add(a);
-    for (const name of names) {
-      const clip = this.clips.get(name);
-      if (!clip || this.additive.has(name)) continue;
-      const add = clip.clone();
-      THREE.AnimationUtils.makeClipAdditive(add);
-      add.name = name + "__add";
-      this.additive.set(name, add);
-    }
   }
 
   async loadWeapons() {
@@ -176,68 +158,19 @@ export class CharacterFactory {
         }
       }
     }
-    return new Character(root, this.clips, this.additive);
+    return new Character(root, this.clips);
   }
 }
 
 class Character {
-  constructor(root, clips, additive) {
+  constructor(root, clips) {
     this.root = root;
     this.clips = clips;
-    this.additive = additive || new Map();
     this.mixer = new THREE.AnimationMixer(root);
     this.actions = new Map();
     this.current = null;
     this.currentName = null;
-    this.baseName = null;
-    this.addAction = null;
   }
-
-  // ---- blended game path: locomotion base + additive attack on top ----
-  _action(name) {
-    let a = this.actions.get(name);
-    if (!a) { const c = this.clips.get(name); if (!c) return null; a = this.mixer.clipAction(c); this.actions.set(name, a); }
-    return a;
-  }
-
-  // Looping locomotion (idle/run) or a one-shot full-body clip (spawn/death) on
-  // the base channel. Crossfades; one-shots clamp and aren't restarted per frame.
-  base(name, { once = false, fade = 0.15, timeScale = 1 } = {}) {
-    if (this.baseName === name) { if (this.current) this.current.timeScale = timeScale; return; }
-    const action = this._action(name);
-    if (!action) return;
-    action.reset();
-    action.timeScale = timeScale;
-    action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
-    action.clampWhenFinished = once;
-    action.fadeIn(fade).play();
-    const prev = this._action(this.baseName);
-    if (prev && prev !== action) prev.fadeOut(fade);
-    this.current = action;
-    this.currentName = this.baseName = name;
-  }
-
-  // One-shot additive attack layered over the base. Auto-stops when it finishes
-  // (returns the additive delta to zero), so the base shows through again.
-  attack(name, timeScale = 1) {
-    const clip = this.additive.get(name);
-    if (!clip) { return; }
-    let action = this.actions.get("add:" + name);
-    if (!action) {
-      action = this.mixer.clipAction(clip);
-      action.blendMode = THREE.AdditiveAnimationBlendMode;
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = false;
-      this.actions.set("add:" + name, action);
-    }
-    if (this.addAction && this.addAction !== action) this.addAction.stop();
-    action.reset();
-    action.timeScale = timeScale;
-    action.setEffectiveWeight(1);
-    action.play();
-    this.addAction = action;
-  }
-  clearAttack() { if (this.addAction) { this.addAction.fadeOut(0.12); this.addAction = null; } }
 
   // Crossfade to a clip. once=true plays a one-shot (clamped on last frame).
   // restart=true forces a replay even if the same clip is already current — used
@@ -301,21 +234,7 @@ export class CharacterManager {
       ch.root.scale.setScalar(ch._baseScale * this.scaleMul);
       ch.root.position.set(it.x, 0, it.z);
       ch.root.rotation.y = it.rotationY;
-      const a = it.anim;
-      if (a.full) {
-        ch.clearAttack();
-        ch.base(a.full, { once: true });
-      } else {
-        ch.base(a.base);
-        // (re)trigger the additive attack when a new swing starts or the combo
-        // clip changes (e.g. bow Draw -> Release within one shot).
-        if (a.attack && (a.attack !== ch._lastAtkName || a.attackId !== ch._lastAtkId)) {
-          ch.attack(a.attack, a.attackTimeScale || 1);
-          ch._lastAtkName = a.attack; ch._lastAtkId = a.attackId;
-        } else if (!a.attack) {
-          ch._lastAtkName = null;
-        }
-      }
+      ch.play(it.clip, { once: it.once, timeScale: it.timeScale || 1, restart: it.restart });
       ch.update(dt);
     }
     for (const [ent, ch] of this.chars) {
