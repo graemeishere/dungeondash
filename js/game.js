@@ -1594,14 +1594,18 @@
     return { clip, fresh }; // fresh -> force the one-shot to restart
   }
   function rigClip(ent, rig, opts) {
-    if (opts.spawn) return { clip: rig.spawn, once: true, timeScale: 1 };
+    // full-body one-shots (spawn/death) replace everything
+    if (opts.dead) return { full: rig.death };
+    if (opts.spawn) return { full: rig.spawn };
+    // otherwise a locomotion base + optional additive attack layered on top
+    const base = opts.moving ? rig.run : rig.idle;
     const atk = comboAttack(ent, rig);
-    if (atk) return { clip: atk.clip, once: true, timeScale: rig.attackSpeed || 1, restart: atk.fresh };
-    return { clip: opts.moving ? rig.run : rig.idle, once: false, timeScale: 1 };
+    if (atk) return { base, attack: atk.clip, attackTimeScale: rig.attackSpeed || 1, attackId: ent.atkAnimAt };
+    return { base };
   }
   function playerClip(p) {
     const rig = DD.char3d.RIG[DD.char3d.classModelKey(p.classKey)];
-    if (p.downed) return { clip: rig.death, once: true, timeScale: 1 };
+    if (p.downed) return { full: rig.death };
     return rigClip(p, rig, { moving: p.moving });
   }
   function enemyClip(s) {
@@ -1634,7 +1638,7 @@
     const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
     const asChar = (e, modelKey, rotationY, anim) => {
       const w = worldOf(e);
-      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart });
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, anim });
     };
 
     // Players + skeletons render as 3D characters once the models have loaded;
