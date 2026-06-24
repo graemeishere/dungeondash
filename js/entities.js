@@ -9,7 +9,7 @@
     },
     rogue: {
       name: "Rogue", color: "#3d7a4f",
-      hp: 8, speed: 225, attack: "melee", range: 34, arc: 1.5, dmg: 2, cooldown: 0.22, dash: true,
+      hp: 8, speed: 225, attack: "melee", range: 34, arc: 1.5, dmg: 2, cooldown: 0.51, dash: true,
       desc: "Lightning-fast stabs. Shift to dash.",
       stats: "HP 8 • Fastest • Dash",
     },
@@ -21,7 +21,7 @@
     },
     ranger: {
       name: "Ranger", color: "#8a5e2e",
-      hp: 8, speed: 185, attack: "arrow", dmg: 2, cooldown: 0.32, projSpeed: 540, pierce: 1,
+      hp: 8, speed: 185, attack: "arrow", dmg: 2, cooldown: 0.64, projSpeed: 540, pierce: 1,
       desc: "Rapid arrows that pierce through enemies.",
       stats: "HP 8 • Piercing shots",
     },

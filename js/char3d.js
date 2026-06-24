@@ -32,7 +32,7 @@ export const RIG = {
   },
   "class:rogue": {
     model: HERO + "Rogue.glb", scale: 1.42, weapon: GEAR + "dagger.gltf", hand: "r",
-    idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1.6,
+    idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1.21,
     attacks: ["Melee_Unarmed_Attack_Punch_A", "Melee_Unarmed_Attack_Kick", "Melee_1H_Attack_Slice_Horizontal", "Melee_1H_Attack_Stab"],
   },
   "class:mage": {
@@ -43,19 +43,19 @@ export const RIG = {
   "class:ranger": {
     model: HERO + "Ranger.glb", scale: 1.42, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
     weaponRot: [4.97, 9.69, 6.28], // user-tuned in anim3d
-    idle: "Idle_A", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
+    idle: "Idle_A", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 0.32,
     attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
   },
   // ---- skeleton enemies (share Rig_Medium) ----
   "enemy:minion": {
     model: SKEL + "Skeleton_Minion.glb", scale: 1.33, weapon: SKGEAR + "Skeleton_Blade.gltf", hand: "r",
-    idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
+    idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1.32,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Melee_1H_Attack_Stab", "Melee_1H_Attack_Slice_Horizontal"],
   },
   "enemy:warrior": {
     model: SKEL + "Skeleton_Warrior.glb", scale: 1.42, weapon: SKGEAR + "Skeleton_Axe.gltf", hand: "r",
-    idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
+    idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 2.01,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Melee_1H_Attack_Chop", "Melee_2H_Attack_Chop"],
   },
