@@ -49,13 +49,13 @@
     // the live-tunable animation playback rate.
     const CLASSES = {
       "class:warrior": { cooldown: 0.5,  sound: "swing", attackSpeed: 1.0 },
-      "class:rogue":   { cooldown: 0.22, sound: "swing", attackSpeed: 1.6 },
+      "class:rogue":   { cooldown: 0.51, sound: "swing", attackSpeed: 1.21 },
       "class:mage":    { cooldown: 0.5,  sound: "bolt",  attackSpeed: 1.0 },
-      "class:ranger":  { cooldown: 0.32, sound: "shoot", attackSpeed: 1.0 },
+      "class:ranger":  { cooldown: 0.64, sound: "shoot", attackSpeed: 0.32 },
       // skeletons (cooldowns approximate the real state-driven rhythm)
-      "enemy:minion":  { cooldown: 0.9,  sound: "swing", attackSpeed: 1.0 },
-      "enemy:warrior": { cooldown: 1.1,  sound: "swing", attackSpeed: 1.0 },
-      "enemy:archer":  { cooldown: 1.0,  sound: "shoot", attackSpeed: 1.0 },
+      "enemy:minion":  { cooldown: 0.68, sound: "swing", attackSpeed: 1.32 },
+      "enemy:warrior": { cooldown: 0.84, sound: "swing", attackSpeed: 2.01 },
+      "enemy:archer":  { cooldown: 0.76, sound: "shoot", attackSpeed: 1.0 },
       "enemy:mage":    { cooldown: 1.2,  sound: "bolt",  attackSpeed: 1.0 },
     };
     const keys = Object.keys(CLASSES);
