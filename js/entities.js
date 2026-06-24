@@ -3,25 +3,25 @@
   DD.CLASSES = {
     warrior: {
       name: "Warrior", color: "#aeb9cd",
-      hp: 12, speed: 165, attack: "melee", range: 46, arc: 2.4, dmg: 3, cooldown: 0.5,
+      hp: 12, speed: 165, attack: "melee", range: 46, arc: 2.4, dmg: 3, cooldown: 0.5, swingLock: 0.4,
       desc: "Heavy armor and wide sword swings.",
       stats: "HP 12 • Big melee arc",
     },
     rogue: {
       name: "Rogue", color: "#3d7a4f",
-      hp: 8, speed: 225, attack: "melee", range: 34, arc: 1.5, dmg: 2, cooldown: 0.51, dash: true,
+      hp: 8, speed: 225, attack: "melee", range: 34, arc: 1.5, dmg: 2, cooldown: 0.51, swingLock: 0.35, dash: true,
       desc: "Lightning-fast stabs. Shift to dash.",
       stats: "HP 8 • Fastest • Dash",
     },
     mage: {
       name: "Mage", color: "#8657d8",
-      hp: 6, speed: 160, attack: "bolt", dmg: 3, cooldown: 0.5, projSpeed: 380, splash: 38,
+      hp: 6, speed: 160, attack: "bolt", dmg: 3, cooldown: 0.5, swingLock: 0.4, projSpeed: 380, splash: 38,
       desc: "Lobs magic bolts that explode on impact.",
       stats: "HP 6 • AoE damage",
     },
     ranger: {
       name: "Ranger", color: "#8a5e2e",
-      hp: 8, speed: 185, attack: "arrow", dmg: 2, cooldown: 0.64, projSpeed: 540, pierce: 1,
+      hp: 8, speed: 185, attack: "arrow", dmg: 2, cooldown: 0.64, swingLock: 0.5, projSpeed: 540, pierce: 1,
       desc: "Rapid arrows that pierce through enemies.",
       stats: "HP 8 • Piercing shots",
     },
@@ -188,6 +188,7 @@
       this.iframes -= dt;
       this.swingT -= dt;
       this.dashCd -= dt;
+      if (this.lockT > 0) this.lockT -= dt;
 
       this.aim = input.aimAngle(this);
       this.flip = Math.cos(this.aim) < 0;
@@ -203,11 +204,14 @@
         this.dashDir = this.moving ? { x: dx, y: dy } : { x: Math.cos(this.aim), y: Math.sin(this.aim) };
         DD.audio.dash();
       }
+      // root-the-swing (3D only): no walking during the attack swing; the 2D
+      // game keeps its free-move-while-attacking feel. Dash always moves.
+      const rooted = DD.use3d && this.lockT > 0;
       if (this.dashT > 0) {
         this.dashT -= dt;
         DD.room.moveEntity(this, this.dashDir.x * 620 * dt, this.dashDir.y * 620 * dt);
         DD.particles.burst(this.x, this.y, { count: 2, colors: ["#bfe8c8", "#ffffff"], speed: 20, life: 0.3, size: 4 });
-      } else {
+      } else if (!rooted) {
         DD.room.moveEntity(this, dx * this.stats.speed * dt, dy * this.stats.speed * dt);
       }
 
@@ -218,6 +222,9 @@
       const c = this.stats;
       this.attackCd = c.cooldown;
       this.atkAnimAt = game.time; // 3D attack-animation trigger (all classes, incl. ranged)
+      // root-the-swing: face aim + stop moving for the swing's duration (3D look)
+      this.swingDur = c.swingLock || 0.4;
+      this.lockT = this.swingDur;
       if (c.attack === "melee") {
         this.swingT = 0.14;
         this.swingAngle = this.aim;

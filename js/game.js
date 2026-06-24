@@ -1582,7 +1582,9 @@
     }
     if (ent.atkAnimAt == null) return null;
     const t = game.time - ent.atkAnimAt;
-    const win = rig.seq ? ATK_WIN_SEQ : ATK_WIN;
+    // players carry their own swing duration (swingLock); skeletons use the
+    // generic constants so the window matches the visible swing exactly.
+    const win = ent.swingDur || (rig.seq ? ATK_WIN_SEQ : ATK_WIN);
     if (t < 0 || t >= win) return null;
     let clip;
     if (rig.seq) {
@@ -1594,18 +1596,14 @@
     return { clip, fresh }; // fresh -> force the one-shot to restart
   }
   function rigClip(ent, rig, opts) {
-    // full-body one-shots (spawn/death) replace everything
-    if (opts.dead) return { full: rig.death };
-    if (opts.spawn) return { full: rig.spawn };
-    // otherwise a locomotion base + optional additive attack layered on top
-    const base = opts.moving ? rig.run : rig.idle;
+    if (opts.spawn) return { clip: rig.spawn, once: true, timeScale: 1 };
     const atk = comboAttack(ent, rig);
-    if (atk) return { base, attack: atk.clip, attackTimeScale: rig.attackSpeed || 1, attackId: ent.atkAnimAt };
-    return { base };
+    if (atk) return { clip: atk.clip, once: true, timeScale: rig.attackSpeed || 1, restart: atk.fresh };
+    return { clip: opts.moving ? rig.run : rig.idle, once: false, timeScale: 1 };
   }
   function playerClip(p) {
     const rig = DD.char3d.RIG[DD.char3d.classModelKey(p.classKey)];
-    if (p.downed) return { full: rig.death };
+    if (p.downed) return { clip: rig.death, once: true, timeScale: 1 };
     return rigClip(p, rig, { moving: p.moving });
   }
   function enemyClip(s) {
@@ -1638,7 +1636,7 @@
     const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
     const asChar = (e, modelKey, rotationY, anim) => {
       const w = worldOf(e);
-      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, anim });
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart });
     };
 
     // Players + skeletons render as 3D characters once the models have loaded;
@@ -1646,7 +1644,11 @@
     for (const p of game.players) {
       if (!p || p.dead) continue;
       const mk = C && C.classModelKey(p.classKey);
-      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(p, mk, faceFromMove(p), playerClip(p));
+      // face the aim direction while a swing is active (root-the-swing model),
+      // else face movement; keep faceFromMove ticking so __px/__py stay current.
+      const moveFace = faceFromMove(p);
+      const face = (p.lockT > 0) ? faceFromAim(p.aim) : moveFace;
+      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(p, mk, face, playerClip(p));
       else billboards.push(captureEntity(p));
     }
     for (const s of game.skeletons) {
