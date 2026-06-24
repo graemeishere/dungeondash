@@ -347,10 +347,20 @@
       const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
       const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
       const kinds = cfg.kinds || ["melee"];
+      // A handful start dormant on the floor (Skeletons_Inactive_Floor_Pose) and
+      // wake when a player approaches; the rest rise in via the staggered queue.
+      const inactiveCount = Math.min(5, Math.max(0, count - 2));
       for (let i = 0; i < count; i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         const kind = i > 1 && Math.random() < 0.4 ? DD.choice(kinds) : kinds[0];
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind, faction });
+        if (i < inactiveCount) {
+          game.skeletons.push(new DD.Skeleton(pos.x, pos.y, {
+            kind, faction, inactive: true, scale: cfg.scale,
+            grade: DD.rollGrade(game.floor, game.tier),
+          }));
+        } else {
+          game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + (i - inactiveCount) * 0.4, big: false, kind, faction });
+        }
       }
       const bruteKind = kinds.find((k) => k !== "shade") || "melee";
       for (let i = 0; i < tier + Math.max(0, game.floor - 1); i++) {
@@ -1608,6 +1618,8 @@
   }
   function enemyClip(s) {
     const rig = DD.char3d.RIG[DD.char3d.enemyModelKey(s.kind)];
+    if (s.state === "inactive") return { clip: rig.inactive || rig.idle, once: false, timeScale: 1 };
+    if (s.state === "awaken")   return { clip: rig.awaken || rig.spawn, once: true, timeScale: 1 };
     const atking = s.state === "windup" || s.state === "fuse";
     if (atking && !s.__wasAtk) s.atkAnimAt = game.time; // rising edge of a strike
     s.__wasAtk = atking;
