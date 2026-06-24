@@ -1,5 +1,10 @@
 "use strict";
 (function (DD) {
+  // Dormant ("inactive") skeletons wake when a player gets within this radius,
+  // then play the awaken animation for this long before chasing.
+  const SKELETON_WAKE_R = 120;
+  const SKELETON_AWAKEN_T = 2.3; // matches Skeletons_Awaken_Floor (~2.3s)
+
   DD.CLASSES = {
     warrior: {
       name: "Warrior", color: "#aeb9cd",
@@ -231,7 +236,7 @@
         DD.audio.swing();
         let hitAny = false;
         for (const sk of game.enemies()) {
-          if (sk.state === "spawn" || sk.dead) continue;
+          if (sk.dormant() || sk.dead) continue;
           const d = DD.dist(this.x, this.y, sk.x, sk.y);
           if (d > c.range + sk.r) continue;
           const da = Math.abs(DD.angleDiff(this.aim, DD.angleTo(this.x, this.y, sk.x, sk.y)));
@@ -358,7 +363,7 @@
       }
 
       for (const sk of game.enemies()) {
-        if (sk.dead || sk.state === "spawn" || this.hitList.has(sk)) continue;
+        if (sk.dead || sk.dormant() || this.hitList.has(sk)) continue;
         if (DD.dist(this.x, this.y, sk.x, sk.y - 12) < sk.r + 6) {
           sk.damage(this.dmg, this.x - this.vx, this.y - this.vy, game, this.owner);
           DD.audio.hit();
@@ -380,7 +385,7 @@
         game.shake = Math.max(game.shake, 3);
         DD.particles.burst(this.x, this.y, { count: 18, colors: ["#b48cff", "#8657d8", "#fff"], speed: 150, life: 0.4 });
         for (const sk of game.enemies()) {
-          if (sk.dead || sk.state === "spawn" || this.hitList.has(sk)) continue;
+          if (sk.dead || sk.dormant() || this.hitList.has(sk)) continue;
           if (DD.dist(this.x, this.y, sk.x, sk.y - 12) < this.splash + sk.r) {
             sk.damage(this.dmg, this.x, this.y, game, this.owner);
           }
@@ -604,7 +609,9 @@
         this.coinDrop = [this.coinDrop[0] + 1, this.coinDrop[1] + 2];
       }
 
-      this.state = "spawn"; // spawn -> chase -> windup/fuse -> recover
+      // inactive: lies dormant on the floor and wakes when a player approaches
+      // (inactive -> awaken -> chase). Otherwise the normal rise (spawn -> chase).
+      this.state = opts.inactive ? "inactive" : "spawn"; // -> chase -> windup/fuse -> recover
       this.stateT = 1.0;
       this.shootCd = DD.rand(1.0, 2.2);
       this.animT = Math.random() * 10;
@@ -615,6 +622,11 @@
       this.kby = 0;
       this.dead = false;
       this.wanderA = DD.rand(0, Math.PI * 2);
+    }
+
+    // Not yet a threat and not targetable/damageable: rising, dormant, or waking.
+    dormant() {
+      return this.state === "spawn" || this.state === "inactive" || this.state === "awaken";
     }
 
     frames() {
@@ -657,6 +669,23 @@
           if (this.stateT <= 0) this.state = "chase";
           break;
 
+        case "inactive":
+          // dormant on the floor until a player comes within the wake radius
+          if (pl && DD.dist(this.x, this.y, pl.x, pl.y) < SKELETON_WAKE_R) {
+            this.state = "awaken";
+            this.stateT = SKELETON_AWAKEN_T;
+            DD.audio.bones();
+          }
+          break;
+
+        case "awaken":
+          // rising up; harmless until fully awake, then chase
+          if (Math.random() < 0.25) {
+            DD.particles.burst(this.x, this.y, { count: 1, colors: ["#6b6481", "#46415c"], speed: 40, life: 0.4, gravity: -60 });
+          }
+          if (this.stateT <= 0) this.state = "chase";
+          break;
+
         case "chase": {
           if (!pl) break;
           const d = DD.dist(this.x, this.y, pl.x, pl.y);
@@ -680,7 +709,7 @@
                   // heal most-damaged goblin ally
                   let bestTarget = null, bestMissing = 0;
                   for (const sk of game.skeletons) {
-                    if (sk === this || sk.dead || sk.state === "spawn" || sk.faction !== "goblin") continue;
+                    if (sk === this || sk.dead || sk.dormant() || sk.faction !== "goblin") continue;
                     const missing = sk.maxHp - sk.hp;
                     if (missing > bestMissing && DD.dist(this.x, this.y, sk.x, sk.y) < 220) {
                       bestMissing = missing; bestTarget = sk;
@@ -788,7 +817,7 @@
     }
 
     damage(n, fromX, fromY, game, attacker) {
-      if (this.dead || this.state === "spawn") return;
+      if (this.dead || this.dormant()) return;
       this.hp -= n;
       this.flash = 0.12;
       const a = DD.angleTo(fromX, fromY, this.x, this.y);
