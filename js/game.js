@@ -1708,7 +1708,13 @@
     // 2D canvas becomes a transparent HUD overlay in screen space.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    DD.hud.draw(ctx, game);
+    if (game.state === "play" || game.state === "transition") DD.hud.draw(ctx, game);
+    // room-transition fade (the 3D scene swaps rooms behind this)
+    if (game.state === "transition") {
+      const a = game.transitionPhase === "out" ? game.transitionT : 1 - game.transitionT;
+      ctx.fillStyle = `rgba(10, 8, 18, ${DD.clamp(a, 0, 1)})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     if (camTest) drawCamTest(dr);
   }
 
@@ -1762,9 +1768,14 @@
     lines.forEach((s, i) => ctx.fillText(s, canvas.width - w, 26 + i * 16));
   }
 
+  // States rendered by the 3D path: actual play plus the in-dungeon states whose
+  // UI is a DOM overlay (levelup/inventory/won/lost) or just a fade (transition).
+  // Without these the screen would flash back to the 2D dungeon every room change
+  // and level-up.
+  const ROOM_3D_STATES = { play: 1, transition: 1, levelup: 1, inventory: 1, won: 1, lost: 1 };
+
   function draw() {
-    // 3D path drives combat; menus/inventory/results stay on the 2D canvas.
-    if (DD.use3d && DD.render3d && DD.render3d.proto && game.state === "play") {
+    if (DD.use3d && DD.render3d && DD.render3d.proto && ROOM_3D_STATES[game.state]) {
       drawCombat3D();
       return;
     }
