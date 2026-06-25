@@ -683,10 +683,14 @@
           break;
 
         case "inactive": {
-          // dormant on the floor until a player is near OR the auto-wake timer
-          // (stateT, counting down from SKELETON_AUTO_WAKE_T) elapses
+          // Wake when: a player is near, OR the auto-wake timer (stateT counting
+          // down from SKELETON_AUTO_WAKE_T) elapses, OR these dormant ones are the
+          // only enemies left (so the room can never soft-lock — the last ambush
+          // rises to finish the fight).
           const near = pl && DD.dist(this.x, this.y, pl.x, pl.y) < SKELETON_WAKE_R;
-          if (near || this.stateT <= 0) {
+          const lastEnemies = game.spawnQueue.length === 0 &&
+            game.enemies().every((s) => s === this || s.dead || s.dying || s.state === "inactive");
+          if (near || this.stateT <= 0 || lastEnemies) {
             this.state = "awaken";
             this.stateT = SKELETON_AWAKEN_T;
             DD.audio.bones();
@@ -717,8 +721,8 @@
                 const aimAngle = DD.angleTo(this.x, this.y, pl.x, pl.y - 8);
                 if (this.kind === "archer" || this.kind === "goblinArcher") {
                   this.shootCd = DD.rand(1.9, 2.6);
-                  const style = this.kind === "goblinArcher" ? "arrow" : "bone";
-                  game.enemyShots.push(new EnemyShot(this.x, this.y - 14, aimAngle, 240, 1, style));
+                  // both archers now hold a bow -> fire arrows (renders as 3D arrow)
+                  game.enemyShots.push(new EnemyShot(this.x, this.y - 14, aimAngle, 240, 1, "arrow"));
                   DD.audio.shoot();
                 } else if (this.kind === "goblinShaman") {
                   this.shootCd = DD.rand(3.5, 5.0);
