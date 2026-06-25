@@ -44,6 +44,9 @@ body {
 .overlay {
   position: absolute;
   inset: 0;
+  /* above #game (z-index 1, which sits above the #game3d WebGL canvas) so the
+     transparent game canvas can't intercept clicks on menus/level-up cards */
+  z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
