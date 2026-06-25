@@ -1689,11 +1689,19 @@
       if (key && dr.hasItem(key)) asItem(pk, key); else billboards.push(captureEntity(pk));
     }
     if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
-    for (const pr of game.projectiles) billboards.push(captureEntity(pr));
-    for (const es of game.enemyShots) billboards.push(captureEntity(es));
+    // arrows render as 3D models oriented along velocity; other shots stay 2D
+    const projs = [];
+    const asProj = (e) => projs.push({ entity: e, key: "arrow", gx: e.x / DD.TILE, gy: e.y / DD.TILE, rotationY: Math.atan2(e.vx, e.vy) });
+    for (const pr of game.projectiles) {
+      if (pr.kind === "arrow" && dr.hasProjectile("arrow")) asProj(pr); else billboards.push(captureEntity(pr));
+    }
+    for (const es of game.enemyShots) {
+      if (es.style === "arrow" && dr.hasProjectile("arrow")) asProj(es); else billboards.push(captureEntity(es));
+    }
 
     if (mgr) mgr.sync(chars, lastDt);
     dr.setItems(items);
+    dr.setProjectiles(projs);
     dr.setEntities(billboards);
     dr.render();
 

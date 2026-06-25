@@ -185,6 +185,7 @@
       window.DD.render3d = dr;
       try { await dr.ready; } catch (e) { console.error("3D kit load failed:", e); }
       dr.loadItems().catch((e) => console.error("3D items load failed:", e)); // background
+      dr.loadProjectiles().catch((e) => console.error("3D projectiles load failed:", e));
       // Load the KayKit characters/animations in the background; game.js falls
       // back to billboards for players/enemies until DD.charMgr is ready.
       try {
