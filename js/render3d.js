@@ -45,6 +45,12 @@ const ITEMS = {
   axe:   { url: "KayKit Adventurers/Assets/gltf/axe_1handed.gltf",   scale: 1.3, spin: true, bob: true },
 };
 
+// Flying projectiles rendered as 3D models oriented along their velocity (the
+// model points +Z; rotation.y = atan2(vx, vy) aligns it with the shot).
+const PROJECTILES = {
+  arrow: { url: "KayKit Adventurers/Assets/gltf/arrow_bow.gltf", scale: 1.4, y: 0.6 },
+};
+
 // Pull the first renderable mesh out of a loaded GLB scene. Kenney pieces are a
 // single mesh sharing the colormap material, so this is all we need to instance.
 function firstMesh(root) {
@@ -98,6 +104,12 @@ export class DungeonRenderer {
     this.scene.add(this.itemGroup);
     this.itemProtos = {};       // key -> loaded scene prototype
     this.itemMap = new Map();   // entity -> { mesh, cfg }
+
+    // 3D projectiles (arrows) oriented along velocity.
+    this.projGroup = new THREE.Group();
+    this.scene.add(this.projGroup);
+    this.projProtos = {};
+    this.projMap = new Map();
 
     // Resolves once the kit pieces are loaded; callers await this before build.
     this.ready = this._loadPieces();
@@ -341,6 +353,44 @@ export class DungeonRenderer {
 
   // True if a given item key has a loaded 3D model.
   hasItem(key) { return !!this.itemProtos[key]; }
+
+  async loadProjectiles() {
+    const entries = Object.entries(PROJECTILES);
+    const res = await Promise.allSettled(
+      entries.map(([, c]) => this.loader.loadAsync(encodeURI(c.url)).then((g) => g.scene))
+    );
+    res.forEach((r, i) => {
+      if (r.status === "fulfilled") this.projProtos[entries[i][0]] = r.value;
+      else console.error("projectile load failed:", entries[i][0], r.reason);
+    });
+    return this;
+  }
+  hasProjectile(key) { return !!this.projProtos[key]; }
+
+  // Place flying projectiles from { entity, key, gx, gy, rotationY }.
+  setProjectiles(list) {
+    const seen = new Set();
+    for (const it of list) {
+      seen.add(it.entity);
+      let rec = this.projMap.get(it.entity);
+      if (!rec) {
+        const proto = this.projProtos[it.key];
+        if (!proto) continue;
+        const cfg = PROJECTILES[it.key];
+        const mesh = proto.clone(true);
+        mesh.scale.setScalar(cfg.scale);
+        this.projGroup.add(mesh);
+        rec = { mesh, cfg };
+        this.projMap.set(it.entity, rec);
+      }
+      const p = this.cellToWorld(it.gx, it.gy);
+      rec.mesh.position.set(p.x, rec.cfg.y, p.z);
+      rec.mesh.rotation.y = it.rotationY;
+    }
+    for (const [ent, rec] of this.projMap) {
+      if (!seen.has(ent)) { this.projGroup.remove(rec.mesh); this.projMap.delete(ent); }
+    }
+  }
 
   render() {
     const tgt = this.camMode === "follow" ? this.followT : ORIGIN;

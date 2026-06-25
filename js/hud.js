@@ -101,7 +101,7 @@
         ctx.fillStyle = "#f2ecdd";
         ctx.fillText(boss.label || "BOSS", DD.WIDTH / 2, bby + 11);
       } else {
-        const remaining = game.skeletons.filter((s) => !s.dead).length + game.spawnQueue.length;
+        const remaining = game.skeletons.filter((s) => !s.dead && !s.dying).length + game.spawnQueue.length;
         const chestsLeft = game.chests.filter((c) => !c.opened).length;
         const boxW = narrow ? 130 : 234;
         ctx.fillStyle = "rgba(10,8,18,0.7)";

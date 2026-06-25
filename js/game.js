@@ -1251,7 +1251,8 @@
       if (!game.roomCleared) {
         if (game.roomType === "treasure") {
           if (game.chests.every((c) => c.opened)) setRoomCleared();
-        } else if (game.skeletons.length === 0 && game.spawnQueue.length === 0) {
+        } else if (game.skeletons.every((s) => s.dying) && game.spawnQueue.length === 0) {
+          // dying skeletons are gameplay-dead (fading corpses) — don't block clear
           setRoomCleared();
         }
       }
@@ -1618,6 +1619,7 @@
   }
   function enemyClip(s) {
     const rig = DD.char3d.RIG[DD.char3d.enemyModelKey(s.kind)];
+    if (s.dying)                return { clip: rig.death, once: true, timeScale: 1 };
     if (s.state === "inactive") return { clip: rig.inactive || rig.idle, once: false, timeScale: 1 };
     if (s.state === "awaken")   return { clip: rig.awaken || rig.spawn, once: true, timeScale: 1 };
     const atking = s.state === "windup" || s.state === "fuse";
@@ -1646,9 +1648,9 @@
     const billboards = [];
     const chars = [];
     const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
-    const asChar = (e, modelKey, rotationY, anim) => {
+    const asChar = (e, modelKey, rotationY, anim, opacity) => {
       const w = worldOf(e);
-      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart });
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity });
     };
 
     // Players + skeletons render as 3D characters once the models have loaded;
@@ -1666,7 +1668,9 @@
     for (const s of game.skeletons) {
       if (!s || s.dead) continue;
       const mk = C && C.enemyModelKey(s.kind);
-      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(s, mk, faceFromMove(s), enemyClip(s));
+      // fade the corpse out over the tail of the death animation
+      const opacity = s.dying ? Math.min(1, s.deathT / 0.7) : 1;
+      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(s, mk, faceFromMove(s), enemyClip(s), opacity);
       else billboards.push(captureEntity(s));
     }
     // 3D items (coins/potions/chests); everything else stays a billboard.
@@ -1685,11 +1689,19 @@
       if (key && dr.hasItem(key)) asItem(pk, key); else billboards.push(captureEntity(pk));
     }
     if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
-    for (const pr of game.projectiles) billboards.push(captureEntity(pr));
-    for (const es of game.enemyShots) billboards.push(captureEntity(es));
+    // arrows render as 3D models oriented along velocity; other shots stay 2D
+    const projs = [];
+    const asProj = (e) => projs.push({ entity: e, key: "arrow", gx: e.x / DD.TILE, gy: e.y / DD.TILE, rotationY: Math.atan2(e.vx, e.vy) });
+    for (const pr of game.projectiles) {
+      if (pr.kind === "arrow" && dr.hasProjectile("arrow")) asProj(pr); else billboards.push(captureEntity(pr));
+    }
+    for (const es of game.enemyShots) {
+      if (es.style === "arrow" && dr.hasProjectile("arrow")) asProj(es); else billboards.push(captureEntity(es));
+    }
 
     if (mgr) mgr.sync(chars, lastDt);
     dr.setItems(items);
+    dr.setProjectiles(projs);
     dr.setEntities(billboards);
     dr.render();
 
