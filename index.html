@@ -181,8 +181,12 @@
   <script type="module">
     if (window.DD && window.DD.use3d) {
       const { DungeonRenderer } = await import("./js/render3d.js");
-      const dr = new DungeonRenderer(document.getElementById("game3d"));
+      const c3 = document.getElementById("game3d");
+      const dr = new DungeonRenderer(c3);
       window.DD.render3d = dr;
+      // game.js ran its first fitCanvas() before this renderer existed, so size
+      // it now (otherwise the view is squashed until the first window resize).
+      dr.resize(c3.width || window.innerWidth, c3.height || window.innerHeight);
       try { await dr.ready; } catch (e) { console.error("3D kit load failed:", e); }
       dr.loadItems().catch((e) => console.error("3D items load failed:", e)); // background
       dr.loadProjectiles().catch((e) => console.error("3D projectiles load failed:", e));
