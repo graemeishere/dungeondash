@@ -3,7 +3,12 @@
   // Dormant ("inactive") skeletons wake when a player gets within this radius,
   // then play the awaken animation for this long before chasing.
   const SKELETON_WAKE_R = 120;
-  const SKELETON_AWAKEN_T = 2.3; // matches Skeletons_Awaken_Floor (~2.3s)
+  const SKELETON_AWAKEN_T = 2.3;   // matches Skeletons_Awaken_Floor (~2.3s)
+  const SKELETON_AUTO_WAKE_T = 60; // dormant skeletons wake after this long regardless
+  // Death (3D): play Skeletons_Death, then fade out and remove. Dying skeletons
+  // are gameplay-dead (no threat / don't block room-clear) but still render.
+  const SKELETON_DEATH_T = 2.0;    // matches Skeletons_Death (~2.0s)
+  const SKELETON_FADE_T = 0.7;     // opacity fade at the tail of the death
 
   DD.CLASSES = {
     warrior: {
@@ -236,7 +241,7 @@
         DD.audio.swing();
         let hitAny = false;
         for (const sk of game.enemies()) {
-          if (sk.dormant() || sk.dead) continue;
+          if (sk.dormant() || sk.dead || sk.dying) continue;
           const d = DD.dist(this.x, this.y, sk.x, sk.y);
           if (d > c.range + sk.r) continue;
           const da = Math.abs(DD.angleDiff(this.aim, DD.angleTo(this.x, this.y, sk.x, sk.y)));
@@ -363,7 +368,7 @@
       }
 
       for (const sk of game.enemies()) {
-        if (sk.dead || sk.dormant() || this.hitList.has(sk)) continue;
+        if (sk.dead || sk.dying || sk.dormant() || this.hitList.has(sk)) continue;
         if (DD.dist(this.x, this.y, sk.x, sk.y - 12) < sk.r + 6) {
           sk.damage(this.dmg, this.x - this.vx, this.y - this.vy, game, this.owner);
           DD.audio.hit();
@@ -385,7 +390,7 @@
         game.shake = Math.max(game.shake, 3);
         DD.particles.burst(this.x, this.y, { count: 18, colors: ["#b48cff", "#8657d8", "#fff"], speed: 150, life: 0.4 });
         for (const sk of game.enemies()) {
-          if (sk.dead || sk.dormant() || this.hitList.has(sk)) continue;
+          if (sk.dead || sk.dying || sk.dormant() || this.hitList.has(sk)) continue;
           if (DD.dist(this.x, this.y, sk.x, sk.y - 12) < this.splash + sk.r) {
             sk.damage(this.dmg, this.x, this.y, game, this.owner);
           }
@@ -612,7 +617,9 @@
       // inactive: lies dormant on the floor and wakes when a player approaches
       // (inactive -> awaken -> chase). Otherwise the normal rise (spawn -> chase).
       this.state = opts.inactive ? "inactive" : "spawn"; // -> chase -> windup/fuse -> recover
-      this.stateT = 1.0;
+      this.stateT = opts.inactive ? SKELETON_AUTO_WAKE_T : 1.0; // inactive: auto-wake countdown
+      this.dying = false;
+      this.deathT = 0;
       this.shootCd = DD.rand(1.0, 2.2);
       this.animT = Math.random() * 10;
       this.flip = false;
@@ -646,6 +653,12 @@
     }
 
     update(dt, game) {
+      // dying: play out the death animation + fade, then remove. No AI.
+      if (this.dying) {
+        this.deathT -= dt;
+        if (this.deathT <= 0) this.dead = true;
+        return;
+      }
       this.stateT -= dt;
       this.flash -= dt;
       this.animT += dt;
@@ -669,14 +682,17 @@
           if (this.stateT <= 0) this.state = "chase";
           break;
 
-        case "inactive":
-          // dormant on the floor until a player comes within the wake radius
-          if (pl && DD.dist(this.x, this.y, pl.x, pl.y) < SKELETON_WAKE_R) {
+        case "inactive": {
+          // dormant on the floor until a player is near OR the auto-wake timer
+          // (stateT, counting down from SKELETON_AUTO_WAKE_T) elapses
+          const near = pl && DD.dist(this.x, this.y, pl.x, pl.y) < SKELETON_WAKE_R;
+          if (near || this.stateT <= 0) {
             this.state = "awaken";
             this.stateT = SKELETON_AWAKEN_T;
             DD.audio.bones();
           }
           break;
+        }
 
         case "awaken":
           // rising up; harmless until fully awake, then chase
@@ -709,7 +725,7 @@
                   // heal most-damaged goblin ally
                   let bestTarget = null, bestMissing = 0;
                   for (const sk of game.skeletons) {
-                    if (sk === this || sk.dead || sk.dormant() || sk.faction !== "goblin") continue;
+                    if (sk === this || sk.dead || sk.dying || sk.dormant() || sk.faction !== "goblin") continue;
                     const missing = sk.maxHp - sk.hp;
                     if (missing > bestMissing && DD.dist(this.x, this.y, sk.x, sk.y) < 220) {
                       bestMissing = missing; bestTarget = sk;
@@ -817,7 +833,7 @@
     }
 
     damage(n, fromX, fromY, game, attacker) {
-      if (this.dead || this.dormant()) return;
+      if (this.dead || this.dying || this.dormant()) return;
       this.hp -= n;
       this.flash = 0.12;
       const a = DD.angleTo(fromX, fromY, this.x, this.y);
@@ -829,8 +845,11 @@
     }
 
     die(game, attacker) {
-      if (this.dead) return;
-      this.dead = true;
+      if (this.dead || this.dying) return;
+      // 3D: enter a dying phase (play Skeletons_Death + fade, then remove).
+      // 2D (legacy): remove immediately. Rewards/drops happen now either way.
+      if (DD.use3d) { this.dying = true; this.deathT = SKELETON_DEATH_T; this.state = "dying"; }
+      else this.dead = true;
       game.kills++;
       game.addXP(this.xpValue);
       if (attacker) attacker.onKill();

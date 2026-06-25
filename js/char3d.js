@@ -193,6 +193,28 @@ class Character {
     return action;
   }
 
+  // Fade the whole model. SkeletonUtils.clone shares materials between clones,
+  // so clone this instance's materials once before tweaking opacity — otherwise
+  // every skeleton using the same material would fade together.
+  setOpacity(o) {
+    if (!this._fadeMats) {
+      this._fadeMats = [];
+      this.root.traverse((m) => {
+        if (!m.isMesh || !m.material) return;
+        const wasArray = Array.isArray(m.material);
+        const mats = wasArray ? m.material : [m.material];
+        const cloned = mats.map((mat) => {
+          const c = mat.clone();
+          c.transparent = true; c.depthWrite = false;
+          this._fadeMats.push(c);
+          return c;
+        });
+        m.material = wasArray ? cloned : cloned[0];
+      });
+    }
+    for (const mat of this._fadeMats) mat.opacity = o;
+  }
+
   update(dt) { this.mixer.update(dt); }
 }
 
@@ -234,6 +256,7 @@ export class CharacterManager {
       ch.root.scale.setScalar(ch._baseScale * this.scaleMul);
       ch.root.position.set(it.x, 0, it.z);
       ch.root.rotation.y = it.rotationY;
+      if (it.opacity != null && it.opacity < 1) ch.setOpacity(it.opacity);
       ch.play(it.clip, { once: it.once, timeScale: it.timeScale || 1, restart: it.restart });
       ch.update(dt);
     }
