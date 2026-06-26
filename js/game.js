@@ -1689,18 +1689,29 @@
       if (key && dr.hasItem(key)) asItem(pk, key); else billboards.push(captureEntity(pk));
     }
     if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
-    // arrows render as 3D models oriented along velocity; other shots stay 2D
+    // arrows -> 3D models (along velocity); mage bolts / magic -> glowing orbs
+    // with a particle trail; anything else stays a billboard.
     const projs = [];
+    const orbs = [];
     const asProj = (e) => projs.push({ entity: e, key: "arrow", gx: e.x / DD.TILE, gy: e.y / DD.TILE, rotationY: Math.atan2(e.vx, e.vy) });
+    const asOrb = (e, color, size, trail) => {
+      const w = dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
+      orbs.push({ entity: e, x: w.x, y: 1.4, z: w.z, color, size });
+      if (DD.fx3d) DD.fx3d.burst(w.x, 1.4, w.z, { count: 1, colors: trail, speed: 8, life: 0.25 });
+    };
     for (const pr of game.projectiles) {
-      if (pr.kind === "arrow" && dr.hasProjectile("arrow")) asProj(pr); else billboards.push(captureEntity(pr));
+      if (pr.kind === "arrow" && dr.hasProjectile("arrow")) asProj(pr);
+      else if (pr.kind === "bolt" && DD.fx3d) asOrb(pr, "#b48cff", 1.3, ["#b48cff", "#d8b4ff"]);
+      else billboards.push(captureEntity(pr));
     }
     for (const es of game.enemyShots) {
-      if (es.style === "arrow" && dr.hasProjectile("arrow")) asProj(es); else billboards.push(captureEntity(es));
+      if (es.style === "arrow" && dr.hasProjectile("arrow")) asProj(es);
+      else if (es.style === "magic" && DD.fx3d) asOrb(es, "#9940d0", 1.1, ["#9940d0", "#c060f0"]);
+      else billboards.push(captureEntity(es));
     }
 
     if (mgr) mgr.sync(chars, lastDt);
-    if (DD.fx3d) DD.fx3d.update(lastDt);
+    if (DD.fx3d) { DD.fx3d.update(lastDt); DD.fx3d.setOrbs(orbs); }
     dr.setItems(items);
     dr.setProjectiles(projs);
     dr.setEntities(billboards);
