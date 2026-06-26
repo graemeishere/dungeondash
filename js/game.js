@@ -1700,6 +1700,7 @@
     }
 
     if (mgr) mgr.sync(chars, lastDt);
+    if (DD.fx3d) DD.fx3d.update(lastDt);
     dr.setItems(items);
     dr.setProjectiles(projs);
     dr.setEntities(billboards);
@@ -1708,6 +1709,7 @@
     // 2D canvas becomes a transparent HUD overlay in screen space.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawDamageNumbers3D(dr);
     if (game.state === "play" || game.state === "transition") DD.hud.draw(ctx, game);
     // room-transition fade (the 3D scene swaps rooms behind this)
     if (game.state === "transition") {
@@ -1716,6 +1718,29 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     if (camTest) drawCamTest(dr);
+  }
+
+  // Floating damage/heal numbers, projected from world space onto the HUD
+  // overlay and risen in screen space over their lifetime.
+  function drawDamageNumbers3D(dr) {
+    if (!DD.particles.activeTexts) return;
+    const texts = DD.particles.activeTexts();
+    if (!texts.length) return;
+    ctx.font = "bold 15px 'Trebuchet MS', Verdana, sans-serif";
+    ctx.textAlign = "center";
+    for (const t of texts) {
+      const sp = dr.projectToScreen(t.x / DD.TILE, t.y / DD.TILE, 1.7);
+      if (sp.depth > 1) continue; // behind the camera
+      const rise = (0.8 - t.life) * 42;
+      const y = sp.y - rise;
+      ctx.globalAlpha = DD.clamp(t.life / 0.4, 0, 1);
+      ctx.fillStyle = "#1a1626";
+      ctx.fillText(t.str, sp.x + 1, y + 1);
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.str, sp.x, y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
   }
 
   // On-screen camera buttons for mobile tuning (?camtest). Touch-friendly DOM
