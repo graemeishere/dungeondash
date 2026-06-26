@@ -51,21 +51,25 @@
   const DUNGEONS = {
     catacombs: {
       id: "catacombs", name: "Catacombs", faction: "skeleton", enemyLabel: "Skeletons",
+      // The 4 skeleton models, ordered easy->hard so the per-room ramp introduces
+      // one new type per combat room: Minion -> Archer -> Heavy -> Mage.
+      // melee=Skeleton_Minion, archer=Skeleton_Rogue(bow), zombie=Skeleton_Warrior
+      // (heavy/tanky), warlock=Skeleton_Mage (casts magic orbs).
       floors: [
         { name: "Upper Catacombs",
-          kinds: ["melee", "shade"], eliteKinds: ["melee"],
-          plan: ["combat", "combat", "treasure", "combat", "boss"] },
+          kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["zombie"],
+          plan: ["combat", "combat", "combat", "combat", "boss"] },
         { name: "Deep Catacombs",
-          kinds: ["melee", "archer", "shade"], eliteKinds: ["archer", "shade"],
+          kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["archer", "warlock"],
           plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
         { name: "Catacombs Core",
-          kinds: ["melee", "archer", "shade"], eliteKinds: ["melee", "archer", "shade"],
+          kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["zombie", "warlock"],
           plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
       ],
       tiers: [
         { tier: 0, levelHint: "1-10",  scale: 1.0, bossHp: 70,  bossDmg: 2, bossName: "SKELETON KING",  summonKind: "melee"  },
         { tier: 1, levelHint: "11-20", scale: 3.0, bossHp: 160, bossDmg: 4, bossName: "SKELETON KING",  summonKind: "archer" },
-        { tier: 2, levelHint: "21-30", scale: 6.0, bossHp: 280, bossDmg: 7, bossName: "SKELETON KING",  summonKind: "bomber" },
+        { tier: 2, levelHint: "21-30", scale: 6.0, bossHp: 280, bossDmg: 7, bossName: "SKELETON KING",  summonKind: "zombie" },
       ],
     },
     goblinMines: {
@@ -346,7 +350,10 @@
     if (game.roomType === "combat") {
       const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
       const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
-      const kinds = cfg.kinds || ["melee"];
+      // Variety ramps one new enemy type per combat room (kinds are ordered
+      // easy->hard): 1st combat room = kinds[0] only, 2nd = +kinds[1], etc.
+      const allKinds = cfg.kinds || ["melee"];
+      const kinds = allKinds.slice(0, Math.min(allKinds.length, tier + 1));
       // A handful start dormant on the floor (Skeletons_Inactive_Floor_Pose) and
       // wake when a player approaches; the rest rise in via the staggered queue.
       const inactiveCount = Math.min(5, Math.max(0, count - 2));
