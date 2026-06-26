@@ -1668,8 +1668,8 @@
     for (const s of game.skeletons) {
       if (!s || s.dead) continue;
       const mk = C && C.enemyModelKey(s.kind);
-      // fade the corpse out over the tail of the death animation
-      const opacity = s.dying ? Math.min(1, s.deathT / 0.7) : 1;
+      // fade dying corpses; shades are translucent ghosts (distinct from minions)
+      const opacity = s.dying ? Math.min(1, s.deathT / 0.7) : (s.kind === "shade" ? 0.5 : 1);
       if (mgr && mk && mgr.factory.protos.has(mk)) asChar(s, mk, faceFromMove(s), enemyClip(s), opacity);
       else billboards.push(captureEntity(s));
     }
@@ -2299,7 +2299,9 @@
   if (params.get("dev") === "combat") {
     document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
     const cls = params.get("class"); // ?class=mage|ranger|rogue|warrior
-    startRun(DD.CLASSES[cls] ? cls : "warrior");
+    // ?dungeon=crypt (warlocks/necromancers) | goblinMines (shamans) | catacombs
+    const dng = params.get("dungeon");
+    startRun(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
   }
 
   // 'C' toggles the 3D camera between fixed (whole-room) and follow (player).
