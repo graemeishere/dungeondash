@@ -85,8 +85,9 @@ export function classModelKey(classKey) {
   return RIG[k] ? k : "class:warrior";
 }
 export function enemyModelKey(kind = "") {
-  if (/mage|warlock|necromancer|shaman|shade/i.test(kind)) return "enemy:mage";
-  if (/arch|bow|ranger|rogue/i.test(kind))                 return "enemy:archer";
+  // only true ranged casters use the mage model (shade is a melee phasing ghost)
+  if (/mage|warlock|necromancer|shaman/i.test(kind)) return "enemy:mage";
+  if (/arch|bow|ranger|rogue/i.test(kind))           return "enemy:archer";
   if (/zombie|berserker|brute|warrior|goblin/i.test(kind)) return "enemy:warrior";
   return "enemy:minion";
 }

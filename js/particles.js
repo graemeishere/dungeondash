@@ -50,6 +50,14 @@
       }
     },
 
+    // Expanding impact ring (3D only; no-op in 2D mode).
+    ring(x, y, color) {
+      if (DD.use3d && DD.fx3d && DD.render3d) {
+        const w = DD.render3d.cellToWorld(x / DD.TILE, y / DD.TILE);
+        DD.fx3d.ring(w.x, 0, w.z, color);
+      }
+    },
+
     // Floating damage/heal numbers, for the 3D HUD overlay to project + draw.
     activeTexts() { return texts; },
 

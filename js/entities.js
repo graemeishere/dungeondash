@@ -389,6 +389,7 @@
         DD.audio.splash();
         game.shake = Math.max(game.shake, 3);
         DD.particles.burst(this.x, this.y, { count: 18, colors: ["#b48cff", "#8657d8", "#fff"], speed: 150, life: 0.4 });
+        DD.particles.ring(this.x, this.y, "#b48cff");
         for (const sk of game.enemies()) {
           if (sk.dead || sk.dying || sk.dormant() || this.hitList.has(sk)) continue;
           if (DD.dist(this.x, this.y, sk.x, sk.y - 12) < this.splash + sk.r) {
@@ -719,6 +720,7 @@
               else if (d < 240) a += Math.PI / 2;
               if (this.shootCd <= 0 && d < 340) {
                 const aimAngle = DD.angleTo(this.x, this.y, pl.x, pl.y - 8);
+                this.atkAnimAt = game.time; // play the ranged cast/draw animation
                 if (this.kind === "archer" || this.kind === "goblinArcher") {
                   this.shootCd = DD.rand(1.9, 2.6);
                   // both archers now hold a bow -> fire arrows (renders as 3D arrow)

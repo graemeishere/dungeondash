@@ -40,14 +40,61 @@ export class FX3D {
 
     // Additive + vertex colours: fade is done by scaling rgb toward 0 (adding
     // less light), so we don't need per-particle alpha.
+    this.scene = scene;
+    this.glowTex = glowTexture();
     this.mat = new THREE.PointsMaterial({
-      map: glowTexture(), size: SIZE, sizeAttenuation: true, vertexColors: true,
+      map: this.glowTex, size: SIZE, sizeAttenuation: true, vertexColors: true,
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
     });
     this.points = new THREE.Points(geo, this.mat);
     this.points.frustumCulled = false;
     scene.add(this.points);
     this._c = new THREE.Color();
+
+    // Glowing orbs (mage bolts / magic shots): one additive sprite per projectile.
+    this.orbMat = new THREE.SpriteMaterial({
+      map: this.glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    this.orbs = new Map(); // entity -> Sprite
+
+    // Expanding ground rings (spell impacts).
+    this.ringGeo = new THREE.RingGeometry(0.55, 1.0, 28);
+    this.rings = [];     // active { mesh, t, life }
+    this.ringPool = [];  // reusable meshes
+  }
+
+  // Place glowing orbs from { entity, x, y, z, color, size }. Pooled per entity.
+  setOrbs(list) {
+    const seen = new Set();
+    for (const it of list) {
+      seen.add(it.entity);
+      let s = this.orbs.get(it.entity);
+      if (!s) { s = new THREE.Sprite(this.orbMat.clone()); this.scene.add(s); this.orbs.set(it.entity, s); }
+      s.material.color.set(it.color || "#b48cff");
+      s.position.set(it.x, it.y, it.z);
+      s.scale.setScalar(it.size || 1);
+    }
+    for (const [e, s] of this.orbs) {
+      if (!seen.has(e)) { this.scene.remove(s); this.orbs.delete(e); }
+    }
+  }
+
+  // Expanding flat ring shockwave on the floor at a world point.
+  ring(wx, wy, wz, color) {
+    let m = this.ringPool.pop();
+    if (!m) {
+      m = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      }));
+      this.scene.add(m);
+    }
+    m.material.color.set(color || "#b48cff");
+    m.position.set(wx, wy + 0.15, wz);
+    m.rotation.x = -Math.PI / 2; // lie flat on the floor
+    m.scale.setScalar(0.2);
+    m.material.opacity = 1;
+    m.visible = true;
+    this.rings.push({ mesh: m, t: 0, life: 0.4 });
   }
 
   // Spawn a burst at world (wx,wy,wz). opts mirror DD.particles.burst:
@@ -94,5 +141,15 @@ export class FX3D {
     this.geo.setDrawRange(0, w);
     this.geo.attributes.position.needsUpdate = true;
     this.geo.attributes.color.needsUpdate = true;
+
+    // expanding impact rings
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const r = this.rings[i];
+      r.t += dt;
+      const k = r.t / r.life;
+      if (k >= 1) { r.mesh.visible = false; this.ringPool.push(r.mesh); this.rings.splice(i, 1); continue; }
+      r.mesh.scale.setScalar(0.2 + k * 4); // expand to ~4u radius
+      r.mesh.material.opacity = 1 - k;
+    }
   }
 }
