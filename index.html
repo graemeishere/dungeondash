@@ -9,6 +9,9 @@
 </head>
 <body>
   <div id="wrap">
+    <!-- 3D dungeon layer (only used when the URL has ?3d); sits behind #game,
+         which becomes transparent so the WebGL render shows through. -->
+    <canvas id="game3d"></canvas>
     <canvas id="game" width="960" height="576"></canvas>
 
     <div id="menu" class="overlay">
@@ -184,6 +187,11 @@
     <div id="inv-tooltip" class="inv-tooltip hidden"></div>
   </div>
 
+  <!-- Resolves the bare "three" specifier for the 3D renderer module. -->
+  <script type="importmap">
+  { "imports": { "three": "./js/lib/three/three.module.js" } }
+  </script>
+
   <script src="js/lib/peerjs.min.js"></script>
   <script src="js/util.js"></script>
   <script src="js/sprites.js"></script>
@@ -197,6 +205,45 @@
   <script src="js/stats.js"></script>
   <script src="js/items.js"></script>
   <script src="js/hud.js"></script>
+  <!-- 3D view driver (?3d); before game.js so DD.game3d exists at boot. -->
+  <script src="js/game3d.js"></script>
   <script src="js/game.js"></script>
+
+  <!-- 3D boot: only spins up when ?3d is present. Creates the renderer and
+       hands it to the (classic-script) game via window.DD; game.js engages the
+       3D path once DD.render3d.proto is loaded. -->
+  <script type="module">
+    if (window.DD && window.DD.use3d) {
+      const { DungeonRenderer } = await import("./js/render3d.js");
+      const c3 = document.getElementById("game3d");
+      const dr = new DungeonRenderer(c3);
+      window.DD.render3d = dr;
+      // game.js ran its first fitCanvas() before this renderer existed, so size
+      // it now (otherwise the view is squashed until the first window resize).
+      dr.resize(c3.width || window.innerWidth, c3.height || window.innerHeight);
+      try { await dr.ready; } catch (e) { console.error("3D kit load failed:", e); }
+      dr.loadItems().catch((e) => console.error("3D items load failed:", e)); // background
+      dr.loadProjectiles().catch((e) => console.error("3D projectiles load failed:", e));
+      // 3D combat effects (particles); bridged from DD.particles.burst
+      try {
+        const fx = await import("./js/fx3d.js");
+        window.DD.fx3d = new fx.FX3D(dr.scene);
+      } catch (e) { console.error("3D fx load failed:", e); }
+      // Load the KayKit characters/animations in the background; game.js falls
+      // back to billboards for players/enemies until DD.charMgr is ready.
+      try {
+        const m = await import("./js/char3d.js");
+        const mgr = new m.CharacterManager(dr.scene, new m.CharacterFactory());
+        // expose the swappable mappings to the (classic-script) game
+        window.DD.char3d = { classModelKey: m.classModelKey, enemyModelKey: m.enemyModelKey, RIG: m.RIG };
+        // Set charMgr immediately and load models in the background, so each
+        // character pops in as its model arrives instead of waiting for all.
+        window.DD.charMgr = mgr;
+        mgr.preloadAll()
+          .then(() => console.log("char3d: ready"))
+          .catch((e) => console.error("3D character preload failed:", e));
+      } catch (e) { console.error("3D character module failed:", e); }
+    }
+  </script>
 </body>
 </html>

@@ -328,6 +328,8 @@
         const y = d.anchorTop ? d.y : d.y - d.img.height;
         ctx.drawImage(d.img, Math.round(d.x - d.img.width / 2), Math.round(y));
       }
+      // bumped on every (re)build so the 3D layer knows to reassemble the mesh
+      this.version = (this.version || 0) + 1;
     },
 
     drawDecorations(ctx) {
@@ -350,7 +352,11 @@
           ctx.textAlign = "left";
           continue;
         }
-        const frame = d.frames[Math.floor(time * 6) % d.frames.length];
+        const n = d.frames ? d.frames.length : 0;
+        if (!n) continue;
+        // Positive modulo: JS's % keeps the dividend's sign, so a negative time
+        // would otherwise yield frames[-1] === undefined and crash on .width.
+        const frame = d.frames[((Math.floor(time * 6) % n) + n) % n];
         let x = d.x, y = d.y;
         if (d.fly) {
           x = d.bx + Math.sin(time * 1.6 + d.phase) * 40;

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Dungeon Dash — combat timing test</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0812; }
+    #c { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    #hud { position: fixed; top: 8px; left: 8px; z-index: 10; font: 13px/1.5 monospace;
+      color: #9affb0; background: rgba(10,8,18,0.8); padding: 10px 12px; border-radius: 6px;
+      border: 1px solid #2c2640; white-space: pre; pointer-events: none; text-shadow: 0 1px 2px #000; }
+    #flash { position: fixed; top: 50%; left: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px;
+      border-radius: 50%; background: #ffec8a; z-index: 11; opacity: 0; pointer-events: none; }
+    #bar { position: fixed; left: 0; right: 0; bottom: 8px; z-index: 20; display: flex;
+      flex-wrap: wrap; gap: 6px; justify-content: center; pointer-events: none; }
+    #bar button { pointer-events: auto; min-width: 66px; padding: 11px 12px; font: bold 13px monospace;
+      background: rgba(20,16,30,0.9); color: #9affb0; border: 1px solid #4a4368; border-radius: 8px; touch-action: manipulation; }
+    #err { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center;
+      color: #ff8a8a; font: 13px monospace; background: rgba(10,8,18,0.92); padding: 24px; text-align: center; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "./js/lib/three/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hud">loading…</div>
+  <div id="flash"></div>
+  <div id="bar"></div>
+  <div id="err"></div>
+
+  <!-- classic scripts for the real game sounds -->
+  <script src="js/util.js"></script>
+  <script src="js/audio.js"></script>
+
+  <script type="module">
+    import { DungeonRenderer } from "./js/render3d.js";
+    import { CharacterFactory, RIG } from "./js/char3d.js";
+
+    const DD = window.DD;
+    const hud = document.getElementById("hud");
+    const flash = document.getElementById("flash");
+    const errEl = document.getElementById("err");
+    const fail = (m) => { errEl.style.display = "flex"; errEl.textContent = m; console.error(m); };
+    window.addEventListener("error", (e) => fail("Error: " + (e.message || e)));
+
+    // Class combat profiles mirror DD.CLASSES (cooldown + sound). attackSpeed is
+    // the live-tunable animation playback rate.
+    const CLASSES = {
+      "class:warrior": { cooldown: 0.5,  sound: "swing", attackSpeed: 1.0 },
+      "class:rogue":   { cooldown: 0.51, sound: "swing", attackSpeed: 1.21 },
+      "class:mage":    { cooldown: 0.5,  sound: "bolt",  attackSpeed: 1.0 },
+      "class:ranger":  { cooldown: 0.64, sound: "shoot", attackSpeed: 0.32 },
+      // skeletons (cooldowns approximate the real state-driven rhythm)
+      "enemy:minion":  { cooldown: 0.68, sound: "swing", attackSpeed: 1.32 },
+      "enemy:warrior": { cooldown: 0.84, sound: "swing", attackSpeed: 2.01 },
+      "enemy:archer":  { cooldown: 0.76, sound: "shoot", attackSpeed: 1.0 },
+      "enemy:mage":    { cooldown: 1.2,  sound: "bolt",  attackSpeed: 1.0 },
+    };
+    const keys = Object.keys(CLASSES);
+    const ATK_WIN = 0.5, ATK_WIN_SEQ = 0.85;
+
+    const W = 7, H = 7, FLOOR = 0, WALL = 1;
+    const tiles = new Array(W * H).fill(FLOOR);
+    for (let x = 0; x < W; x++) { tiles[x] = WALL; tiles[(H - 1) * W + x] = WALL; }
+    for (let y = 0; y < H; y++) { tiles[y * W] = WALL; tiles[y * W + W - 1] = WALL; }
+
+    const canvas = document.getElementById("c");
+    const dr = new DungeonRenderer(canvas);
+
+    let idx = 0, auto = true, char = null, factory;
+    let cd = 0, atkAt = -1, atkIdx = -1, cooldownMul = 1, pendingRestart = false;
+    const cur = () => keys[idx];
+    const prof = () => CLASSES[cur()];
+    const rig = () => RIG[cur()];
+
+    function spawnChar() {
+      if (char) dr.scene.remove(char.root);
+      const k = cur();
+      char = factory.spawn(k);
+      char.root.scale.setScalar(RIG[k].scale || 1);
+      const p = dr.cellToWorld(W / 2, H / 2);
+      char.root.position.set(p.x, 0, p.z);
+      char.root.rotation.y = 0; // face the camera (+Z)
+      dr.scene.add(char.root);
+      atkAt = -1; atkIdx = -1; cd = 0;
+    }
+
+    // Same combo logic as the game's rigClip(), so timing matches the real thing.
+    function currentClip(t) {
+      const r = rig();
+      if (atkAt >= 0) {
+        const dt = t - atkAt;
+        const win = r.seq ? ATK_WIN_SEQ : ATK_WIN;
+        if (dt >= 0 && dt < win) {
+          if (r.seq) { const n = r.attacks.length; return r.attacks[Math.min(n - 1, Math.floor(dt / win * n))]; }
+          return r.attacks[atkIdx % r.attacks.length];
+        }
+      }
+      return r.idle;
+    }
+    function doAttack(t) {
+      atkAt = t; atkIdx++; pendingRestart = true;
+      DD.audio.unlock(); DD.audio[prof().sound] && DD.audio[prof().sound]();
+      flash.style.transition = "none"; flash.style.opacity = "0.9";
+      requestAnimationFrame(() => { flash.style.transition = "opacity 0.25s"; flash.style.opacity = "0"; });
+    }
+
+    (async function main() {
+      try {
+        await dr.ready;
+        dr.buildRoom({ tiles, w: W, h: H });
+        dr.setCameraMode("follow");
+        const c = dr.cellToWorld(W / 2, H / 2); dr.setFollowTarget(c.x, c.z);
+        factory = new CharacterFactory();
+        await factory.loadClips();
+        await factory.loadWeapons();
+        for (const k of keys) await factory.loadModelByKey(k, RIG[k].model);
+        spawnChar();
+      } catch (e) { return fail("load failed: " + (e && e.message ? e.message : e)); }
+
+      const cls = (d) => { idx = (idx + d + keys.length) % keys.length; spawnChar(); };
+      const aspd = (m) => { prof().attackSpeed = Math.max(0.2, Math.min(4, +(prof().attackSpeed * m).toFixed(2))); };
+      const cdmul = (m) => { cooldownMul = Math.max(0.3, Math.min(3, +(cooldownMul * m).toFixed(2))); };
+
+      const keymap = {
+        ArrowRight: () => cls(1), ArrowLeft: () => cls(-1),
+        " ": () => { auto = false; cd = 0; }, // space = single manual attack
+        a: () => { auto = !auto; }, "=": () => aspd(1.15), "+": () => aspd(1.15), "-": () => aspd(0.87),
+        "]": () => cdmul(1.15), "[": () => cdmul(0.87),
+      };
+      addEventListener("keydown", (e) => { if (keymap[e.key]) { e.preventDefault(); keymap[e.key](); } });
+
+      const bar = document.getElementById("bar");
+      const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label;
+        b.addEventListener("click", (e) => { e.preventDefault(); fn(); }); bar.appendChild(b); };
+      mk("class", () => cls(1)); mk("attack", () => { auto = false; cd = 0; });
+      mk("auto", () => { auto = !auto; });
+      mk("anim−", () => aspd(0.87)); mk("anim+", () => aspd(1.15));
+      mk("rate−", () => cdmul(1.15)); mk("rate+", () => cdmul(0.87));
+
+      const onResize = () => dr.resize(innerWidth, innerHeight);
+      addEventListener("resize", onResize); onResize();
+
+      let last = performance.now(), t = 0;
+      function tick(now) {
+        const dt = Math.max(0, (now - last) / 1000); last = now; t += dt;
+        if (auto) { cd -= dt; if (cd <= 0) { doAttack(t); cd = prof().cooldown * cooldownMul; } }
+        if (char) {
+          const name = currentClip(t);
+          const isAtk = name !== rig().idle;
+          char.play(name, { once: isAtk, timeScale: isAtk ? prof().attackSpeed : 1, fade: 0.1, restart: pendingRestart });
+          pendingRestart = false;
+          char.update(dt);
+        }
+        dr.render();
+        const r = rig();
+        hud.textContent =
+          `CLASS    ${cur().replace("class:", "")}   [←/→]\n` +
+          `cooldown ${(prof().cooldown * cooldownMul).toFixed(2)}s  (x${cooldownMul.toFixed(2)})  [ [ / ] ]\n` +
+          `animSpd  x${prof().attackSpeed.toFixed(2)}   [-/+]\n` +
+          `attacks  ${r.attacks.length}${r.seq ? " (sequence)" : " (combo)"}\n` +
+          `  ${currentClip(t)}\n` +
+          `auto     ${auto ? "ON" : "off (space=1 hit)"} [a]`;
+        requestAnimationFrame(tick);
+      }
+      // manual single-attack: space sets cd so the next frame fires once
+      addEventListener("keydown", (e) => { if (e.key === " ") { doAttack(t); } });
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

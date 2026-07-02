@@ -3,10 +3,20 @@
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
+  // Opt-in 3D dungeon rendering (?3d). DD.render3d is supplied by the module
+  // boot in index.html once the dungeon kit has loaded. Set before that module
+  // runs so it knows whether to spin up at all. The 3D view itself lives in
+  // js/game3d.js (DD.game3d), loaded just before this file.
+  const params = new URLSearchParams(location.search);
+  DD.use3d = params.has("3d");
+  // freeze + disarm enemies for tweaking (?safe, or implied by ?camtest)
+  const safeMode = params.has("camtest") || params.has("safe");
+
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
     canvas.height = Math.max(320, window.innerHeight);
     ctx.imageSmoothingEnabled = false; // resets on resize
+    if (DD.game3d) DD.game3d.resize(canvas.width, canvas.height);
     DD.updateView(canvas);
   }
 
@@ -35,21 +45,25 @@
   const DUNGEONS = {
     catacombs: {
       id: "catacombs", name: "Catacombs", faction: "skeleton", enemyLabel: "Skeletons",
+      // The 4 skeleton models, ordered easy->hard so the per-room ramp introduces
+      // one new type per combat room: Minion -> Archer -> Heavy -> Mage.
+      // melee=Skeleton_Minion, archer=Skeleton_Rogue(bow), zombie=Skeleton_Warrior
+      // (heavy/tanky), warlock=Skeleton_Mage (casts magic orbs).
       floors: [
         { name: "Upper Catacombs",
-          kinds: ["melee", "shade"], eliteKinds: ["melee"],
-          plan: ["combat", "combat", "treasure", "combat", "boss"] },
+          kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["zombie"],
+          plan: ["combat", "combat", "combat", "combat", "boss"] },
         { name: "Deep Catacombs",
-          kinds: ["melee", "archer", "shade"], eliteKinds: ["archer", "shade"],
+          kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["archer", "warlock"],
           plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
         { name: "Catacombs Core",
-          kinds: ["melee", "archer", "shade"], eliteKinds: ["melee", "archer", "shade"],
+          kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["zombie", "warlock"],
           plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
       ],
       tiers: [
         { tier: 0, levelHint: "1-10",  scale: 1.0, bossHp: 70,  bossDmg: 2, bossName: "SKELETON KING",  summonKind: "melee"  },
         { tier: 1, levelHint: "11-20", scale: 3.0, bossHp: 160, bossDmg: 4, bossName: "SKELETON KING",  summonKind: "archer" },
-        { tier: 2, levelHint: "21-30", scale: 6.0, bossHp: 280, bossDmg: 7, bossName: "SKELETON KING",  summonKind: "bomber" },
+        { tier: 2, levelHint: "21-30", scale: 6.0, bossHp: 280, bossDmg: 7, bossName: "SKELETON KING",  summonKind: "zombie" },
       ],
     },
     goblinMines: {
@@ -349,11 +363,24 @@
     if (game.roomType === "combat") {
       const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
       const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
-      const kinds = cfg.kinds || ["melee"];
+      // Variety ramps one new enemy type per combat room (kinds are ordered
+      // easy->hard): 1st combat room = kinds[0] only, 2nd = +kinds[1], etc.
+      const allKinds = cfg.kinds || ["melee"];
+      const kinds = allKinds.slice(0, Math.min(allKinds.length, tier + 1));
+      // A handful start dormant on the floor (Skeletons_Inactive_Floor_Pose) and
+      // wake when a player approaches; the rest rise in via the staggered queue.
+      const inactiveCount = Math.min(5, Math.max(0, count - 2));
       for (let i = 0; i < count; i++) {
         const pos = DD.room.randomFloorPos(pl.x, pl.y, spawnDist);
         const kind = i > 1 && Math.random() < 0.4 ? DD.choice(kinds) : kinds[0];
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + i * 0.4, big: false, kind, faction: factionFor(kind) });
+        if (i < inactiveCount) {
+          game.skeletons.push(new DD.Skeleton(pos.x, pos.y, {
+            kind, faction, inactive: true, scale: cfg.scale,
+            grade: DD.rollGrade(game.floor, game.tier),
+          }));
+        } else {
+          game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + (i - inactiveCount) * 0.4, big: false, kind, faction });
+        }
       }
       const bruteKind = kinds.find((k) => k !== "shade") || "melee";
       for (let i = 0; i < tier + Math.max(0, game.floor - 1); i++) {
@@ -1424,8 +1451,8 @@
     game.hintT -= dt;
     game.shake = Math.max(0, game.shake - 30 * dt);
 
-    // staggered skeleton spawns
-    for (let i = game.spawnQueue.length - 1; i >= 0; i--) {
+    // staggered skeleton spawns (suppressed in safe mode for camera tweaking)
+    for (let i = game.spawnQueue.length - 1; !safeMode && i >= 0; i--) {
       const s = game.spawnQueue[i];
       s.delay -= dt;
       if (s.delay <= 0) {
@@ -1455,13 +1482,14 @@
       }
     }
 
-    for (const sk of game.skeletons) if (!sk.dead) sk.update(dt, game);
+    // safe mode: don't run enemy AI/attacks so they stay frozen and harmless
+    if (!safeMode) for (const sk of game.skeletons) if (!sk.dead) sk.update(dt, game);
     game.skeletons = game.skeletons.filter((s) => !s.dead);
 
     for (const pr of game.projectiles) if (!pr.dead) pr.update(dt, game);
     game.projectiles = game.projectiles.filter((p) => !p.dead);
 
-    for (const es of game.enemyShots) if (!es.dead) es.update(dt, game);
+    if (!safeMode) for (const es of game.enemyShots) if (!es.dead) es.update(dt, game);
     game.enemyShots = game.enemyShots.filter((p) => !p.dead);
 
     for (const pk of game.pickups) if (!pk.dead) pk.update(dt, game);
@@ -1490,7 +1518,8 @@
       if (!game.roomCleared) {
         if (game.roomType === "treasure") {
           if (game.chests.every((c) => c.opened)) setRoomCleared();
-        } else if (game.skeletons.length === 0 && game.spawnQueue.length === 0) {
+        } else if (game.skeletons.every((s) => s.dying) && game.spawnQueue.length === 0) {
+          // dying skeletons are gameplay-dead (fading corpses) — don't block clear
           setRoomCleared();
         }
       }
@@ -1822,7 +1851,13 @@
 
   // ---- draw ----
 
-  function draw() {
+  function draw(dt) {
+    // 3D path (?3d): js/game3d.js renders the scene + HUD overlay.
+    if (DD.game3d && DD.game3d.active(game.state)) {
+      DD.game3d.draw(dt);
+      return;
+    }
+
     ctx.fillStyle = "#0e0b16";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -2309,6 +2344,16 @@
     refreshContinueButton();
   }
 
+  // Dev shortcut for verifying the 3D path: ?dev=combat jumps straight into a
+  // solo combat room (skips menus). Not wired to any UI.
+  if (params.get("dev") === "combat") {
+    document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
+    const cls = params.get("class"); // ?class=mage|ranger|rogue|warrior
+    // ?dungeon=crypt (warlocks/necromancers) | goblinMines (shamans) | catacombs
+    const dng = params.get("dungeon");
+    startRun(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
+  }
+
   window.addEventListener("resize", () => {
     fitCanvas();
     // regenerate the backdrop room to fill the new shape; mid-run rooms keep
@@ -2330,10 +2375,14 @@
   let last = performance.now();
   let netAccum = 0;
   function frame(now) {
-    const dt = Math.min((now - last) / 1000, 1 / 30);
+    // Clamp to >= 0: on the first frame the rAF timestamp can predate the
+    // performance.now() captured at boot, yielding a negative dt that pushes
+    // game.time below zero (which broke decoration frame indexing, and could
+    // corrupt spawn/animation timers).
+    const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 30));
     last = now;
     update(dt);
-    draw();
+    draw(dt); // dt feeds the 3D animation mixers
 
     // network pump: host streams snapshots, guest streams input
     if (DD.net.connected) {
