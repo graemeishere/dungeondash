@@ -14,7 +14,9 @@ is your safe hub for managing your hero. Occasionally the town is **raided** and
 
 **Victory condition (target):** clear all three dungeons at **Tier 3** (levels 21–30). Doing so
 unlocks a capstone **"Town Under Siege" raid finale**. After winning, play continues freely for gear
-hunting and higher challenge. *(Win-tracking and the finale are a planned stage — see Roadmap.)*
+hunting and higher challenge. Per-hero clears are tracked and clearing all three dungeons at Tier 3
+marks the hero a **Champion**, which unlocks **"The Last Stand"** finale on the world map — a
+town-themed siege by every faction at once, capped by a unique boss, **THE WORLD-EATER**.
 
 **Death model:** the hero is persistent — **level, XP, and gear are never lost**. Dying in a dungeon
 only **forfeits the gold collected during that run** (gold is banked only when a run is completed).
@@ -178,12 +180,18 @@ co-op parity for them is on the roadmap.
 
 ## 10. Roadmap (prioritized)
 
-1. **Trader shop** — real buy/sell economy in town (gives gold a sink; pairs with the death model).
-2. **Quest system** — NPC-assigned quests with goals + rewards, replacing the auto-quest stubs
-   (faction kill counts, boss kills, dungeon clears, raid defenses).
-3. **Town-raid depth** — defense rewards, scaling, frequency tuning, and the **victory finale**.
-4. **Co-op parity** — town/lobby/map/themes working for the guest; sync raid state.
-5. **Victory tracking** — persist which (dungeon, tier) combos are cleared; trigger the win/finale.
+**Shipped:**
+- ✅ **Trader shop** — buy/sell economy in town (gold sink; pairs with the death model).
+- ✅ **Quest system** — NPC-assigned quests (accept up to 3, abandon for a fee) covering faction
+  kills, boss kills, dungeon clears, full runs, and raid defenses.
+- ✅ **Victory tracking** — per-hero (dungeon, tier) clears persist; clearing all three dungeons at
+  the top tier marks the hero a Champion (one-time victory screen + map/lobby clear indicators).
+- ✅ **Victory finale** — "The Last Stand" appears on the map once you're Champion: a town-themed
+  multi-faction siege (all enemy types at once) ending with a unique final boss, **THE WORLD-EATER**.
+
+**Remaining:**
+1. **Town-raid depth** — defense rewards, scaling, frequency tuning.
+2. **Co-op parity** — town/lobby/map/themes working for the guest; sync raid state.
 
 ---
 

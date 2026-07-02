@@ -246,7 +246,21 @@
   function drawBoss(p, frame, faction) {
     const bob = frame === 1 ? 1 : 0;
     const DARKC = "#1a1626";
-    if (faction === "goblin") {
+    if (faction === "finale") {
+      const SHELL = "#3a1530", SHELL_L = "#5a2a4a", DARK2 = "#1a0a14", FIRE = "#ff5a2a", EMBER = "#ffd14a";
+      p(4, 14, DARK2, 3, 2); p(9, 14, DARK2, 3, 2);                    // armored boots
+      p(2, 7, SHELL, 12, 7); p(3, 7, SHELL_L, 10, 1);                  // hulking torso
+      p(1, 8, DARK2, 2, 5); p(13, 8, DARK2, 2, 5);                     // spiked pauldrons
+      p(1, 8, SHELL_L, 1, 1); p(14, 8, SHELL_L, 1, 1);
+      p(6, 9, FIRE, 4, 4); p(7, 10, EMBER, 2, 2);                      // molten chest core
+      p(3, 2 + bob, DARK2, 10, 6); p(3, 2 + bob, SHELL, 10, 1);        // dark helm
+      p(4, 4 + bob, FIRE, 2, 2); p(10, 4 + bob, FIRE, 2, 2);          // burning eyes
+      p(5, 5 + bob, EMBER, 1, 1); p(11, 5 + bob, EMBER, 1, 1);
+      p(6, 7 + bob, DARK2, 4, 1);                                      // grim mouth
+      p(3, 0 + bob, EMBER, 10, 1);                                     // horned crown
+      p(2, 0 + bob, EMBER, 1, 2); p(7, 0 + bob, EMBER, 1, 2); p(13, 0 + bob, EMBER, 1, 2);
+      p(4, 1 + bob, FIRE, 1, 1); p(11, 1 + bob, FIRE, 1, 1);
+    } else if (faction === "goblin") {
       const SKIN = "#3f6e3f", SKIN_D = "#274d27", ARMOR = "#5a4326", IRON = "#6b6b78";
       p(4, 14, "#2a2016", 3, 2); p(9, 14, "#2a2016", 3, 2);            // boots
       p(3, 8, ARMOR, 10, 6); p(4, 8, "#7a5c34", 8, 1);                  // armored torso
@@ -794,6 +808,7 @@
       this.bossSkeleton = makeFrames((p, f) => drawBoss(p, f, "skeleton"));
       this.bossGoblin = makeFrames((p, f) => drawBoss(p, f, "goblin"));
       this.bossLich = makeFrames((p, f) => drawBoss(p, f, "undead"));
+      this.bossFinale = makeFrames((p, f) => drawBoss(p, f, "finale"));
       this.zombie = makeFrames((p, f) => drawUndead(p, f, "zombie"));
       this.warlock = makeFrames((p, f) => drawUndead(p, f, "warlock"));
       this.necromancer = makeFrames((p, f) => drawUndead(p, f, "necromancer"));
