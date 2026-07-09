@@ -84,7 +84,7 @@
   }
   function playerClip(p) {
     const rig = DD.char3d.RIG[DD.char3d.classModelKey(p.classKey)];
-    if (p.downed) return { clip: rig.death, once: true, timeScale: 1 };
+    if (p.downed || p.dying) return { clip: rig.death, once: true, timeScale: 1 };
     return rigClip(p, rig, { moving: p.moving });
   }
   function enemyClip(s) {
@@ -150,7 +150,9 @@
         const reach = (p.stats.range / DD.TILE) * dr.CELL * 0.55;
         DD.fx3d.swingArc(w.x, 1.2, w.z, p.swingAngle, p.stats.arc, reach, "#fff8e0", (p.swingDur || 0.4) * 0.6);
       }
-      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(p, mk, face, playerClip(p));
+      // dying heroes fade out over the tail of the death animation
+      const pOpacity = p.dying ? Math.min(1, p.deathT / 0.7) : 1;
+      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(p, mk, face, playerClip(p), pOpacity);
       else billboards.push(captureEntity(p));
     }
     // town NPCs stand as billboards (they carry a draw() sprite shim)
