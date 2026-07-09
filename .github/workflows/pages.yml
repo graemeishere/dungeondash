@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [claude/repository-overview-cp60ga, main]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
