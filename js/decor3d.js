@@ -207,10 +207,30 @@ export function planRoomDecor(desc) {
     }
   }
 
+  // Pass 5 — the exit: a doorway frame per DOOR cell plus a gate that the
+  // renderer slides open on room clear. Boss/floor exits also get a staircase
+  // rising behind the doorway (outside the grid — purely visual).
+  const door = { cells: [], frame: "wall_doorway", gate: "wall_gated" };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (tiles[y * w + x] === DOOR) door.cells.push({ gx: x, gy: y });
+    }
+  }
+  if (door.cells.length && desc.exit === "stairs") {
+    const cx = door.cells.reduce((s, c) => s + c.gx, 0) / door.cells.length;
+    const gy = door.cells[0].gy; // door row (top wall)
+    props.push({ piece: "stairs_wide", gx: cx, gy: gy - 0.85, rot: 0 });
+    // landing tiles so the staircase doesn't float on the void
+    for (const c of door.cells) {
+      floors.push({ piece: plainFloor, gx: c.gx, gy: gy - 1, rot: 0 });
+    }
+  }
+
   const pieces = new Set();
   for (const f of floors) pieces.add(f.piece);
   for (const wl of walls) pieces.add(wl.piece);
   for (const p of props) pieces.add(p.piece);
+  if (door.cells.length) { pieces.add(door.frame); pieces.add(door.gate); }
 
-  return { floors, walls, props, flames, atmosphere: pal.atmosphere, pieces: [...pieces] };
+  return { floors, walls, props, flames, door, atmosphere: pal.atmosphere, pieces: [...pieces] };
 }
