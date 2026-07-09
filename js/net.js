@@ -182,6 +182,7 @@
           aim: r2(p.aim), fl: p.flip ? 1 : 0, mv: p.moving ? 1 : 0, an: r2(p.animT % 100),
           sw: r2(Math.max(0, p.swingT)), swa: r2(p.swingAngle), ifr: r2(Math.max(0, p.iframes)),
           dn: p.downed ? 1 : 0, dnt: r1(p.downT), rp: r2(p.reviveP), dd: p.dead ? 1 : 0,
+          dg: p.dying ? 1 : 0, dgt: r1(p.deathT || 0),
           arc: r2(p.stats.arc || 0), rng: r1(p.stats.range || 0),
           dsh: p.stats.dash ? 1 : 0, dcd: r1(p.dashCd),
         })),
@@ -219,6 +220,7 @@
         o.aim = d.aim; o.flip = !!d.fl; o.moving = !!d.mv; o.animT = d.an;
         o.swingT = d.sw; o.swingAngle = d.swa; o.iframes = d.ifr;
         o.downed = !!d.dn; o.downT = d.dnt; o.reviveP = d.rp; o.dead = !!d.dd;
+        o.dying = !!d.dg; o.deathT = d.dgt;
         o.dashCd = d.dcd; o.killHeal = 0;
         return o;
       });

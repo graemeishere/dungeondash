@@ -449,9 +449,10 @@
     // co-op: fallen players return at the room entrance with a sliver of HP
     if (game.players.length > 1) {
       for (const p of game.players) {
-        if (p.dead || p.downed) {
+        if (p.dead || p.downed || p.dying) {
           p.dead = false;
           p.downed = false;
+          p.dying = false;
           p.hp = Math.max(1, Math.ceil(p.maxHp * 0.25));
           p.x = DD.WIDTH / 2;
           p.y = DD.HEIGHT - DD.TILE * 2.5;
@@ -1513,7 +1514,8 @@
     DD.particles.update(dt);
 
     if (game.state === "play") {
-      if (!game.players.some((p) => p.alive())) {
+      // wait for death animations to play out before showing the result screen
+      if (!game.players.some((p) => p.alive()) && !game.players.some((p) => p.dying)) {
         endRun(false);
         return;
       }

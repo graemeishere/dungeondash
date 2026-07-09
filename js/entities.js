@@ -9,6 +9,9 @@
   // are gameplay-dead (no threat / don't block room-clear) but still render.
   const SKELETON_DEATH_T = 2.0;    // matches Skeletons_Death (~2.0s)
   const SKELETON_FADE_T = 0.7;     // opacity fade at the tail of the death
+  // Heroes get the same dying phase: play the rig's Death clip, fade, then
+  // dead (which is when the run actually ends, so the fall is visible).
+  const PLAYER_DEATH_T = 2.0;
 
   DD.CLASSES = {
     warrior: {
@@ -142,7 +145,7 @@
       this.killHeal = (b.killHeal || 0) + r.killHeal;
     }
 
-    alive() { return !this.dead && !this.downed; }
+    alive() { return !this.dead && !this.downed && !this.dying; }
 
     effDmg() {
       return Math.max(1, Math.round(this.stats.dmg));
@@ -165,6 +168,7 @@
     revive(partial) {
       this.downed = false;
       this.dead = false;
+      this.dying = false;
       this.hp = Math.max(1, Math.ceil(this.maxHp * partial));
       this.iframes = 1.5;
       DD.audio.heal();
@@ -173,6 +177,13 @@
 
     update(dt, game) {
       if (this.dead) return;
+
+      // dying: hold still while the death animation plays out, then be dead
+      if (this.dying) {
+        this.deathT -= dt;
+        if (this.deathT <= 0) { this.dying = false; this.dead = true; }
+        return;
+      }
 
       if (this.downed) {
         this.downT -= dt;
@@ -186,8 +197,10 @@
           this.reviveP = Math.max(0, this.reviveP - dt);
         }
         if (this.downed && this.downT <= 0) {
-          // failed revive: sit out until the room is cleared
-          this.dead = true;
+          // failed revive: fade out, then sit out until the room is cleared
+          this.downed = false;
+          this.dying = true;
+          this.deathT = PLAYER_DEATH_T;
           DD.particles.burst(this.x, this.y - 14, { count: 20, colors: ["#8b80a8", "#f2c09a"], speed: 120, life: 0.7, gravity: 200 });
         }
         return;
@@ -267,7 +280,7 @@
     }
 
     damage(n, fromX, fromY, game) {
-      if (this.iframes > 0 || this.dead || this.downed) return;
+      if (this.iframes > 0 || this.dead || this.dying || this.downed) return;
       this.hp -= n;
       this.iframes = 0.9;
       DD.audio.hurt();
@@ -282,7 +295,8 @@
         if (teammateUp) {
           this.goDown(game);
         } else {
-          this.dead = true;
+          this.dying = true;
+          this.deathT = PLAYER_DEATH_T;
           DD.particles.burst(this.x, this.y - 14, { count: 26, colors: ["#e8484f", "#f2c09a", "#ffffff"], speed: 160, life: 0.8, gravity: 220 });
         }
       }
