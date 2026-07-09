@@ -110,10 +110,15 @@
       dr.buildRoom({
         tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h,
         seed: d.seed, theme: d.theme, roomType: d.roomType,
-        isLobby: !!d.isLobby, isTown: !!d.isTown,
+        isLobby: !!d.isLobby, isTown: !!d.isTown, exit: d.exit,
       });
       dr._builtVersion = DD.room.version;
       if (DD.fx3d) DD.fx3d.setFlames(dr.flameWorld);
+    }
+    // gate visual tracks the gameplay door state; instant right after a
+    // rebuild (covers guests joining an already-cleared room)
+    if (dr.gates && dr._doorOpen !== DD.room.doorOpen) {
+      dr.setDoorOpen(DD.room.doorOpen, dr._doorOpen === null);
     }
 
     // Camera mode (fixed whole-room vs follow the local player). Backdrop

@@ -165,7 +165,8 @@ export class DungeonRenderer {
         const m = firstMesh(g.scene);
         if (!m) throw new Error("no mesh in " + n);
         m.updateWorldMatrix(true, false);
-        this.pieceProtos.set(n, { mesh: m, base: m.matrixWorld.clone() });
+        // scene kept for multi-mesh pieces (doorframes/gates are cloned whole)
+        this.pieceProtos.set(n, { mesh: m, base: m.matrixWorld.clone(), scene: g.scene });
         loadedAny = true;
       } catch (e) {
         this.pieceFailed.add(n); // log-and-drop: the planner keeps its RNG
@@ -232,10 +233,49 @@ export class DungeonRenderer {
       return { x: p.x, y: f.up * this.wallH, z: p.z };
     });
 
+    // Doorway frames + gates. Cloned (not instanced): wall_doorway is a
+    // multi-mesh piece and there are at most a couple of door cells. The gate
+    // slides up out of the frame on setDoorOpen — no room rebuild involved.
+    if (this.doorGroup) { this.scene.remove(this.doorGroup); this.doorGroup = null; }
+    this.gates = [];
+    this._doorOpen = null; // force game3d's per-frame diff to re-apply state
+    if (plan.door && plan.door.cells.length) {
+      const frameProto = this.pieceProtos.get(plan.door.frame);
+      const gateProto = this.pieceProtos.get(plan.door.gate);
+      const dg = new THREE.Group();
+      for (const c of plan.door.cells) {
+        // the doorway stands on the wall line's inner face (the boundary the
+        // neighbouring wall panels sit on)
+        const pos = this._cellWorld(c.gx, c.gy);
+        pos.z += this.CELL / 2;
+        if (frameProto && frameProto.scene) {
+          const f = frameProto.scene.clone(true);
+          f.position.copy(pos);
+          dg.add(f);
+        }
+        if (gateProto && gateProto.scene) {
+          const gt = gateProto.scene.clone(true);
+          gt.position.copy(pos);
+          dg.add(gt);
+          this.gates.push(gt);
+        }
+      }
+      this.scene.add(dg);
+      this.doorGroup = dg;
+    }
+
     this.scene.add(g);
     this.dungeon = g;
     this._frameCamera();
     return { drawCalls };
+  }
+
+  // Slide the gates up into the frame (open) or back down (closed). Instant
+  // skips the tween — used right after a rebuild and for guests joining a
+  // room that is already cleared.
+  setDoorOpen(open, instant = false) {
+    this._doorOpen = !!open;
+    this._doorAnimT = instant ? 1 : 0;
   }
 
   // World position for a planner placement: cell center, pushed to the wall
@@ -448,6 +488,20 @@ export class DungeonRenderer {
   }
 
   render() {
+    // gate open/close tween (~0.55s), driven by wall-clock frame delta
+    if (this.gates && this.gates.length && this._doorOpen !== null) {
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - (this._lastRenderT || now)) / 1000);
+      this._doorAnimT = Math.min(1, (this._doorAnimT == null ? 1 : this._doorAnimT) + dt / 0.55);
+      const k = this._doorAnimT;
+      const lift = (this._doorOpen ? k : 1 - k) * this.wallH * 0.92;
+      for (const gt of this.gates) {
+        gt.position.y = lift;
+        gt.visible = !(this._doorOpen && k >= 1); // fully open = out of sight
+      }
+    }
+    this._lastRenderT = performance.now();
+
     const tgt = this.camMode === "follow" ? this.followT : ORIGIN;
     const dist = this._camDist || (this._span || 10) * 1.15;
     const horiz = dist * Math.cos(this.elev), cy = dist * Math.sin(this.elev);

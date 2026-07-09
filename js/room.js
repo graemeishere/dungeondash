@@ -63,6 +63,7 @@
       this.isLobby = false;
       this.isTown = false;
       this.roomType = null; // the caller stamps it after generate()
+      this.exit = "door";   // ...and the exit style ("stairs" on floor bosses)
       // decoration seed: the 3D decor planner derives every visual choice from
       // this, so co-op guests rebuild identical rooms from {tiles, seed}
       this.seed = (Math.random() * 0x7fffffff) | 0;
@@ -298,7 +299,7 @@
         doorCols: this.doorCols, doorOpen: this.doorOpen, spikes: this.spikes,
         // decor inputs: guests re-derive identical room dressing from these
         seed: this.seed || 1, theme: this.theme, roomType: this.roomType || "combat",
-        isLobby: this.isLobby ? 1 : 0, isTown: this.isTown ? 1 : 0,
+        isLobby: this.isLobby ? 1 : 0, isTown: this.isTown ? 1 : 0, exit: this.exit || "door",
       };
     },
 
@@ -313,6 +314,7 @@
       this.roomType = d.roomType || "combat";
       this.isLobby = !!d.isLobby;
       this.isTown = !!d.isTown;
+      this.exit = d.exit || "door";
       this.decorations = [];
       this.staticDecor = [];
       this.prerender();

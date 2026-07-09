@@ -335,6 +335,9 @@
     DD.setRoomSize(size.tw, size.th);
     DD.room.generate({ spikes: game.roomType === "trap" });
     DD.room.roomType = game.roomType; // rides along in getData for guest decor
+    // boss rooms that lead to another floor show a staircase behind the exit
+    const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
+    DD.room.exit = (game.roomType === "boss" && game.floor < dungeon.floors.length - 1) ? "stairs" : "door";
     DD.updateView(canvas);
     game.skeletons = [];
     game.projectiles = [];
