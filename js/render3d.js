@@ -14,6 +14,7 @@
 // resolves the bare "three" specifier to js/lib/three/three.module.js.
 import * as THREE from "three";
 import { GLTFLoader } from "./lib/three/GLTFLoader.js";
+import { planRoomDecor, PIECE_DIR } from "./decor3d.js";
 
 const FLOOR = 0, WALL = 1, DOOR = 2;
 
@@ -78,10 +79,11 @@ export class DungeonRenderer {
     this._camDist = 40;
     this._fixedDist = 40;
 
-    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x40384f, 1.05));
-    const sun = new THREE.DirectionalLight(0xfff1d0, 1.4);
-    sun.position.set(8, 18, 10);
-    this.scene.add(sun);
+    this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x40384f, 1.05);
+    this.scene.add(this.hemi);
+    this.sun = new THREE.DirectionalLight(0xfff1d0, 1.4);
+    this.sun.position.set(8, 18, 10);
+    this.scene.add(this.sun);
 
     this.kit = DUNGEON_KITS[ACTIVE_KIT];
     this.loader = new GLTFLoader();
@@ -91,6 +93,15 @@ export class DungeonRenderer {
     this.wallH = 1;
     this.W = 0; this.H = 0;
     this._w = 1; this._h = 1; // viewport px (for projectToScreen)
+
+    // Decor piece registry: every named piece the decor planner can request,
+    // lazy-loaded and cached. When late loads land, needsRebuild asks the
+    // caller (game3d) for one identical rebuild that now includes them.
+    this.pieceProtos = new Map(); // name -> { mesh, base }
+    this.pieceFailed = new Set();
+    this.needsRebuild = false;
+    this._lastDesc = null;
+    this.flameWorld = [];     // torch-flame world positions for fx3d
 
     // Billboard layer: 2D character sprites stood up as camera-facing quads in
     // the 3D scene (Phase 2). Kept in its own group so rebuilding the dungeon
@@ -130,12 +141,38 @@ export class DungeonRenderer {
     };
     this.proto = { floor: baseOf(floor), wall: baseOf(wall) };
     if (door) this.proto.door = baseOf(door);
+    // seed the decor registry with the base pieces so ensurePieces never
+    // re-fetches them
+    this.pieceProtos.set(k.floor, this.proto.floor);
+    this.pieceProtos.set(k.wall, this.proto.wall);
 
     const fb = new THREE.Box3().setFromObject(floor);
     this.CELL = Math.max(fb.max.x - fb.min.x, fb.max.z - fb.min.z) || 1;
     const wb = new THREE.Box3().setFromObject(wall);
     this.wallH = wb.max.y - wb.min.y;
     return this;
+  }
+
+  // Lazy-load decor pieces by name (from the KayKit pack). Anything that was
+  // missing when the room built triggers exactly one rebuild once loaded.
+  async ensurePieces(names) {
+    const missing = names.filter((n) => !this.pieceProtos.has(n) && !this.pieceFailed.has(n));
+    if (!missing.length) return;
+    let loadedAny = false;
+    await Promise.allSettled(missing.map(async (n) => {
+      try {
+        const g = await this.loader.loadAsync(encodeURI(PIECE_DIR + n + ".gltf"));
+        const m = firstMesh(g.scene);
+        if (!m) throw new Error("no mesh in " + n);
+        m.updateWorldMatrix(true, false);
+        this.pieceProtos.set(n, { mesh: m, base: m.matrixWorld.clone() });
+        loadedAny = true;
+      } catch (e) {
+        this.pieceFailed.add(n); // log-and-drop: the planner keeps its RNG
+        console.error("decor piece load failed:", n, e);
+      }
+    }));
+    if (loadedAny) this.needsRebuild = true;
   }
 
   // Grid cell (gx,gy) -> world-space center, matching the layout used for instances.
@@ -145,35 +182,96 @@ export class DungeonRenderer {
     );
   }
 
-  _instance(proto, cells) {
-    const inst = new THREE.InstancedMesh(proto.mesh.geometry, proto.mesh.material, cells.length);
-    const t = new THREE.Matrix4(), out = new THREE.Matrix4();
-    cells.forEach(([gx, gy], i) => {
-      const p = this._cellWorld(gx, gy);
-      t.makeTranslation(p.x, p.y, p.z);
-      out.multiplyMatrices(t, proto.base); // place at cell, keep the piece's own transform
-      inst.setMatrixAt(i, out);
-    });
-    inst.instanceMatrix.needsUpdate = true;
-    inst.frustumCulled = false; // whole room is on-screen; skip per-instance culling
-    return inst;
+  // Rotation that makes a wall-hugging piece face into the room from a wall on
+  // the given side (models face +Z at rot 0; the room lies +Z of a north wall).
+  static _inwardRot(dir) {
+    return dir === "N" ? 0 : dir === "S" ? Math.PI : dir === "E" ? -Math.PI / 2 : Math.PI / 2;
   }
 
-  // Thin directional wall panels placed on floor-cell edges. edges: [{gx,gy,dir}]
-  // dir in N/S/E/W; the panel sits on that boundary, rotated to face inward.
-  _instanceWalls(proto, edges) {
-    const inst = new THREE.InstancedMesh(proto.mesh.geometry, proto.mesh.material, edges.length);
+  // Build (or rebuild) the dungeon from a tile grid + decor inputs.
+  // desc: { tiles:number[], w, h, seed?, theme?, roomType?, isLobby?, isTown? }
+  // Missing decor fields default so old callers ({tiles,w,h}) keep working.
+  buildRoom(desc) {
+    if (this.dungeon) { this.scene.remove(this.dungeon); this.dungeon = null; }
+    this.needsRebuild = false;
+    this._lastDesc = desc;
+    const { w, h } = desc;
+    this.W = w; this.H = h;
+    const g = new THREE.Group();
+
+    const plan = planRoomDecor(desc);
+    this.ensurePieces(plan.pieces); // background; sets needsRebuild when done
+    this.setAtmosphere(plan.atmosphere);
+
+    // Group placements by piece -> one InstancedMesh per piece type. Unloaded
+    // architecture falls back to the base floor/wall (never see-through while
+    // variants stream in); unloaded props are skipped until the rebuild.
+    const groups = new Map(); // piece -> [{gx,gy,rot,mount,up,edge,dir}]
+    const put = (piece, placement, fallback) => {
+      if (!this.pieceProtos.has(piece)) {
+        if (!fallback || !this.pieceProtos.has(fallback)) return;
+        piece = fallback;
+      }
+      let list = groups.get(piece);
+      if (!list) groups.set(piece, (list = []));
+      list.push(placement);
+    };
+    for (const f of plan.floors) put(f.piece, f, this.kit.floor);
+    for (const wl of plan.walls) put(wl.piece, { ...wl, rot: DungeonRenderer._inwardRot(wl.dir), edge: true }, this.kit.wall);
+    for (const p of plan.props) put(p.piece, p, null);
+
+    let drawCalls = 0;
+    for (const [piece, placements] of groups) {
+      g.add(this._instancePlaced(this.pieceProtos.get(piece), placements));
+      drawCalls++;
+    }
+
+    // torch-flame emitters in world space, for fx3d
+    this.flameWorld = plan.flames.map((f) => {
+      const p = this._placementWorld(f);
+      return { x: p.x, y: f.up * this.wallH, z: p.z };
+    });
+
+    this.scene.add(g);
+    this.dungeon = g;
+    this._frameCamera();
+    return { drawCalls };
+  }
+
+  // World position for a planner placement: cell center, pushed to the wall
+  // boundary when mounted on an edge.
+  _placementWorld(p) {
+    const c = this._cellWorld(p.gx, p.gy);
+    const off = this.CELL * 0.42; // just inside the wall face
+    if (p.mount === "N") c.z -= off;
+    else if (p.mount === "S") c.z += off;
+    else if (p.mount === "E") c.x += off;
+    else if (p.mount === "W") c.x -= off;
+    return c;
+  }
+
+  // Instance a piece over planner placements ({gx,gy,rot,mount?,up?,edge?}).
+  _instancePlaced(proto, placements) {
+    const inst = new THREE.InstancedMesh(proto.mesh.geometry, proto.mesh.material, placements.length);
     const T = new THREE.Matrix4(), R = new THREE.Matrix4(), M = new THREE.Matrix4();
     const half = this.CELL / 2;
-    edges.forEach((e, i) => {
-      const c = this._cellWorld(e.gx, e.gy);
-      let ox = 0, oz = 0, rot = 0;
-      if (e.dir === "N") { oz = -half; rot = 0; }
-      else if (e.dir === "S") { oz = half; rot = 0; }
-      else if (e.dir === "E") { ox = half; rot = Math.PI / 2; }
-      else { ox = -half; rot = Math.PI / 2; }
-      T.makeTranslation(c.x + ox, 0, c.z + oz);
-      R.makeRotationY(rot);
+    placements.forEach((p, i) => {
+      let pos;
+      if (p.edge) {
+        // wall panels sit ON the cell boundary (not inset like mounted props)
+        pos = this._cellWorld(p.gx, p.gy);
+        if (p.dir === "N") pos.z -= half;
+        else if (p.dir === "S") pos.z += half;
+        else if (p.dir === "E") pos.x += half;
+        else pos.x -= half;
+      } else {
+        pos = this._placementWorld(p);
+        pos.x += (p.ox || 0) * this.CELL; // sub-cell offsets (quarter-tile quads)
+        pos.z += (p.oz || 0) * this.CELL;
+      }
+      const rot = p.mount ? DungeonRenderer._inwardRot(p.mount) : (p.rot || 0);
+      T.makeTranslation(pos.x, (p.up || 0) * this.wallH, pos.z);
+      R.makeRotationY(p.edge ? (p.rot || 0) : rot);
       M.multiplyMatrices(T, R).multiply(proto.base);
       inst.setMatrixAt(i, M);
     });
@@ -182,56 +280,13 @@ export class DungeonRenderer {
     return inst;
   }
 
-  // Build (or rebuild) the dungeon mesh from a tile grid.
-  // grid: { tiles:number[], w:number, h:number }
-  buildRoom({ tiles, w, h }) {
-    if (this.dungeon) { this.scene.remove(this.dungeon); this.dungeon = null; }
-    this.W = w; this.H = h;
-    const g = new THREE.Group();
-    let drawCalls;
-
-    if (this.kit.wallStyle === "edge") {
-      // KayKit: floor on floor+door cells; thin walls on every floor-cell edge
-      // whose neighbour is solid (WALL or out-of-bounds). DOOR/FLOOR neighbours
-      // stay open, which leaves the doorway gap for free.
-      const solid = (x, y) => x < 0 || y < 0 || x >= w || y >= h || tiles[y * w + x] === WALL;
-      const floors = [], edges = [];
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const t = tiles[y * w + x];
-          if (t === WALL) continue;        // wall cells: no floor
-          floors.push([x, y]);             // floor + door cells get a floor tile
-          if (t === DOOR) continue;        // door cells: keep the opening
-          if (solid(x, y - 1)) edges.push({ gx: x, gy: y, dir: "N" });
-          if (solid(x, y + 1)) edges.push({ gx: x, gy: y, dir: "S" });
-          if (solid(x + 1, y)) edges.push({ gx: x, gy: y, dir: "E" });
-          if (solid(x - 1, y)) edges.push({ gx: x, gy: y, dir: "W" });
-        }
-      }
-      g.add(this._instance(this.proto.floor, floors));
-      if (edges.length) g.add(this._instanceWalls(this.proto.wall, edges));
-      drawCalls = 1 + (edges.length ? 1 : 0);
-    } else {
-      // Kenney: floor under every cell, symmetric wall/door blocks fill cells.
-      const floors = [], walls = [], doors = [];
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          floors.push([x, y]);
-          const t = tiles[y * w + x];
-          if (t === WALL) walls.push([x, y]);
-          else if (t === DOOR) doors.push([x, y]);
-        }
-      }
-      g.add(this._instance(this.proto.floor, floors));
-      if (walls.length) g.add(this._instance(this.proto.wall, walls));
-      if (doors.length && this.proto.door) g.add(this._instance(this.proto.door, doors));
-      drawCalls = 1 + (walls.length ? 1 : 0) + (doors.length ? 1 : 0);
-    }
-
-    this.scene.add(g);
-    this.dungeon = g;
-    this._frameCamera();
-    return { drawCalls };
+  // Per-theme scene mood: background + light colors.
+  setAtmosphere(a) {
+    if (!a) return;
+    this.scene.background.set(a.bg);
+    this.hemi.color.set(a.hemiSky);
+    this.hemi.groundColor.set(a.hemiGround);
+    this.sun.color.set(a.sun);
   }
 
   _frameCamera() {

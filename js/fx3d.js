@@ -67,6 +67,18 @@ export class FX3D {
     this.arcGeo = new THREE.RingGeometry(0.45, 1.0, 16, 1, 0, 0.9);
     this.arcs = [];      // active { mesh, t, life, angle, arc, r }
     this.arcPool = [];   // reusable meshes
+
+    // Torch flames: persistent emitters (world positions) that drip glow
+    // particles into the shared Points pool — ambience with zero extra draw
+    // calls. Set per room via setFlames().
+    this.flames = [];
+    this._flameAcc = 0;
+  }
+
+  // Replace the room's torch-flame emitters: [{x, y, z}].
+  setFlames(list) {
+    this.flames = list || [];
+    this._flameAcc = 0;
   }
 
   // Place glowing orbs from { entity, x, y, z, color, size }. Pooled per entity.
@@ -146,6 +158,17 @@ export class FX3D {
   }
 
   update(dt) {
+    // torch flames: each emitter drips a small rising ember every ~90ms
+    this._flameAcc += dt;
+    if (this.flames.length && this._flameAcc >= 0.09) {
+      this._flameAcc = 0;
+      for (const f of this.flames) {
+        this.burst(f.x, f.y, f.z, {
+          count: 1, colors: ["#ffb347", "#ffd95e", "#ff8c42"], speed: 3, life: 0.45, gravity: -60,
+        });
+      }
+    }
+
     let w = 0;
     for (let i = 0; i < this.n; i++) {
       const p = this.parts[i];

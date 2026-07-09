@@ -329,8 +329,12 @@
     game.roomIndex = index;
     game.roomType = cfg.plan[index];
     game.roomCleared = false;
-    sizeRoomToCanvas(); // each room is generated to fill the current screen
+    // each room draws a per-type shape (arenas big, vaults small, gauntlets
+    // long) — the 3D camera frames whatever size exists
+    const size = DD.roomSizeFor(game.roomType);
+    DD.setRoomSize(size.tw, size.th);
     DD.room.generate({ spikes: game.roomType === "trap" });
+    DD.room.roomType = game.roomType; // rides along in getData for guest decor
     DD.updateView(canvas);
     game.skeletons = [];
     game.projectiles = [];
