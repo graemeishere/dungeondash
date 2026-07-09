@@ -134,6 +134,13 @@
       // else face movement; keep faceFromMove ticking so __px/__py stay current.
       const moveFace = faceFromMove(p);
       const face = (p.lockT > 0) ? faceFromAim(p.aim) : moveFace;
+      // fresh melee swing -> 3D weapon trail sweeping the swing's arc
+      if (DD.fx3d && p.stats.attack === "melee" && p.atkAnimAt != null && p.atkAnimAt !== p.__trailAt) {
+        p.__trailAt = p.atkAnimAt;
+        const w = worldOf(p);
+        const reach = (p.stats.range / DD.TILE) * dr.CELL;
+        DD.fx3d.swingArc(w.x, 1.4, w.z, p.swingAngle, p.stats.arc, reach, "#fff8e0", (p.swingDur || 0.4) * 0.6);
+      }
       if (mgr && mk && mgr.factory.protos.has(mk)) asChar(p, mk, face, playerClip(p));
       else billboards.push(captureEntity(p));
     }

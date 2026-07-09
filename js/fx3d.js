@@ -61,6 +61,12 @@ export class FX3D {
     this.ringGeo = new THREE.RingGeometry(0.55, 1.0, 28);
     this.rings = [];     // active { mesh, t, life }
     this.ringPool = [];  // reusable meshes
+
+    // Melee weapon trails: a 0.9-rad arc segment (unit radius, scaled per
+    // swing) swept across the swing's arc, same shape as the 2D drawSwing.
+    this.arcGeo = new THREE.RingGeometry(0.45, 1.0, 16, 1, 0, 0.9);
+    this.arcs = [];      // active { mesh, t, life, angle, arc, r }
+    this.arcPool = [];   // reusable meshes
   }
 
   // Place glowing orbs from { entity, x, y, z, color, size }. Pooled per entity.
@@ -95,6 +101,24 @@ export class FX3D {
     m.material.opacity = 1;
     m.visible = true;
     this.rings.push({ mesh: m, t: 0, life: 0.4 });
+  }
+
+  // Melee weapon trail: a flat additive arc segment at world (wx,wy,wz) that
+  // sweeps across the swing over `dur` seconds and fades. `angle`/`arc` are 2D
+  // radians (aim direction + swing width), `radius` the reach in world units.
+  swingArc(wx, wy, wz, angle, arc, radius, color, dur) {
+    let m = this.arcPool.pop();
+    if (!m) {
+      m = new THREE.Mesh(this.arcGeo, new THREE.MeshBasicMaterial({
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      }));
+      this.scene.add(m);
+    }
+    m.material.color.set(color || "#fff8e0");
+    m.position.set(wx, wy, wz);
+    m.scale.setScalar(radius);
+    m.visible = true;
+    this.arcs.push({ mesh: m, t: 0, life: dur || 0.25, angle, arc, r: radius });
   }
 
   // Spawn a burst at world (wx,wy,wz). opts mirror DD.particles.burst:
@@ -150,6 +174,24 @@ export class FX3D {
       if (k >= 1) { r.mesh.visible = false; this.ringPool.push(r.mesh); this.rings.splice(i, 1); continue; }
       r.mesh.scale.setScalar(0.2 + k * 4); // expand to ~4u radius
       r.mesh.material.opacity = 1 - k;
+    }
+
+    // sweeping swing arcs + sparks at the leading edge. The segment start
+    // angle mirrors the 2D drawSwing sweep; the mesh lies flat (rotation.x
+    // = -PI/2), which maps a 2D angle a to rotation.z = -(a + 0.9) because
+    // the 2D y axis becomes world Z with flipped handedness.
+    for (let i = this.arcs.length - 1; i >= 0; i--) {
+      const a = this.arcs[i];
+      a.t += dt;
+      const k = a.t / a.life;
+      if (k >= 1) { a.mesh.visible = false; this.arcPool.push(a.mesh); this.arcs.splice(i, 1); continue; }
+      const a0 = a.angle - a.arc / 2 + a.arc * k - 0.5;
+      a.mesh.rotation.set(-Math.PI / 2, 0, -(a0 + 0.9));
+      a.mesh.material.opacity = 0.85 * (1 - k * k);
+      const lead = a0 + 0.9;
+      this.burst(a.mesh.position.x + Math.cos(lead) * a.r * 0.85, a.mesh.position.y,
+                 a.mesh.position.z + Math.sin(lead) * a.r * 0.85,
+                 { count: 1, colors: ["#fff8e0", "#ffe9a8"], speed: 8, life: 0.22 });
     }
   }
 }
