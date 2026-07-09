@@ -214,9 +214,8 @@
         this.dashDir = this.moving ? { x: dx, y: dy } : { x: Math.cos(this.aim), y: Math.sin(this.aim) };
         DD.audio.dash();
       }
-      // root-the-swing (3D only): no walking during the attack swing; the 2D
-      // game keeps its free-move-while-attacking feel. Dash always moves.
-      const rooted = DD.use3d && this.lockT > 0;
+      // root-the-swing: no walking during the attack swing. Dash always moves.
+      const rooted = this.lockT > 0;
       if (this.dashT > 0) {
         this.dashT -= dt;
         DD.room.moveEntity(this, this.dashDir.x * 620 * dt, this.dashDir.y * 620 * dt);
@@ -861,10 +860,9 @@
 
     die(game, attacker) {
       if (this.dead || this.dying) return;
-      // 3D: enter a dying phase (play Skeletons_Death + fade, then remove).
-      // 2D (legacy): remove immediately. Rewards/drops happen now either way.
-      if (DD.use3d) { this.dying = true; this.deathT = SKELETON_DEATH_T; this.state = "dying"; }
-      else this.dead = true;
+      // Enter a dying phase (play Skeletons_Death + fade, then remove).
+      // Rewards/drops happen now, not at the end of the animation.
+      this.dying = true; this.deathT = SKELETON_DEATH_T; this.state = "dying";
       game.kills++;
       if (game.killsByFaction) {
         const f = this.faction || "skeleton";

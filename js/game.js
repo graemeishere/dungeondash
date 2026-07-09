@@ -3,12 +3,10 @@
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
-  // Opt-in 3D dungeon rendering (?3d). DD.render3d is supplied by the module
-  // boot in index.html once the dungeon kit has loaded. Set before that module
-  // runs so it knows whether to spin up at all. The 3D view itself lives in
-  // js/game3d.js (DD.game3d), loaded just before this file.
+  // DD.render3d is supplied by the module boot in index.html once the dungeon
+  // kit has loaded; until then draw() shows a plain backdrop. The 3D view
+  // itself lives in js/game3d.js (DD.game3d), loaded just before this file.
   const params = new URLSearchParams(location.search);
-  DD.use3d = params.has("3d");
   // freeze + disarm enemies for tweaking (?safe, or implied by ?camtest)
   const safeMode = params.has("camtest") || params.has("safe");
 
@@ -754,6 +752,7 @@
     game.state = "lobby";
     game.peaceful = true;
     game.lobbyDungeonId = dungeonId;
+    game.lobbyDungeonName = DUNGEONS[dungeonId].name; // for the 3D overlay title
     game.dungeonId = dungeonId;
     game.time = 0;
     game.nearbyNpc = null;
@@ -797,7 +796,12 @@
       { id: "trader",     label: "Trader",      sprite: "npcTrader",     interact: openTraderMenu },
       { id: "questgiver", label: "Quest Giver", sprite: "npcQuestGiver", interact: openQuestGiverMenu },
     ];
-    return defs.map((d, i) => ({ ...d, x: DD.WIDTH * slots[i], y, r: 14, bob: Math.random() * Math.PI * 2 }));
+    return defs.map((d, i) => {
+      const npc = { ...d, x: DD.WIDTH * slots[i], y, r: 14, bob: Math.random() * Math.PI * 2 };
+      // sprite shim so the 3D layer can stand the NPC up as a billboard
+      npc.draw = (c) => drawTownNpc(c, npc, game.time);
+      return npc;
+    });
   }
 
   // Walkable town. 25% of arrivals trigger a raid warning instead.
@@ -1761,166 +1765,36 @@
     ctx.textAlign = "left";
   }
 
-  // A glowing floor pad that starts a tier when you stand on it.
-  function drawTierPad(ctx, pad, time) {
-    const font = "'Trebuchet MS', Verdana, sans-serif";
-    const col = pad.locked ? "#6b6481" : pad.color;
-    const pulse = 0.5 + 0.5 * Math.sin(time * 3 + pad.ti);
-    ctx.save();
-    ctx.globalAlpha = pad.locked ? 0.12 : 0.18 + 0.14 * pulse;
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.ellipse(pad.x, pad.y, pad.r, pad.r * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 2.5;
-    ctx.globalAlpha = pad.locked ? 0.5 : 0.9;
-    ctx.beginPath();
-    ctx.ellipse(pad.x, pad.y, pad.r, pad.r * 0.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    // dwell-to-enter progress ring on the active pad
-    if (!pad.locked && game.padTi === pad.ti && game.padDwell > 0) {
-      const frac = DD.clamp(game.padDwell / 0.7, 0, 1);
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.ellipse(pad.x, pad.y, pad.r, pad.r * 0.5, 0, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.textAlign = "center";
-    ctx.fillStyle = pad.locked ? "#9b90b8" : col;
-    ctx.font = `bold 14px ${font}`;
-    const title = pad.cleared && !pad.locked ? `${pad.label}  ✓` : pad.label;
-    ctx.fillText(title, pad.x, pad.y - pad.r * 0.5 - 14);
-    ctx.fillStyle = pad.locked ? "#ff8a8a" : (pad.cleared ? "#9affb0" : "#d8cfee");
-    ctx.font = `11px ${font}`;
-    const subText = pad.locked ? `LOCKED · Lv ${pad.req}` : (pad.cleared ? `${pad.sub} · cleared` : pad.sub);
-    ctx.fillText(subText, pad.x, pad.y - pad.r * 0.5 - 1);
-    ctx.textAlign = "left";
-  }
-
-  function drawPeaceful(ctx) {
-    DD.room.draw(ctx);
-    const time = game.time;
-    if (game.state === "lobby" && DD.room.tierPads) {
-      for (const pad of DD.room.tierPads) drawTierPad(ctx, pad, time);
-    }
-    const ents = [];
-    for (const p of game.players) if (p && !p.dead) ents.push({ y: p.y, render: () => p.draw(ctx) });
-    if (game.state === "town" || game.state === "stats" || game.state === "trader" || game.state === "quests") {
-      for (const npc of game.townNpcs) ents.push({ y: npc.y, render: () => drawTownNpc(ctx, npc, time) });
-    }
-    ents.sort((a, b) => a.y - b.y);
-    for (const e of ents) e.render();
-    DD.particles.draw(ctx);
-
-    // title + prompt
-    const font = "'Trebuchet MS', Verdana, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(10,8,18,0.66)";
-    ctx.fillRect(DD.WIDTH / 2 - 150, 10, 300, 44);
-    ctx.fillStyle = "#ffd95e";
-    ctx.font = `bold 19px ${font}`;
-    let title, sub;
-    if (game.state === "lobby") {
-      const dn = (DUNGEONS[game.lobbyDungeonId] || {}).name || "Dungeon";
-      title = dn.toUpperCase();
-      sub = "Stand on a glowing pad to enter that tier  •  Esc: map";
-    } else {
-      title = "TOWN";
-      sub = DD.input.touchSeen
-        ? "Tap an NPC to talk  •  walk up through the door to leave"
-        : "Walk to an NPC and press E  •  exit ▲ to the map  •  Esc: map";
-    }
-    ctx.fillText(title, DD.WIDTH / 2, 32);
-    ctx.fillStyle = "#bdb3d6";
-    ctx.font = `12px ${font}`;
-    ctx.fillText(sub, DD.WIDTH / 2, 48);
-
-    if (game.state === "town" && game.nearbyNpc) {
-      const pl = game.players[0];
-      ctx.fillStyle = "#ffd95e";
-      ctx.font = `bold 13px ${font}`;
-      const label = DD.input.touchSeen ? `Tap to talk to ${game.nearbyNpc.label}` : `[E] Talk to ${game.nearbyNpc.label}`;
-      ctx.fillText(label, pl.x, pl.y - 40);
-    }
-    ctx.textAlign = "left";
-  }
-
   // ---- draw ----
 
   function draw(dt) {
-    // 3D path (?3d): js/game3d.js renders the scene + HUD overlay.
+    // menu/hub show a generated dungeon as their 3D backdrop
+    if ((game.state === "menu" || game.state === "hub") && !DD.room.prerendered) {
+      sizeRoomToCanvas();
+      DD.room.setTheme("catacombs"); // neutral backdrop, not the last dungeon's theme
+      DD.room.generate();
+      DD.updateView(canvas);
+      DD.room.prerendered = true;
+    }
+
+    // js/game3d.js renders the scene + HUD overlay for every in-world state.
     if (DD.game3d && DD.game3d.active(game.state)) {
       DD.game3d.draw(dt);
       return;
     }
 
+    // Screen-space UI states (the world map), plus a plain backdrop while the
+    // 3D kit is still loading.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#0e0b16";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.save();
-    ctx.translate(DD.view.ox, DD.view.oy);
-    ctx.scale(DD.view.scale, DD.view.scale);
-
     if (game.state === "map") {
+      ctx.save();
+      ctx.translate(DD.view.ox, DD.view.oy);
+      ctx.scale(DD.view.scale, DD.view.scale);
       drawMap(ctx);
       ctx.restore();
-      return;
-    }
-
-    if (game.state === "lobby" || game.state === "town" || game.state === "stats" ||
-        game.state === "trader" || game.state === "quests") {
-      drawPeaceful(ctx);
-      ctx.restore();
-      return;
-    }
-
-    if (game.state === "menu" || game.state === "hub") {
-      if (!DD.room.prerendered) {
-        sizeRoomToCanvas();
-        DD.room.setTheme("catacombs"); // neutral backdrop, not the last dungeon's theme
-        DD.room.generate();
-        DD.updateView(canvas);
-      }
-      DD.room.prerendered = true;
-      DD.room.draw(ctx);
-      ctx.restore();
-      return;
-    }
-
-    ctx.save();
-    if (game.shake > 0) {
-      ctx.translate(DD.rand(-game.shake, game.shake), DD.rand(-game.shake, game.shake));
-    }
-
-    DD.room.draw(ctx);
-
-    for (const it of game.shopItems) it.draw(ctx);
-    for (const pk of game.pickups) pk.draw(ctx);
-
-    // y-sort so lower entities draw in front
-    const drawables = [...game.skeletons, ...game.chests, ...game.players.filter((p) => !p.dead)];
-    if (game.shopkeeper) drawables.push(game.shopkeeper);
-    drawables.sort((a, b) => a.y - b.y);
-    for (const d of drawables) d.draw(ctx);
-
-    for (const pr of game.projectiles) pr.draw(ctx);
-    for (const es of game.enemyShots) es.draw(ctx);
-
-    DD.particles.draw(ctx);
-    DD.hud.draw(ctx, game);
-
-    ctx.restore(); // shake
-    ctx.restore(); // view transform
-
-    // room transition fade covers the whole screen
-    if (game.state === "transition") {
-      const a = game.transitionPhase === "out" ? game.transitionT : 1 - game.transitionT;
-      ctx.fillStyle = `rgba(10, 8, 18, ${DD.clamp(a, 0, 1)})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
   }
 

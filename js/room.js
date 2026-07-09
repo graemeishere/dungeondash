@@ -2,7 +2,6 @@
 (function (DD) {
   const FLOOR = 0, WALL = 1, DOOR = 2;
   let tiles = [];
-  let floorCanvas = null;
 
   function tileAt(tx, ty) {
     if (tx < 0 || ty < 0 || tx >= DD.ROOM_W || ty >= DD.ROOM_H) return WALL;
@@ -17,8 +16,8 @@
     doorCols: [14, 15],
     spikes: [], // [{tx, ty, offset}]
     theme: "catacombs",
-    decorations: [],    // animated/text overlays drawn every frame
-    staticDecor: [],    // baked into the floor canvas during prerender
+    decorations: [],    // theme ambiance data (not yet rendered in 3D)
+    staticDecor: [],    // static prop data (not yet rendered in 3D)
     tierDoorCols: null, // legacy lobby doorways (unused; pads replace them)
     tierPads: null,     // lobby: [{ti,x,y,r,label,sub,color,locked,req}]
     isLobby: false,
@@ -304,80 +303,11 @@
       this.prerender();
     },
 
+    // The room has no 2D render of its own anymore — the 3D layer assembles
+    // the dungeon from tiles[]. Bump the version on every (re)build so it
+    // knows to reassemble the mesh.
     prerender() {
-      const th = this.themeSet();
-      const wallImg = th ? th.wall : DD.sprites.wallTile;
-      const floorSet = th ? th.floor : DD.sprites.floorTiles;
-      const doorImg = th ? th.doorClosed : DD.sprites.doorClosed;
-      floorCanvas = document.createElement("canvas");
-      floorCanvas.width = DD.WIDTH;
-      floorCanvas.height = DD.HEIGHT;
-      const ctx = floorCanvas.getContext("2d");
-      for (let ty = 0; ty < DD.ROOM_H; ty++) {
-        for (let tx = 0; tx < DD.ROOM_W; tx++) {
-          const t = tileAt(tx, ty);
-          let img;
-          if (t === WALL) img = wallImg;
-          else if (t === DOOR) img = doorImg;
-          else img = floorSet[(tx * 7 + ty * 13) % floorSet.length];
-          ctx.drawImage(img, tx * DD.TILE, ty * DD.TILE);
-        }
-      }
-      // bake static props (gravestones, fences, mine carts, bar counter)
-      for (const d of this.staticDecor) {
-        const y = d.anchorTop ? d.y : d.y - d.img.height;
-        ctx.drawImage(d.img, Math.round(d.x - d.img.width / 2), Math.round(y));
-      }
-      // bumped on every (re)build so the 3D layer knows to reassemble the mesh
       this.version = (this.version || 0) + 1;
-    },
-
-    drawDecorations(ctx) {
-      const time = (DD.game && DD.game.time) || 0;
-      const font = "'Trebuchet MS', Verdana, sans-serif";
-      for (const d of this.decorations) {
-        if (d.sign) {
-          ctx.textAlign = "center";
-          ctx.fillStyle = "rgba(10,8,18,0.7)";
-          ctx.fillRect(d.x - 52, d.y - 16, 104, 34);
-          ctx.strokeStyle = d.color;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(d.x - 52, d.y - 16, 104, 34);
-          ctx.fillStyle = d.color;
-          ctx.font = `bold 14px ${font}`;
-          ctx.fillText(d.text, d.x, d.y - 1);
-          ctx.fillStyle = "#d8cfee";
-          ctx.font = `11px ${font}`;
-          ctx.fillText(d.sub, d.x, d.y + 13);
-          ctx.textAlign = "left";
-          continue;
-        }
-        const n = d.frames ? d.frames.length : 0;
-        if (!n) continue;
-        // Positive modulo: JS's % keeps the dividend's sign, so a negative time
-        // would otherwise yield frames[-1] === undefined and crash on .width.
-        const frame = d.frames[((Math.floor(time * 6) % n) + n) % n];
-        let x = d.x, y = d.y;
-        if (d.fly) {
-          x = d.bx + Math.sin(time * 1.6 + d.phase) * 40;
-          y = d.by + Math.cos(time * 2.3 + d.phase) * 22;
-        }
-        ctx.drawImage(frame, Math.round(x - frame.width / 2), Math.round(y - frame.height / 2));
-      }
-    },
-
-    draw(ctx) {
-      const th = this.themeSet();
-      ctx.drawImage(floorCanvas, 0, 0);
-      if (this.doorOpen) {
-        const openImg = th ? th.doorOpen : DD.sprites.doorOpen;
-        for (const c of this.doorCols) ctx.drawImage(openImg, c * DD.TILE, 0);
-      }
-      const time = (DD.game && DD.game.time) || 0;
-      for (const s of this.spikes) {
-        ctx.drawImage(DD.sprites.spikes[this.spikeStage(s, time)], s.tx * DD.TILE, s.ty * DD.TILE);
-      }
-      this.drawDecorations(ctx);
     },
   };
 })(window.DD);

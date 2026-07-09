@@ -14,17 +14,23 @@ python3 -m http.server 8123 &   # from the repo root
 
 ## Useful URLs
 
-- `?dev=combat` — skips all menus straight into a solo combat room (2D path).
-- `?3d&dev=combat` — same, on the 3D WebGL path.
+The game is 3D-only (WebGL scene + a transparent 2D overlay canvas for
+HUD/map UI).
+
+- `?dev=combat` — skips all menus straight into a solo combat room.
 - `&class=warrior|rogue|mage|ranger`, `&dungeon=crypt|goblinMines|catacombs`.
-- `&cam=fixed` — whole-room 3D camera (best for screenshots; the default
+- `&cam=fixed` — whole-room camera (best for screenshots; the default
   follow camera is zoomed very close).
 - `?camtest` — live camera tuning readout/buttons.
+- Town/lobby can be reached from a running game via
+  `DD.game.state = "town"` (or `"lobby"` + `DD.game.lobbyDungeonId`) followed
+  by `window.dispatchEvent(new Event("resize"))` — the resize handler rebuilds
+  the room for the new state.
 
 ## Driving it
 
-- Wait for boot with `page.waitForFunction(() => window.DD && DD.game3d && DD.game3d.active("play"))`
-  (3D) or `DD.game` (2D), then ~1s more for GLB models to settle.
+- Wait for boot with `page.waitForFunction(() => window.DD && DD.game3d && DD.game3d.active("play"))`,
+  then ~1s more for GLB models to settle.
 - Attack: `page.keyboard.down(" ")` (hold — a quick `press` can fall between
   frames and be missed). Move: WASD. Aim: `page.mouse.move(...)`.
 - Player's screen position: `DD.render3d.projectToScreen(p.x/DD.TILE, p.y/DD.TILE, 1)`.

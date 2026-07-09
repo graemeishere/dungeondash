@@ -60,6 +60,11 @@ guest disconnects, the host continues solo seamlessly.
 
 ## What's in the game so far
 
+- A full 3D WebGL view (three.js): the dungeon is assembled from Kenney
+  modular pieces, heroes and skeletons are animated KayKit character models,
+  and combat effects (sparks, spell orbs, impact rings, weapon trails) are a
+  GPU particle system — while all gameplay logic still runs on the original
+  2D tile grid underneath
 - Three floors of escalating rooms: combat, treasure vaults, spike-trap
   gauntlets, and named elite minibosses, each floor capped by its own boss
   (Skeleton King → Bone Emperor → The Deathless) with AoE slams, summons,
@@ -77,37 +82,45 @@ guest disconnects, the host continues solo seamlessly.
 - Hit feedback: knockback, hit-flash, damage numbers, particles, screen shake
 - Synthesized sound effects via the Web Audio API
 
-## No asset files?
+## Assets
 
-Correct — every sprite (heroes, skeletons, tiles, pickups) is pixel art generated
-onto offscreen canvases at boot in `js/sprites.js`, and every sound is synthesized
-at runtime in `js/audio.js`. The whole game is code.
+The 3D scene uses CC0 asset packs, vendored into the repo (no CDN, no build
+step): the **Kenney Modular Dungeon Kit** for the architecture and the
+**KayKit** Adventurers / Skeletons / Character Animations packs for the
+animated heroes and enemies, loaded with a vendored three.js (`js/lib/three/`).
+
+Everything else is still code: NPC/pickup/UI sprites are pixel art generated
+onto offscreen canvases at boot in `js/sprites.js` (they stand in the 3D scene
+as billboards), and every sound is synthesized at runtime in `js/audio.js`.
 
 ## Code layout
 
 ```
-index.html      page shell + class select / result overlays
+index.html      page shell, DOM overlays, 3D boot
 css/style.css   layout and menu styling
 js/util.js      constants and math helpers
-js/sprites.js   procedural pixel-art generation
+js/sprites.js   procedural pixel-art generation (billboards + UI)
 js/audio.js     Web Audio sound effects
-js/input.js     keyboard + mouse state
-js/particles.js particle bursts and floating damage text
-js/room.js      room generation, tile collision, rendering
+js/input.js     keyboard + mouse + touch state
+js/render3d.js  three.js dungeon renderer (instanced Kenney kit)
+js/char3d.js    KayKit character rigs + animation clips
+js/fx3d.js      3D combat effects (particles, orbs, rings, swing trails)
+js/game3d.js    the 3D view driver: entities -> models/billboards, overlays
+js/particles.js effect triggers bridged into fx3d + damage-number data
+js/room.js      room generation, tile grid, collision
 js/entities.js  player classes, skeletons, projectiles, pickups
-js/hud.js       in-game HUD
-js/game.js      state machine, main loop, wiring
-```
-
-## Code layout (additions)
-
-```
+js/items.js     gear, rarities, inventory data
+js/stats.js     hero attributes and derived stats
+js/profile.js   persistent heroes and save data
+js/hud.js       in-game HUD (screen-space overlay)
 js/net.js       WebRTC pairing, remote input, world snapshot sync
+js/game.js      state machine, main loop, wiring
 ```
 
 ## Next steps (toward the design brief)
 
-- Gear drops and inventory (the last big brief feature missing)
 - Guest joining mid-run at floor transitions, co-op save of both characters
 - A lobby/signaling helper to replace manual code exchange
+- Real 3D meshes for spikes, doors and props (currently sprite billboards)
+- Pointer-aim screen→world mapping tuned for the 3D camera
 - More floors, bosses, and class abilities
