@@ -103,11 +103,17 @@
     const game = DD.game;
     const menuish = MENU_3D[game.state];    // room is just a backdrop, no entities
     const peaceful = PEACE_3D[game.state];  // walkable hub: players + NPCs, no HUD
-    // Rebuild the mesh only when the room layout actually changes.
-    if (dr._builtVersion !== DD.room.version) {
+    // Rebuild the mesh when the room layout changes, or when late-loading
+    // decor pieces ask for one identical re-instance.
+    if (dr._builtVersion !== DD.room.version || dr.needsRebuild) {
       const d = DD.room.getData();
-      dr.buildRoom({ tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h });
+      dr.buildRoom({
+        tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h,
+        seed: d.seed, theme: d.theme, roomType: d.roomType,
+        isLobby: !!d.isLobby, isTown: !!d.isTown,
+      });
       dr._builtVersion = DD.room.version;
+      if (DD.fx3d) DD.fx3d.setFlames(dr.flameWorld);
     }
 
     // Camera mode (fixed whole-room vs follow the local player). Backdrop

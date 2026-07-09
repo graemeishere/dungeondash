@@ -62,6 +62,10 @@
       this.tierPads = null;
       this.isLobby = false;
       this.isTown = false;
+      this.roomType = null; // the caller stamps it after generate()
+      // decoration seed: the 3D decor planner derives every visual choice from
+      // this, so co-op guests rebuild identical rooms from {tiles, seed}
+      this.seed = (Math.random() * 0x7fffffff) | 0;
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
 
       // border walls
@@ -151,7 +155,9 @@
       this.staticDecor = [];
       this.isLobby = true;
       this.isTown = false;
+      this.roomType = null;
       this.doorOpen = false;
+      this.seed = (Math.random() * 0x7fffffff) | 0;
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
       for (let x = 0; x < DD.ROOM_W; x++) {
         tiles[x] = WALL;
@@ -191,9 +197,11 @@
       this.staticDecor = [];
       this.isLobby = false;
       this.isTown = true;
+      this.roomType = null;
       this.doorOpen = true;
       this.tierDoorCols = null;
       this.tierPads = null;
+      this.seed = (Math.random() * 0x7fffffff) | 0;
       tiles = new Array(DD.ROOM_W * DD.ROOM_H).fill(FLOOR);
       for (let x = 0; x < DD.ROOM_W; x++) {
         tiles[x] = WALL;
@@ -288,6 +296,9 @@
       return {
         w: DD.ROOM_W, h: DD.ROOM_H, tiles: tiles.join(","),
         doorCols: this.doorCols, doorOpen: this.doorOpen, spikes: this.spikes,
+        // decor inputs: guests re-derive identical room dressing from these
+        seed: this.seed || 1, theme: this.theme, roomType: this.roomType || "combat",
+        isLobby: this.isLobby ? 1 : 0, isTown: this.isTown ? 1 : 0,
       };
     },
 
@@ -297,9 +308,13 @@
       this.doorCols = d.doorCols;
       this.doorOpen = d.doorOpen;
       this.spikes = d.spikes || [];
+      this.seed = d.seed || 1;
+      if (d.theme) this.setTheme(d.theme);
+      this.roomType = d.roomType || "combat";
+      this.isLobby = !!d.isLobby;
+      this.isTown = !!d.isTown;
       this.decorations = [];
       this.staticDecor = [];
-      this.addAmbiance();
       this.prerender();
     },
 
