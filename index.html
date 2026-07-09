@@ -9,8 +9,8 @@
 </head>
 <body>
   <div id="wrap">
-    <!-- 3D dungeon layer (only used when the URL has ?3d); sits behind #game,
-         which becomes transparent so the WebGL render shows through. -->
+    <!-- 3D dungeon layer; sits behind #game, the transparent screen-space
+         overlay canvas (HUD, damage numbers, map screen). -->
     <canvas id="game3d"></canvas>
     <canvas id="game" width="960" height="576"></canvas>
 
@@ -205,15 +205,15 @@
   <script src="js/stats.js"></script>
   <script src="js/items.js"></script>
   <script src="js/hud.js"></script>
-  <!-- 3D view driver (?3d); before game.js so DD.game3d exists at boot. -->
+  <!-- 3D view driver; before game.js so DD.game3d exists at boot. -->
   <script src="js/game3d.js"></script>
   <script src="js/game.js"></script>
 
-  <!-- 3D boot: only spins up when ?3d is present. Creates the renderer and
-       hands it to the (classic-script) game via window.DD; game.js engages the
-       3D path once DD.render3d.proto is loaded. -->
+  <!-- 3D boot: creates the renderer and hands it to the (classic-script) game
+       via window.DD; game.js engages the 3D path once DD.render3d.proto is
+       loaded. -->
   <script type="module">
-    if (window.DD && window.DD.use3d) {
+    {
       const { DungeonRenderer } = await import("./js/render3d.js");
       const c3 = document.getElementById("game3d");
       const dr = new DungeonRenderer(c3);
