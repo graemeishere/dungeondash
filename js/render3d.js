@@ -242,9 +242,12 @@ export class DungeonRenderer {
       }
     }
 
-    // torch-flame emitters in world space, for fx3d
+    // torch-flame emitters in world space, for fx3d (vignette flames carry
+    // sub-cell ox/oz offsets; wall torches carry mount)
     this.flameWorld = plan.flames.map((f) => {
       const p = this._placementWorld(f);
+      p.x += (f.ox || 0) * this.CELL;
+      p.z += (f.oz || 0) * this.CELL;
       return { x: p.x, y: f.up * this.wallH, z: p.z };
     });
 
