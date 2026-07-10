@@ -162,11 +162,13 @@ export class DungeonRenderer {
     await Promise.allSettled(missing.map(async (n) => {
       try {
         const g = await this.loader.loadAsync(encodeURI(PIECE_DIR + n + ".gltf"));
-        const m = firstMesh(g.scene);
-        if (!m) throw new Error("no mesh in " + n);
-        m.updateWorldMatrix(true, false);
-        // scene kept for multi-mesh pieces (doorframes/gates are cloned whole)
-        this.pieceProtos.set(n, { mesh: m, base: m.matrixWorld.clone(), scene: g.scene });
+        const meshes = [];
+        g.scene.updateWorldMatrix(true, true);
+        g.scene.traverse((o) => { if (o.isMesh) meshes.push({ mesh: o, base: o.matrixWorld.clone() }); });
+        if (!meshes.length) throw new Error("no mesh in " + n);
+        // meshes: every submesh (some pieces, e.g. spike tiles, have several);
+        // mesh/base: the first, for single-mesh consumers; scene: for cloning
+        this.pieceProtos.set(n, { mesh: meshes[0].mesh, base: meshes[0].base, meshes, scene: g.scene });
         loadedAny = true;
       } catch (e) {
         this.pieceFailed.add(n); // log-and-drop: the planner keeps its RNG
@@ -223,8 +225,13 @@ export class DungeonRenderer {
 
     let drawCalls = 0;
     for (const [piece, placements] of groups) {
-      g.add(this._instancePlaced(this.pieceProtos.get(piece), placements));
-      drawCalls++;
+      const proto = this.pieceProtos.get(piece);
+      // one InstancedMesh per submesh of the piece (most have exactly one);
+      // fit scale derives from the piece's first submesh so they stay together
+      for (const sub of (proto.meshes || [proto])) {
+        g.add(this._instancePlaced(sub, placements, proto));
+        drawCalls++;
+      }
     }
 
     // torch-flame emitters in world space, for fx3d
@@ -264,10 +271,46 @@ export class DungeonRenderer {
       this.doorGroup = dg;
     }
 
+    // Spike traps: InstancedMeshes (one per submesh of the spike tile) whose
+    // per-instance Y follows the trap cycle (sunk / warning tips / up), driven
+    // by updateSpikes() each frame. Timing stays authoritative in room.js.
+    if (this.spikeInst) { this.scene.remove(this.spikeInst); this.spikeInst = null; this._spikeSubs = null; }
+    this.spikeList = plan.spikes || [];
+    const spikeProto = this.pieceProtos.get("floor_tile_big_spikes");
+    if (this.spikeList.length && spikeProto) {
+      const grp = new THREE.Group();
+      this._spikeSubs = (spikeProto.meshes || [spikeProto]).map((sub) => {
+        const inst = new THREE.InstancedMesh(sub.mesh.geometry, sub.mesh.material, this.spikeList.length);
+        inst.frustumCulled = false;
+        grp.add(inst);
+        return { inst, base: sub.base };
+      });
+      this.scene.add(grp);
+      this.spikeInst = grp;
+      this.updateSpikes(this.spikeList.map(() => 0));
+    }
+
     this.scene.add(g);
     this.dungeon = g;
     this._frameCamera();
     return { drawCalls };
+  }
+
+  // stages[i]: 0 = sunk under the floor, 1 = warning tips, 2 = fully up.
+  // The spike tile's blades rise ~2u from its base, so sinking 2.15u hides it.
+  updateSpikes(stages) {
+    if (!this._spikeSubs) return;
+    const T = new THREE.Matrix4(), M = new THREE.Matrix4();
+    const LIFT = [-2.15, -1.55, -0.02];
+    for (const { inst, base } of this._spikeSubs) {
+      this.spikeList.forEach((s, i) => {
+        const p = this._cellWorld(s.tx, s.ty);
+        T.makeTranslation(p.x, LIFT[stages[i]] ?? LIFT[0], p.z);
+        M.multiplyMatrices(T, base);
+        inst.setMatrixAt(i, M);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+    }
   }
 
   // Slide the gates up into the frame (open) or back down (closed). Instant
@@ -290,10 +333,23 @@ export class DungeonRenderer {
     return c;
   }
 
-  // Instance a piece over planner placements ({gx,gy,rot,mount?,up?,edge?}).
-  _instancePlaced(proto, placements) {
+  // Uniform scale that makes a piece's footprint fill `fit` of a cell (used
+  // for obstacle props of very different natural sizes).
+  _fitScale(proto, fit) {
+    if (!proto.mesh.geometry.boundingBox) proto.mesh.geometry.computeBoundingBox();
+    const bb = proto.mesh.geometry.boundingBox;
+    const s = proto.base.getMaxScaleOnAxis() || 1;
+    const span = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * s;
+    if (!span) return 1;
+    return Math.min(3, Math.max(0.5, (fit * this.CELL) / span));
+  }
+
+  // Instance a (sub)mesh over planner placements
+  // ({gx,gy,rot,mount?,up?,edge?,fit?}); fitProto anchors auto-fit scale to the
+  // whole piece rather than this submesh.
+  _instancePlaced(proto, placements, fitProto) {
     const inst = new THREE.InstancedMesh(proto.mesh.geometry, proto.mesh.material, placements.length);
-    const T = new THREE.Matrix4(), R = new THREE.Matrix4(), M = new THREE.Matrix4();
+    const T = new THREE.Matrix4(), R = new THREE.Matrix4(), S = new THREE.Matrix4(), M = new THREE.Matrix4();
     const half = this.CELL / 2;
     placements.forEach((p, i) => {
       let pos;
@@ -312,7 +368,9 @@ export class DungeonRenderer {
       const rot = p.mount ? DungeonRenderer._inwardRot(p.mount) : (p.rot || 0);
       T.makeTranslation(pos.x, (p.up || 0) * this.wallH, pos.z);
       R.makeRotationY(p.edge ? (p.rot || 0) : rot);
-      M.multiplyMatrices(T, R).multiply(proto.base);
+      M.multiplyMatrices(T, R);
+      if (p.fit) { const k = this._fitScale(fitProto || proto, p.fit); S.makeScale(k, k, k); M.multiply(S); }
+      M.multiply(proto.base);
       inst.setMatrixAt(i, M);
     });
     inst.instanceMatrix.needsUpdate = true;

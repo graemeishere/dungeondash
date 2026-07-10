@@ -8,7 +8,7 @@
 // js/render3d.js turns the plan into InstancedMeshes; this module never
 // imports three.js and stays trivially testable.
 
-const FLOOR = 0, WALL = 1, DOOR = 2;
+const FLOOR = 0, WALL = 1, DOOR = 2, OBSTACLE = 3;
 
 // All pieces come from the KayKit Dungeon Remastered pack (single-mesh gltf
 // files sharing one 17KB atlas — cheap to instance).
@@ -55,6 +55,7 @@ const PALETTES = {
       ],
     },
     wall: [["wall", 70], ["wall_cracked", 18], ["wall_pillar", 8], ["wall_broken", 4]],
+    obstacle: [["pillar", 30], ["crates_stacked", 22], ["rubble_large", 20], ["trunk_medium_A", 14], ["barrel_small_stack", 14]],
     banner: "banner_patternA_red", bannerChance: 0.10,
     torch: "torch_mounted", torchEvery: 5,
     atmosphere: { bg: 0x0a0812, hemiSky: 0xcfe0ff, hemiGround: 0x40384f, sun: 0xfff1d0 },
@@ -69,6 +70,7 @@ const PALETTES = {
       ],
     },
     wall: [["wall", 56], ["wall_cracked", 24], ["wall_broken", 10], ["wall_sloped", 10]],
+    obstacle: [["crates_stacked", 28], ["barrel_large", 24], ["box_stacked", 20], ["rubble_large", 18], ["keg", 10]],
     banner: "banner_patternB_green", bannerChance: 0.08,
     torch: "torch_mounted", torchEvery: 4,
     atmosphere: { bg: 0x0d0a06, hemiSky: 0xffe0b8, hemiGround: 0x4a3a28, sun: 0xffd9a0 },
@@ -84,6 +86,7 @@ const PALETTES = {
       ],
     },
     wall: [["wall", 56], ["wall_cracked", 20], ["wall_broken", 8], ["wall_pillar", 8], ["wall_window_closed", 8]],
+    obstacle: [["pillar_decorated", 34], ["pillar", 18], ["rubble_large", 24], ["trunk_large_A", 24]],
     banner: "banner_patternC_white", bannerChance: 0.12,
     torch: "candle_triple", torchEvery: 4, torchOnFloor: true,
     atmosphere: { bg: 0x070812, hemiSky: 0x9fb4ff, hemiGround: 0x2c2a4a, sun: 0xcfd8ff },
@@ -95,6 +98,7 @@ const PALETTES = {
       small: [["floor_wood_small", 60], ["floor_wood_small_dark", 40]],
     },
     wall: [["wall", 50], ["wall_window_closed", 20], ["wall_shelves", 16], ["wall_pillar", 14]],
+    obstacle: [["table_medium", 28], ["barrel_large_decorated", 24], ["keg_decorated", 24], ["crates_stacked", 24]],
     banner: "banner_patternA_yellow", bannerChance: 0.10,
     torch: "torch_mounted", torchEvery: 4,
     atmosphere: { bg: 0x0c0a10, hemiSky: 0xffe8c0, hemiGround: 0x4a3c30, sun: 0xffe0b0 },
@@ -106,6 +110,7 @@ const PALETTES = {
       small: [["floor_tile_small", 70], ["floor_tile_small_decorated", 30]],
     },
     wall: [["wall", 70], ["wall_pillar", 16], ["wall_cracked", 14]],
+    obstacle: [["pillar_decorated", 70], ["pillar", 30]],
     banner: "banner_triple_red", bannerChance: 0.14,
     torch: "torch_mounted", torchEvery: 4,
     atmosphere: { bg: 0x0a0812, hemiSky: 0xcfe0ff, hemiGround: 0x40384f, sun: 0xfff1d0 },
@@ -136,16 +141,27 @@ export function planRoomDecor(desc) {
   const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? WALL : tiles[y * w + x];
   const solid = (x, y) => at(x, y) === WALL;
 
-  // Pass 1 — floors: every FLOOR/DOOR cell gets either a full-cell piece or a
-  // 2x2 quad of quarter-cell pieces, all seeded. Doorway cells stay plain so
-  // the threshold reads clean.
+  // Pass 1 — floors: every non-wall cell gets either a full-cell piece or a
+  // 2x2 quad of quarter-cell pieces, all seeded. Doorway and obstacle cells
+  // stay plain (the threshold reads clean; props sit on a plain base). Trap
+  // rooms mix rusty grates into the floor.
   const plainFloor = pal.floor.large[0][0];
+  const largeTable = desc.roomType === "trap"
+    ? pal.floor.large.concat([["floor_tile_grate", 16], ["floor_tile_big_grate", 8]])
+    : pal.floor.large;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const t = tiles[y * w + x];
       if (t === WALL) continue;
-      if (t === DOOR) {
+      if (t === DOOR || t === OBSTACLE) {
         floors.push({ piece: plainFloor, gx: x, gy: y, rot: 0 });
+        if (t === OBSTACLE) {
+          // the solid prop standing on this cell, auto-fitted to the cell
+          props.push({
+            piece: pick(rng, pal.obstacle), gx: x, gy: y,
+            rot: Math.floor(rng() * 4) * (Math.PI / 2), fit: 0.86,
+          });
+        }
         continue;
       }
       if (rng() < pal.floor.smallChance) {
@@ -158,7 +174,7 @@ export function planRoomDecor(desc) {
         }
       } else {
         floors.push({
-          piece: pick(rng, pal.floor.large), gx: x, gy: y,
+          piece: pick(rng, largeTable), gx: x, gy: y,
           rot: Math.floor(rng() * 4) * (Math.PI / 2),
         });
       }
@@ -226,11 +242,15 @@ export function planRoomDecor(desc) {
     }
   }
 
+  // Spike traps pass through for the renderer's animated spike layer.
+  const spikes = desc.spikes || [];
+
   const pieces = new Set();
   for (const f of floors) pieces.add(f.piece);
   for (const wl of walls) pieces.add(wl.piece);
   for (const p of props) pieces.add(p.piece);
   if (door.cells.length) { pieces.add(door.frame); pieces.add(door.gate); }
+  if (spikes.length) pieces.add("floor_tile_big_spikes");
 
-  return { floors, walls, props, flames, door, atmosphere: pal.atmosphere, pieces: [...pieces] };
+  return { floors, walls, props, flames, door, spikes, atmosphere: pal.atmosphere, pieces: [...pieces] };
 }

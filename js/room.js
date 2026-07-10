@@ -1,6 +1,8 @@
 "use strict";
 (function (DD) {
-  const FLOOR = 0, WALL = 1, DOOR = 2;
+  // OBSTACLE cells are solid like walls but render as props (pillars, crates,
+  // barrels) instead of wall blocks.
+  const FLOOR = 0, WALL = 1, DOOR = 2, OBSTACLE = 3;
   let tiles = [];
 
   function tileAt(tx, ty) {
@@ -83,16 +85,38 @@
       this.doorCols = [Math.floor(DD.ROOM_W / 2) - 1, Math.floor(DD.ROOM_W / 2)];
       for (const c of this.doorCols) tiles[c] = DOOR;
 
-      // 2x2 pillars near the room quarters, with jitter, keeping center open
-      const qxs = [Math.round(DD.ROOM_W * 0.27), Math.round(DD.ROOM_W * 0.66)];
-      const qys = [Math.round(DD.ROOM_H * 0.28), Math.round(DD.ROOM_H * 0.62)];
+      // Corner notches: sometimes bite a walled rectangle out of a corner so
+      // rooms aren't always plain rectangles. Top notches keep clear of the
+      // door columns; the bottom stays shallow so the entry band survives.
+      const W = DD.ROOM_W, H = DD.ROOM_H;
+      const corners = [[0, 0], [1, 0], [0, 1], [1, 1]];
+      for (const [cx, cy] of corners) {
+        if (Math.random() > 0.35) continue;
+        const nw = DD.randi(3, Math.max(3, Math.floor(W * 0.24)));
+        const nh = DD.randi(2, Math.max(2, Math.floor(H * (cy ? 0.18 : 0.3))));
+        const x0 = cx ? W - nw : 0, y0 = cy ? H - nh : 0;
+        // never swallow the doorway or the entry point
+        if (!cy && x0 <= this.doorCols[1] + 1 && x0 + nw >= this.doorCols[0] - 1) continue;
+        for (let y = y0; y < y0 + nh; y++) {
+          for (let x = x0; x < x0 + nw; x++) tiles[y * W + x] = WALL;
+        }
+      }
+
+      // Obstacle clusters near the room quarters, with jitter: solid tiles
+      // rendered as props (pillars/crates/barrels). Shapes vary 1x1..2x2;
+      // the center band and entry band stay open.
+      const qxs = [Math.round(W * 0.27), Math.round(W * 0.66)];
+      const qys = [Math.round(H * 0.28), Math.round(H * 0.62)];
+      const SHAPES = [[1, 1], [2, 1], [1, 2], [2, 2]];
       for (const qx of qxs) {
         for (const qy of qys) {
-          const px = DD.clamp(qx + DD.randi(-1, 1), 2, DD.ROOM_W - 4);
-          const py = DD.clamp(qy + DD.randi(-1, 1), 3, DD.ROOM_H - 4);
-          for (let dy = 0; dy < 2; dy++) {
-            for (let dx = 0; dx < 2; dx++) {
-              tiles[(py + dy) * DD.ROOM_W + (px + dx)] = WALL;
+          const [sw, sh] = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+          const px = DD.clamp(qx + DD.randi(-1, 1), 2, W - 2 - sw);
+          const py = DD.clamp(qy + DD.randi(-1, 1), 3, H - 4 - sh);
+          for (let dy = 0; dy < sh; dy++) {
+            for (let dx = 0; dx < sw; dx++) {
+              const i = (py + dy) * W + (px + dx);
+              if (tiles[i] === FLOOR) tiles[i] = OBSTACLE;
             }
           }
         }
@@ -240,7 +264,7 @@
     isSolid(tx, ty) {
       const t = tileAt(tx, ty);
       if (t === DOOR) return !this.doorOpen; // door unlocks when the room is cleared
-      return t === WALL;
+      return t === WALL || t === OBSTACLE;
     },
 
     // Is this world-space point standing in the doorway?
