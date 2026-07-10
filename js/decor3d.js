@@ -70,6 +70,7 @@ const PALETTES = {
     banner: "banner_patternA_red",
     torch: "torch_mounted",
     vignettes: { storageCorner: 3, hoardSmall: 2, candleShrine: 1, rubbleNest: 2, dining: 1 },
+    intents: { storage: 3, ruin: 3, shrine: 1, messHall: 1 },
     obstacle2x: { crateFort: 3, dining: 1 },
     obstacleSingles: [["pillar", 45], ["crates_stacked", 30], ["barrel_large", 25]],
     atmosphere: { bgTop: 0x2c1c42, bgBottom: 0x0a0614, hemiSky: 0xcfe0ff, hemiGround: 0x40384f, sun: 0xfff1d0 },
@@ -87,6 +88,7 @@ const PALETTES = {
     banner: "banner_patternB_green",
     torch: "torch_mounted",
     vignettes: { storageCorner: 4, bar: 3, rubbleNest: 3, hoardSmall: 1 },
+    intents: { storage: 4, messHall: 2, ruin: 2 },
     obstacle2x: { crateFort: 4, bar: 2 },
     obstacleSingles: [["crates_stacked", 35], ["barrel_large", 35], ["box_stacked", 30]],
     atmosphere: { bgTop: 0x38241a, bgBottom: 0x0c0705, hemiSky: 0xffe0b8, hemiGround: 0x4a3a28, sun: 0xffd9a0 },
@@ -104,6 +106,7 @@ const PALETTES = {
     banner: "banner_patternC_white",
     torch: "candle_triple", torchOnFloor: true,
     vignettes: { candleShrine: 4, bedNook: 2, hoardSmall: 2, storageCorner: 1 },
+    intents: { shrine: 4, ruin: 2, den: 2 },
     obstacle2x: { crateFort: 1, candleShrine: 2 },
     obstacleSingles: [["pillar_decorated", 60], ["pillar", 40]],
     atmosphere: { bgTop: 0x1c1c48, bgBottom: 0x060612, hemiSky: 0x9fb4ff, hemiGround: 0x2c2a4a, sun: 0xcfd8ff },
@@ -121,6 +124,7 @@ const PALETTES = {
     banner: "banner_patternA_yellow",
     torch: "torch_mounted",
     vignettes: { bar: 4, dining: 4, storageCorner: 2, bedNook: 1 },
+    intents: { messHall: 5, storage: 2, den: 1 },
     obstacle2x: { dining: 3, bar: 3 },
     obstacleSingles: [["table_medium", 40], ["keg_decorated", 30], ["barrel_large_decorated", 30]],
     atmosphere: { bgTop: 0x33202c, bgBottom: 0x0c0810, hemiSky: 0xffe8c0, hemiGround: 0x4a3c30, sun: 0xffe0b0 },
@@ -134,6 +138,7 @@ const PALETTES = {
     banner: "banner_triple_red",
     torch: "torch_mounted",
     vignettes: { candleShrine: 2, library: 2 },
+    intents: { shrine: 1 },
     obstacle2x: {},
     obstacleSingles: [["pillar_decorated", 100]],
     atmosphere: { bgTop: 0x2c1c42, bgBottom: 0x0a0614, hemiSky: 0xcfe0ff, hemiGround: 0x40384f, sun: 0xfff1d0 },
@@ -255,6 +260,18 @@ const VIGNETTES = {
 // props scale up to match — otherwise tables read knee-high on characters.
 const PROP_SCALE = 1.4;
 
+// Composition intents: one per room, so its vignettes agree with each other
+// (a storage room is crates everywhere, a mess hall is tables and kegs)
+// instead of each anchor rolling independently.
+const INTENTS = {
+  storage:  { vignettes: { storageCorner: 4, crateFort: 3, hoardSmall: 1 }, obstacle2x: { crateFort: 5 } },
+  messHall: { vignettes: { dining: 4, bar: 3, storageCorner: 1 }, obstacle2x: { dining: 3, bar: 2 } },
+  shrine:   { vignettes: { candleShrine: 5, library: 2 }, obstacle2x: { candleShrine: 3, crateFort: 1 } },
+  den:      { vignettes: { bedNook: 3, storageCorner: 2, rubbleNest: 1 }, obstacle2x: { crateFort: 2 } },
+  ruin:     { vignettes: { rubbleNest: 5, hoardSmall: 2 }, obstacle2x: { crateFort: 1 } },
+  hoardRoom: { vignettes: { hoard: 3, hoardSmall: 3, storageCorner: 1 }, obstacle2x: { crateFort: 1 } },
+};
+
 // Stamp a vignette's elements at an anchor (planner-side rotation into ox/oz
 // so the renderer needs no new machinery). Offsets and heights scale with
 // PROP_SCALE so arrangements stay proportional (plates stay ON tables).
@@ -262,8 +279,8 @@ function stampVignette(v, anchor, props, flames) {
   const c = Math.cos(anchor.rot), s = Math.sin(anchor.rot);
   const S = PROP_SCALE;
   for (const el of v.elements) {
-    const ox = ((el.dx || 0) * c - (el.dz || 0) * s) * S;
-    const oz = ((el.dx || 0) * s + (el.dz || 0) * c) * S;
+    const ox = (anchor.ox || 0) + ((el.dx || 0) * c - (el.dz || 0) * s) * S;
+    const oz = (anchor.oz || 0) + ((el.dx || 0) * s + (el.dz || 0) * c) * S;
     props.push({
       piece: el.piece, gx: anchor.gx, gy: anchor.gy, ox, oz,
       rot: anchor.rot + (el.rot || 0), up: (el.up || 0) * S, fit: el.fit,
@@ -315,9 +332,16 @@ export function planRoomDecor(desc) {
     for (let x = 1; x < w - 1; x++) { mask.add(idx(x, cy)); mask.add(idx(x, cy - 1)); mask.add(idx(x, cy - 2)); }
   }
 
-  // ---- pass 1: aisle roll -------------------------------------------------
+  // ---- pass 1: aisle roll + the room's composition intent ------------------
   const wantAisle = doorXs.length &&
     (desc.roomType === "treasure" || rng() < (pal.aisleChance || 0));
+  // one intent per room: all its vignettes tell the same story
+  const intentName = desc.roomType === "treasure"
+    ? "hoardRoom"
+    : pick(rng, Object.entries(pal.intents || { storage: 1 }));
+  const intent = INTENTS[intentName] || null;
+  const vigTableSrc = (intent && intent.vignettes) || pal.vignettes || {};
+  const obstacle2xSrc = (intent && intent.obstacle2x) || pal.obstacle2x || {};
   const aisle = new Set();
   if (wantAisle) {
     for (const x of doorXs) {
@@ -554,13 +578,17 @@ export function planRoomDecor(desc) {
       rot: CORNER_ROT[Q],
     });
     // corner vignette anchor: the floor cell diagonal into the open quadrant.
-    // Facing snaps to the nearest cardinal — furniture at 45° reads dropped
-    // rather than placed.
+    // Facing snaps to the nearest cardinal (45° furniture reads dropped, not
+    // placed) and the anchor hugs the corner's two walls instead of floating
+    // at the cell center.
     const cx = openE ? Px : Px - 1, cy = openS ? Py : Py - 1;
     if (at(cx, cy) === FLOOR && !mask.has(idx(cx, cy))) {
       const diag = Math.atan2(openE ? 1 : -1, openS ? 1 : -1);
       const rot = Math.round(diag / (Math.PI / 2)) * (Math.PI / 2);
-      cornerAnchors.push({ gx: cx, gy: cy, rot, kind: "corner" });
+      cornerAnchors.push({
+        gx: cx, gy: cy, rot, kind: "corner",
+        ox: openE ? -0.2 : 0.2, oz: openS ? -0.2 : 0.2,
+      });
     }
   }
 
@@ -592,7 +620,7 @@ export function planRoomDecor(desc) {
       props.push({ piece: pick(rng, pal.obstacleSingles), gx, gy, rot: Math.floor(rng() * 4) * (Math.PI / 2), fit: 0.85 });
       continue;
     }
-    const table = Object.entries(pal.obstacle2x || {});
+    const table = Object.entries(obstacle2xSrc);
     const vName = table.length ? pick(rng, table) : null;
     const v = vName && VIGNETTES[vName];
     if (v) {
@@ -617,16 +645,28 @@ export function planRoomDecor(desc) {
     if (featureEdges.has(e) || doorAdjacent(e)) continue;
     if (at(e.gx, e.gy) !== FLOOR || mask.has(idx(e.gx, e.gy))) continue;
     const rot = e.dir === "N" ? 0 : e.dir === "S" ? Math.PI : e.dir === "E" ? -Math.PI / 2 : Math.PI / 2;
-    wallMidAnchors.push({ gx: e.gx, gy: e.gy, rot, kind: "wallMid" });
+    // hug the wall the anchor belongs to
+    const ox = e.dir === "E" ? 0.24 : e.dir === "W" ? -0.24 : 0;
+    const oz = e.dir === "N" ? -0.24 : e.dir === "S" ? 0.24 : 0;
+    wallMidAnchors.push({ gx: e.gx, gy: e.gy, rot, ox, oz, kind: "wallMid" });
   }
   const anchors = shuffle(rng, [...cornerAnchors, ...wallMidAnchors]);
-  const vigTable = Object.entries(pal.vignettes || {});
-  let vigLeft = Math.max(1, Math.min(3, Math.round((w * h) / 40)));
+  const vigTable = Object.entries(vigTableSrc);
+  let vigLeft = Math.max(1, Math.min(4, Math.round((w * h) / 36)));
   const claimed = new Set();
+  // mirrored twin of an anchor across the room's vertical center axis
+  const mirrorOf = (a) => anchors.find((b) =>
+    b !== a && b.kind === a.kind && b.gy === a.gy &&
+    b.gx === (w - 1) - a.gx && !claimed.has(idx(b.gx, b.gy)));
+  const stampAt = (v, a) => {
+    stampVignette(v, a, props, flames);
+    claimed.add(idx(a.gx, a.gy));
+    vigLeft--;
+  };
   if (desc.roomType === "treasure") {
     // treasure rooms: a hoard takes the first available corner
     const a = anchors.find((a) => a.kind === "corner");
-    if (a) { stampVignette(VIGNETTES.hoard, a, props, flames); claimed.add(idx(a.gx, a.gy)); vigLeft--; }
+    if (a) stampAt(VIGNETTES.hoard, a);
   }
   for (const a of anchors) {
     if (vigLeft <= 0 || !vigTable.length) break;
@@ -634,9 +674,11 @@ export function planRoomDecor(desc) {
     const name = pick(rng, vigTable);
     const v = VIGNETTES[name];
     if (!v || !v.anchors.includes(a.kind)) continue;
-    stampVignette(v, a, props, flames);
-    claimed.add(idx(a.gx, a.gy));
-    vigLeft--;
+    stampAt(v, a);
+    // symmetry: usually stamp the same vignette mirrored across the aisle
+    // (the twin anchor carries its own facing/wall-hug offsets)
+    const m = vigLeft > 0 ? mirrorOf(a) : null;
+    if (m && rng() < 0.75) stampAt(v, m);
   }
   if (desc.roomType === "shop") {
     stampVignette(VIGNETTES.shopStall, { gx: w / 2 - 0.5, gy: Math.floor(h / 2) - 3.2, rot: 0 }, props, flames);
