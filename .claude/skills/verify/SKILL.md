@@ -41,6 +41,23 @@ HUD/map UI).
 - Inspect effects state via `DD.fx3d` (`arcs`, `arcPool`, `rings`, `n` = live
   particles) and game state via `DD.game`.
 
+## Regression checks
+
+`node dev/room-checks.mjs` (run from a dir with playwright installed, server
+on :8123) asserts per-theme draw-call/triangle budgets and decor-planner
+determinism (same desc → same plan; guest `setData(getData())` round-trip).
+
+## Room navigation tricks
+
+- Jump to a specific room: `DD.game.floor = F; DD.game.roomIndex = I - 1;
+  DD.game.state = "transition"; DD.game.transitionPhase = "out";
+  DD.game.transitionT = 0.999;` — the transition machinery calls
+  advanceRoom() next frame (floor 1 of catacombs: index 1 = trap,
+  4 = treasure, 6 = boss).
+- Clear a room: empty `DD.game.spawnQueue`, then for each skeleton set
+  `s.state = "chase"` (dormant ones ignore damage) and call
+  `s.damage(9999, s.x, s.y, DD.game)`.
+
 ## Gotchas
 
 - `/favicon.ico` 404 in the console is normal.

@@ -284,6 +284,15 @@ export function planRoomDecor(desc) {
     }
   }
 
+  // Pass 8 — real point lights (the renderer keeps a fixed pool of 2, so at
+  // most one scripted light here; the second is the doorway glow on open).
+  const lights = [];
+  if (desc.roomType === "boss") {
+    lights.push({ gx: w / 2 - 0.5, gy: h / 2 - 0.5, up: 0.6, color: 0xffb870, intensity: 1.6 });
+  } else if (desc.isTown || desc.isLobby) {
+    lights.push({ gx: w / 2 - 0.5, gy: h / 2 - 0.5, up: 0.7, color: 0xffd9a0, intensity: 1.1 });
+  }
+
   // Spike traps pass through for the renderer's animated spike layer.
   const spikes = desc.spikes || [];
 
@@ -294,5 +303,5 @@ export function planRoomDecor(desc) {
   if (door.cells.length) { pieces.add(door.frame); pieces.add(door.gate); }
   if (spikes.length) pieces.add("floor_tile_big_spikes");
 
-  return { floors, walls, props, flames, door, spikes, atmosphere: pal.atmosphere, pieces: [...pieces] };
+  return { floors, walls, props, flames, door, spikes, lights, atmosphere: pal.atmosphere, pieces: [...pieces] };
 }

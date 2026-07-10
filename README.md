@@ -60,11 +60,14 @@ guest disconnects, the host continues solo seamlessly.
 
 ## What's in the game so far
 
-- A full 3D WebGL view (three.js): the dungeon is assembled from Kenney
-  modular pieces, heroes and skeletons are animated KayKit character models,
-  and combat effects (sparks, spell orbs, impact rings, weapon trails) are a
-  GPU particle system — while all gameplay logic still runs on the original
-  2D tile grid underneath
+- A full 3D WebGL view (three.js): dungeons are assembled from the KayKit
+  modular kit with seeded per-room decoration — varied room sizes and shapes,
+  themed floors/walls/props per dungeon, torches, banners, gates that slide
+  open on room clear, staircases at floor exits, rising spike traps, and
+  solid obstacle props (pillars, crates, barrels) — while all gameplay logic
+  still runs on the original 2D tile grid underneath
+- Animated KayKit heroes and skeletons, with GPU-particle combat effects
+  (sparks, spell orbs, impact rings, weapon trails)
 - Three floors of escalating rooms: combat, treasure vaults, spike-trap
   gauntlets, and named elite minibosses, each floor capped by its own boss
   (Skeleton King → Bone Emperor → The Deathless) with AoE slams, summons,
@@ -121,6 +124,5 @@ js/game.js      state machine, main loop, wiring
 
 - Guest joining mid-run at floor transitions, co-op save of both characters
 - A lobby/signaling helper to replace manual code exchange
-- Real 3D meshes for spikes, doors and props (currently sprite billboards)
 - Pointer-aim screen→world mapping tuned for the 3D camera
 - More floors, bosses, and class abilities

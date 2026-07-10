@@ -84,6 +84,14 @@ export class DungeonRenderer {
     this.sun = new THREE.DirectionalLight(0xfff1d0, 1.4);
     this.sun.position.set(8, 18, 10);
     this.scene.add(this.sun);
+    // Fixed pool of 2 point lights (a fixed count avoids three.js shader
+    // recompiles when rooms change): [0] = the room's scripted light (boss
+    // centerpiece / hub warmth), [1] = the doorway glow when the gate opens.
+    this.pointLights = [0, 1].map(() => {
+      const pl = new THREE.PointLight(0xffffff, 0, 60, 1.6);
+      this.scene.add(pl);
+      return pl;
+    });
 
     this.kit = DUNGEON_KITS[ACTIVE_KIT];
     this.loader = new GLTFLoader();
@@ -240,12 +248,32 @@ export class DungeonRenderer {
       return { x: p.x, y: f.up * this.wallH, z: p.z };
     });
 
+    // scripted room light (slot 0); slot 1 is reserved for the doorway glow
+    const scripted = (plan.lights || [])[0];
+    const pl0 = this.pointLights[0];
+    if (scripted) {
+      const p = this._cellWorld(scripted.gx, scripted.gy);
+      pl0.position.set(p.x, scripted.up * this.wallH, p.z);
+      pl0.color.set(scripted.color);
+      pl0.intensity = scripted.intensity * this.CELL * this.CELL; // physical falloff
+      pl0.distance = this.CELL * 10;
+    } else {
+      pl0.intensity = 0;
+    }
+    this.pointLights[1].intensity = 0;
+
     // Doorway frames + gates. Cloned (not instanced): wall_doorway is a
     // multi-mesh piece and there are at most a couple of door cells. The gate
     // slides up out of the frame on setDoorOpen — no room rebuild involved.
     if (this.doorGroup) { this.scene.remove(this.doorGroup); this.doorGroup = null; }
     this.gates = [];
     this._doorOpen = null; // force game3d's per-frame diff to re-apply state
+    this._doorCenter = null;
+    if (plan.door && plan.door.cells.length) {
+      const dc = plan.door.cells;
+      const avg = dc.reduce((a, c) => { const p = this._cellWorld(c.gx, c.gy); a.x += p.x; a.z += p.z; return a; }, { x: 0, z: 0 });
+      this._doorCenter = { x: avg.x / dc.length, z: avg.z / dc.length + this.CELL / 2 };
+    }
     if (plan.door && plan.door.cells.length) {
       const frameProto = this.pieceProtos.get(plan.door.frame);
       const gateProto = this.pieceProtos.get(plan.door.gate);
@@ -556,6 +584,15 @@ export class DungeonRenderer {
       for (const gt of this.gates) {
         gt.position.y = lift;
         gt.visible = !(this._doorOpen && k >= 1); // fully open = out of sight
+      }
+      // warm glow spilling from the open doorway — "the way forward"
+      const glow = this.pointLights[1];
+      if (this._doorCenter) {
+        const g = (this._doorOpen ? k : 1 - k) * 1.1 * this.CELL * this.CELL;
+        glow.position.set(this._doorCenter.x, this.wallH * 0.5, this._doorCenter.z);
+        glow.color.set(0xffc070);
+        glow.distance = this.CELL * 6;
+        glow.intensity = g;
       }
     }
     this._lastRenderT = performance.now();
