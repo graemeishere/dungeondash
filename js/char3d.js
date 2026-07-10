@@ -159,6 +159,9 @@ export class CharacterFactory {
         }
       }
     }
+    // cast-only: grounding shadows sell the 3D look; self-shadowing on toon
+    // models looks muddy and costs extra
+    root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     return new Character(root, this.clips);
   }
 }

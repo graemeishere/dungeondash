@@ -473,7 +473,12 @@ export function planRoomDecor(desc) {
     if (doorAdjacent(e)) continue;
     const isSide = run.dir === "E" || run.dir === "W";
     const piece = desc.roomType === "boss" && isSide ? "sword_shield" : pick(rng, pal.features);
-    edgePiece.set(e, piece);
+    if (piece === "sword_shield") {
+      // trophy: a prop hung on the wall, not a wall-panel replacement
+      props.push({ piece, gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0.42 });
+    } else {
+      edgePiece.set(e, piece);
+    }
     featureEdges.add(e);
     featuresLeft--;
   }

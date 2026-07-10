@@ -65,25 +65,41 @@ export class DungeonRenderer {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); // cap for mobile
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Filmic tone mapping + soft shadows: the two renderer-side steps toward
+    // the KayKit sample-scene look. ?noshadow is the mobile escape hatch.
+    this.shadows = !new URLSearchParams(location.search).has("noshadow");
+    this.renderer.shadowMap.enabled = this.shadows;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0812);
+    this._bgCache = new Map();
 
-    // Low isometric "diorama" look (KayKit). Perspective for a touch of depth.
-    // Tuned values (user-chosen): 25° elevation, 35° FOV.
+    // Diorama look (KayKit): ~37° elevation matches the pack's sample shots
+    // (raised from the original 25°, which read flat/side-on).
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 600);
     this.camAngle = 0;        // horizontal orbit offset (spike inspection)
-    this.elev = 0.436;        // camera elevation in radians (~25°)
+    this.elev = 0.64;         // camera elevation in radians (~37°)
     this.camMode = "fixed";   // "fixed" = frame whole room, "follow" = track player
     this.followT = new THREE.Vector3();
     this._camDist = 40;
     this._fixedDist = 40;
 
-    this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x40384f, 1.05);
+    // ACES darkens mids, so the base lights run brighter than before.
+    this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x40384f, 1.5);
     this.scene.add(this.hemi);
-    this.sun = new THREE.DirectionalLight(0xfff1d0, 1.4);
+    this.sun = new THREE.DirectionalLight(0xfff1d0, 2.2);
     this.sun.position.set(8, 18, 10);
     this.scene.add(this.sun);
+    this.scene.add(this.sun.target);
+    if (this.shadows) {
+      this.sun.castShadow = true;
+      this.sun.shadow.mapSize.set(1024, 1024); // mobile-safe single map
+      this.sun.shadow.bias = -0.0005;
+      this.sun.shadow.normalBias = 0.02;
+    }
     // Fixed pool of 2 point lights (a fixed count avoids three.js shader
     // recompiles when rooms change): [0] = the room's scripted light (boss
     // centerpiece / hub warmth), [1] = the doorway glow when the gate opens.
@@ -286,14 +302,17 @@ export class DungeonRenderer {
         // neighbouring wall panels sit on)
         const pos = this._cellWorld(c.gx, c.gy);
         pos.z += this.CELL / 2;
+        const shadowify = (root) => root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
         if (frameProto && frameProto.scene) {
           const f = frameProto.scene.clone(true);
           f.position.copy(pos);
+          shadowify(f);
           dg.add(f);
         }
         if (gateProto && gateProto.scene) {
           const gt = gateProto.scene.clone(true);
           gt.position.copy(pos);
+          shadowify(gt);
           dg.add(gt);
           this.gates.push(gt);
         }
@@ -313,6 +332,8 @@ export class DungeonRenderer {
       this._spikeSubs = (spikeProto.meshes || [spikeProto]).map((sub) => {
         const inst = new THREE.InstancedMesh(sub.mesh.geometry, sub.mesh.material, this.spikeList.length);
         inst.frustumCulled = false;
+        inst.castShadow = true;
+        inst.receiveShadow = true;
         grp.add(inst);
         return { inst, base: sub.base };
       });
@@ -406,13 +427,33 @@ export class DungeonRenderer {
     });
     inst.instanceMatrix.needsUpdate = true;
     inst.frustumCulled = false;
+    inst.castShadow = true;
+    inst.receiveShadow = true;
     return inst;
   }
 
-  // Per-theme scene mood: background + light colors.
+  // Per-theme scene mood: gradient background (the samples' purple vignette)
+  // + light colors. Gradient textures are cached per color pair.
   setAtmosphere(a) {
     if (!a) return;
-    this.scene.background.set(a.bg);
+    const top = a.bgTop ?? a.bg ?? 0x0a0812;
+    const bottom = a.bgBottom ?? a.bg ?? 0x0a0812;
+    const key = `${top}-${bottom}`;
+    let tex = this._bgCache.get(key);
+    if (!tex) {
+      const c = document.createElement("canvas");
+      c.width = 32; c.height = 256;
+      const x = c.getContext("2d");
+      const g = x.createLinearGradient(0, 0, 0, 256);
+      g.addColorStop(0, "#" + new THREE.Color(top).getHexString());
+      g.addColorStop(1, "#" + new THREE.Color(bottom).getHexString());
+      x.fillStyle = g;
+      x.fillRect(0, 0, 32, 256);
+      tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this._bgCache.set(key, tex);
+    }
+    this.scene.background = tex;
     this.hemi.color.set(a.hemiSky);
     this.hemi.groundColor.set(a.hemiGround);
     this.sun.color.set(a.sun);
@@ -424,6 +465,17 @@ export class DungeonRenderer {
     // two spans drives it so nothing clips off-screen.
     this._fixedDist = this._span * 1.15;
     if (this.camMode === "fixed") this._camDist = this._fixedDist;
+    // fit the sun + its ortho shadow frustum to the room
+    const span = this._span || 40;
+    this.sun.position.set(span * 0.35, span * 0.8, span * 0.45);
+    this.sun.target.position.set(0, 0, 0);
+    if (this.shadows) {
+      const r = span * 0.72;
+      const sc = this.sun.shadow.camera;
+      sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r;
+      sc.near = 1; sc.far = span * 3;
+      sc.updateProjectionMatrix();
+    }
   }
 
   // "fixed" frames the whole room; "follow" tracks the player at a closer zoom.
@@ -521,6 +573,7 @@ export class DungeonRenderer {
         const cfg = ITEMS[it.key];
         const mesh = proto.clone(true);
         mesh.scale.setScalar(cfg.scale);
+        mesh.traverse((o) => { if (o.isMesh) o.castShadow = true; });
         this.itemGroup.add(mesh);
         rec = { mesh, cfg };
         this.itemMap.set(it.entity, rec);
