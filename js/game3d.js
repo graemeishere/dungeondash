@@ -111,6 +111,7 @@
         tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h,
         seed: d.seed, theme: d.theme, roomType: d.roomType,
         isLobby: !!d.isLobby, isTown: !!d.isTown, exit: d.exit, spikes: d.spikes,
+        isFloor: !!d.isFloor, rooms: d.rooms,
       });
       dr._builtVersion = DD.room.version;
       if (DD.fx3d) DD.fx3d.setFlames(dr.flameWorld);
@@ -122,8 +123,9 @@
     }
 
     // Camera mode (fixed whole-room vs follow the local player). Backdrop
-    // screens always use the fixed whole-room camera.
-    const camMode = menuish ? "fixed" : camMode3d;
+    // screens always use the fixed whole-room camera; floors use fixed in
+    // Phase 1 (whole-floor overview) until the follow camera lands in Phase 2.
+    const camMode = (menuish || DD.room.isFloor) ? "fixed" : camMode3d;
     if (dr.camMode !== camMode) dr.setCameraMode(camMode);
     if (camMode === "follow" && game.localPlayer) {
       const w = dr.cellToWorld(game.localPlayer.x / DD.TILE, game.localPlayer.y / DD.TILE);

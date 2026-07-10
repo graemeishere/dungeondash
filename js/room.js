@@ -34,6 +34,7 @@
       this.tierPads = null;
       this.isLobby = false;
       this.isTown = false;
+      this.isFloor = false;
       this.roomType = null; // the caller stamps it after generate()
       this.exit = "door";   // ...and the exit style ("stairs" on floor bosses)
       // decoration seed: the 3D decor planner derives every visual choice from
@@ -111,12 +112,35 @@
       this.prerender();
     },
 
+    // Install a whole floor (js/floor.js spec) as the live world: one large
+    // tiles grid of small rooms + corridors. Collision/movement/decor all
+    // operate on `tiles` unchanged; `rooms` metadata drives per-room decor,
+    // combat gating and the minimap.
+    setFloor(f) {
+      DD.setRoomSize(f.w, f.h);
+      tiles = f.tiles;
+      this.isFloor = true;
+      this.isLobby = false;
+      this.isTown = false;
+      this.spikes = [];
+      this.doorCols = [];
+      this.doorOpen = true;         // Phase 1: corridors are open gaps
+      this.rooms = f.rooms;
+      this.edges = f.edges;
+      this.stairsRoomId = f.stairsRoomId;
+      this.seed = f.seed;
+      this.roomType = "floor";
+      this.exit = "door";
+      this.prerender();
+    },
+
     // A themed entry room with three glowing floor pads, one per dungeon tier.
     // tierInfo (optional): [{ sub, color, locked, req }] per tier, from the caller.
     generateLobby(tierInfo) {
       this.spikes = [];
       this.isLobby = true;
       this.isTown = false;
+      this.isFloor = false;
       this.roomType = null;
       this.doorOpen = false;
       this.seed = (Math.random() * 0x7fffffff) | 0;
@@ -156,6 +180,7 @@
       this.spikes = [];
       this.isLobby = false;
       this.isTown = true;
+      this.isFloor = false;
       this.roomType = null;
       this.doorOpen = true;
       this.tierDoorCols = null;
@@ -257,6 +282,9 @@
         // decor inputs: guests re-derive identical room dressing from these
         seed: this.seed || 1, theme: this.theme, roomType: this.roomType || "combat",
         isLobby: this.isLobby ? 1 : 0, isTown: this.isTown ? 1 : 0, exit: this.exit || "door",
+        // floor mode: per-room rects/intents drive the decor planner + minimap
+        isFloor: this.isFloor ? 1 : 0,
+        rooms: this.isFloor ? this.rooms.map((r) => ({ id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed })) : null,
       };
     },
 
