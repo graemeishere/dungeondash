@@ -110,7 +110,7 @@
       dr.buildRoom({
         tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h,
         seed: d.seed, theme: d.theme, roomType: d.roomType,
-        isLobby: !!d.isLobby, isTown: !!d.isTown, exit: d.exit,
+        isLobby: !!d.isLobby, isTown: !!d.isTown, exit: d.exit, spikes: d.spikes,
       });
       dr._builtVersion = DD.room.version;
       if (DD.fx3d) DD.fx3d.setFlames(dr.flameWorld);
@@ -197,16 +197,6 @@
     }
     if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
     for (const it of game.shopItems) billboards.push(captureEntity(it));
-    // spike traps: animated floor-spike sprites stood up as billboards (interim
-    // until they get real 3D meshes)
-    for (const s of (DD.room.spikes || [])) {
-      if (!s.draw) {
-        s.x = (s.tx + 0.5) * DD.TILE;
-        s.y = (s.ty + 1) * DD.TILE;
-        s.draw = (c) => c.drawImage(DD.sprites.spikes[DD.room.spikeStage(s, DD.game.time)], s.tx * DD.TILE, s.ty * DD.TILE);
-      }
-      billboards.push(captureEntity(s));
-    }
     // arrows -> 3D models (along velocity); mage bolts / magic -> glowing orbs
     // with a particle trail; anything else stays a billboard.
     const asProj = (e) => projs.push({ entity: e, key: "arrow", gx: e.x / DD.TILE, gy: e.y / DD.TILE, rotationY: Math.atan2(e.vx, e.vy) });
@@ -230,6 +220,8 @@
 
     if (mgr) mgr.sync(chars, dt);
     if (DD.fx3d) { DD.fx3d.update(dt); DD.fx3d.setOrbs(orbs); }
+    // spike traps rise/sink with their gameplay cycle
+    if (dr.spikeInst) dr.updateSpikes(DD.room.spikes.map((s) => DD.room.spikeStage(s, game.time)));
     dr.setItems(items);
     dr.setProjectiles(projs);
     dr.setEntities(billboards);
