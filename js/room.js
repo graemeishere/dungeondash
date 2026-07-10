@@ -18,8 +18,6 @@
     doorCols: [14, 15],
     spikes: [], // [{tx, ty, offset}]
     theme: "catacombs",
-    decorations: [],    // theme ambiance data (not yet rendered in 3D)
-    staticDecor: [],    // static prop data (not yet rendered in 3D)
     tierDoorCols: null, // legacy lobby doorways (unused; pads replace them)
     tierPads: null,     // lobby: [{ti,x,y,r,label,sub,color,locked,req}]
     isLobby: false,
@@ -29,37 +27,9 @@
       this.theme = (DD.sprites.themes && DD.sprites.themes[id]) ? id : "catacombs";
     },
 
-    themeSet() {
-      return (DD.sprites.themes && DD.sprites.themes[this.theme]) || null;
-    },
-
-    // Sprinkle non-colliding ambiance for the current theme along the walls.
-    addAmbiance() {
-      const th = this.themeSet();
-      if (!th) return;
-      const topY = DD.TILE * 0.9;
-      for (let tx = 3; tx < DD.ROOM_W - 3; tx += 6) {
-        const x = tx * DD.TILE + DD.TILE / 2;
-        if (th.torch) this.decorations.push({ frames: th.torch, x, y: topY, anim: true });
-        else if (th.lantern) this.decorations.push({ frames: th.lantern, x, y: topY, anim: true });
-      }
-      if (th.bat) {
-        for (let i = 0; i < 4; i++) {
-          this.decorations.push({
-            frames: th.bat, anim: true,
-            bx: DD.rand(DD.TILE * 3, DD.WIDTH - DD.TILE * 3),
-            by: DD.rand(DD.TILE * 2, DD.HEIGHT * 0.45),
-            phase: Math.random() * Math.PI * 2, fly: true,
-          });
-        }
-      }
-    },
-
     generate(opts = {}) {
       this.doorOpen = false;
       this.spikes = [];
-      this.decorations = [];
-      this.staticDecor = [];
       this.tierDoorCols = null;
       this.tierPads = null;
       this.isLobby = false;
@@ -138,37 +108,6 @@
         });
       }
 
-      this.addAmbiance();
-      // crypt-only ground props baked into the floor (purely visual)
-      const th = this.themeSet();
-      if (th && th.gravestone) {
-        for (let i = 0; i < 3; i++) {
-          const tx = DD.randi(2, DD.ROOM_W - 3), ty = DD.randi(2, DD.ROOM_H - 3);
-          if (tileAt(tx, ty) !== FLOOR) continue;
-          const img = Math.random() < 0.5 ? th.gravestone : (th.fence || th.gravestone);
-          this.staticDecor.push({ img, x: tx * DD.TILE + DD.TILE / 2, y: ty * DD.TILE + DD.TILE });
-        }
-      }
-      if (th && th.rail) {
-        // one continuous mine-cart track running down a mostly-open column
-        let col = Math.round(DD.ROOM_W * 0.5);
-        for (let off = 0; off <= 4; off++) {
-          const c = Math.round(DD.ROOM_W * 0.5) + (off % 2 === 0 ? off / 2 : -(off + 1) / 2);
-          let open = 0;
-          for (let ty = 1; ty < DD.ROOM_H - 1; ty++) if (tileAt(c, ty) === FLOOR) open++;
-          if (open >= DD.ROOM_H - 4) { col = c; break; }
-        }
-        let lastFloorY = DD.ROOM_H - 3;
-        for (let ty = 1; ty < DD.ROOM_H - 1; ty++) {
-          if (tileAt(col, ty) !== FLOOR) continue;
-          this.staticDecor.push({ img: th.rail, x: col * DD.TILE + DD.TILE / 2, y: ty * DD.TILE, anchorTop: true });
-          lastFloorY = ty;
-        }
-        if (th.mineCart) {
-          this.staticDecor.push({ img: th.mineCart, x: col * DD.TILE + DD.TILE / 2, y: lastFloorY * DD.TILE + DD.TILE });
-        }
-      }
-
       this.prerender();
     },
 
@@ -176,8 +115,6 @@
     // tierInfo (optional): [{ sub, color, locked, req }] per tier, from the caller.
     generateLobby(tierInfo) {
       this.spikes = [];
-      this.decorations = [];
-      this.staticDecor = [];
       this.isLobby = true;
       this.isTown = false;
       this.roomType = null;
@@ -211,15 +148,12 @@
           locked: !!t.locked, req: t.req || 0, cleared: !!t.cleared,
         };
       });
-      this.addAmbiance();
       this.prerender();
     },
 
-    // A walkable town: warm theme, a single exit door, a bar counter prop.
+    // A walkable town: warm theme, a single exit door, a tavern corner.
     generateTown() {
       this.spikes = [];
-      this.decorations = [];
-      this.staticDecor = [];
       this.isLobby = false;
       this.isTown = true;
       this.roomType = null;
@@ -239,12 +173,11 @@
       this.doorCols = [Math.floor(DD.ROOM_W / 2) - 1, Math.floor(DD.ROOM_W / 2)];
       for (const c of this.doorCols) tiles[c] = DOOR;
 
-      const th = this.themeSet();
-      if (th && th.barCounter) {
-        this.staticDecor.push({ img: th.barCounter, x: DD.TILE * 3.5, y: DD.TILE * 2.4, anchorTop: true });
+      // tavern corner: a few solid cells rendered as tables/kegs/crates by the
+      // town obstacle palette (NPCs stand along the 0.45H row, so stay above it)
+      for (const [tx, ty] of [[2, 2], [3, 2], [2, 3], [DD.ROOM_W - 3, 2], [DD.ROOM_W - 4, 2]]) {
+        tiles[ty * DD.ROOM_W + tx] = OBSTACLE;
       }
-      this.decorations.push({ sign: true, text: "TO THE MAP", sub: "▲ exit", color: "#ffd95e", x: (DD.ROOM_W / 2) * DD.TILE, y: DD.TILE * 2.2 });
-      this.addAmbiance();
       this.prerender();
     },
 
@@ -339,8 +272,6 @@
       this.isLobby = !!d.isLobby;
       this.isTown = !!d.isTown;
       this.exit = d.exit || "door";
-      this.decorations = [];
-      this.staticDecor = [];
       this.prerender();
     },
 

@@ -56,6 +56,7 @@ const PALETTES = {
     },
     wall: [["wall", 70], ["wall_cracked", 18], ["wall_pillar", 8], ["wall_broken", 4]],
     obstacle: [["pillar", 30], ["crates_stacked", 22], ["rubble_large", 20], ["trunk_medium_A", 14], ["barrel_small_stack", 14]],
+    clutter: [["barrel_small", 30], ["box_small", 25], ["candle_melted", 20], ["rubble_half", 25]],
     banner: "banner_patternA_red", bannerChance: 0.10,
     torch: "torch_mounted", torchEvery: 5,
     atmosphere: { bg: 0x0a0812, hemiSky: 0xcfe0ff, hemiGround: 0x40384f, sun: 0xfff1d0 },
@@ -71,6 +72,7 @@ const PALETTES = {
     },
     wall: [["wall", 56], ["wall_cracked", 24], ["wall_broken", 10], ["wall_sloped", 10]],
     obstacle: [["crates_stacked", 28], ["barrel_large", 24], ["box_stacked", 20], ["rubble_large", 18], ["keg", 10]],
+    clutter: [["barrel_small", 35], ["box_small", 30], ["rubble_half", 35]],
     banner: "banner_patternB_green", bannerChance: 0.08,
     torch: "torch_mounted", torchEvery: 4,
     atmosphere: { bg: 0x0d0a06, hemiSky: 0xffe0b8, hemiGround: 0x4a3a28, sun: 0xffd9a0 },
@@ -87,6 +89,7 @@ const PALETTES = {
     },
     wall: [["wall", 56], ["wall_cracked", 20], ["wall_broken", 8], ["wall_pillar", 8], ["wall_window_closed", 8]],
     obstacle: [["pillar_decorated", 34], ["pillar", 18], ["rubble_large", 24], ["trunk_large_A", 24]],
+    clutter: [["candle_melted", 30], ["candle", 20], ["rubble_half", 30], ["trunk_small_A", 20]],
     banner: "banner_patternC_white", bannerChance: 0.12,
     torch: "candle_triple", torchEvery: 4, torchOnFloor: true,
     atmosphere: { bg: 0x070812, hemiSky: 0x9fb4ff, hemiGround: 0x2c2a4a, sun: 0xcfd8ff },
@@ -99,6 +102,7 @@ const PALETTES = {
     },
     wall: [["wall", 50], ["wall_window_closed", 20], ["wall_shelves", 16], ["wall_pillar", 14]],
     obstacle: [["table_medium", 28], ["barrel_large_decorated", 24], ["keg_decorated", 24], ["crates_stacked", 24]],
+    clutter: [["barrel_small", 25], ["stool", 25], ["plate_stack", 20], ["bottle_A_brown", 30]],
     banner: "banner_patternA_yellow", bannerChance: 0.10,
     torch: "torch_mounted", torchEvery: 4,
     atmosphere: { bg: 0x0c0a10, hemiSky: 0xffe8c0, hemiGround: 0x4a3c30, sun: 0xffe0b0 },
@@ -111,6 +115,7 @@ const PALETTES = {
     },
     wall: [["wall", 70], ["wall_pillar", 16], ["wall_cracked", 14]],
     obstacle: [["pillar_decorated", 70], ["pillar", 30]],
+    clutter: [["candle_triple", 50], ["sword_shield", 50]],
     banner: "banner_triple_red", bannerChance: 0.14,
     torch: "torch_mounted", torchEvery: 4,
     atmosphere: { bg: 0x0a0812, hemiSky: 0xcfe0ff, hemiGround: 0x40384f, sun: 0xfff1d0 },
@@ -214,16 +219,53 @@ export function planRoomDecor(desc) {
   }
 
   // Pass 4 — banners on north-facing top-wall edges (they hang flat against
-  // the wall and read best facing the camera).
+  // the wall and read best facing the camera). Boss rooms double up; the
+  // lobby color-codes them to match the tier pad below each third.
+  const bannerChance = desc.roomType === "boss" ? Math.min(0.32, pal.bannerChance * 2.6) : pal.bannerChance;
   for (const e of edges) {
     if (e.dir !== "N") continue;
     const roll = rng();
-    if (roll < pal.bannerChance && !doorAdjacent(e)) {
-      props.push({ piece: pal.banner, gx: e.gx, gy: e.gy, rot: 0, mount: "N", up: 0.55 });
+    if (roll < bannerChance && !doorAdjacent(e)) {
+      let piece = pal.banner;
+      if (desc.isLobby) {
+        piece = ["banner_triple_green", "banner_triple_yellow", "banner_triple_red"][Math.min(2, Math.floor((e.gx / w) * 3))];
+      }
+      props.push({ piece, gx: e.gx, gy: e.gy, rot: 0, mount: "N", up: 0.55 });
     }
   }
 
-  // Pass 5 — the exit: a doorway frame per DOOR cell plus a gate that the
+  // Pass 5 — perimeter clutter: small props hugging the wall bases.
+  for (const e of edges) {
+    if (rng() < 0.07 && !doorAdjacent(e)) {
+      props.push({ piece: pick(rng, pal.clutter), gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0 });
+    }
+  }
+
+  // Pass 6 — room-type dressing.
+  if (desc.roomType === "boss") {
+    // trophy shields on the side walls
+    for (const e of edges) {
+      if ((e.dir === "E" || e.dir === "W") && rng() < 0.08 && !doorAdjacent(e)) {
+        props.push({ piece: "sword_shield", gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0 });
+      }
+    }
+  } else if (desc.roomType === "treasure") {
+    // hoard spill: coin piles and trunks along the side walls
+    const hoard = [["coin_stack_medium", 40], ["coin_stack_large", 30], ["coin_stack_small", 15], ["trunk_small_B", 15]];
+    for (const e of edges) {
+      if ((e.dir === "E" || e.dir === "W" || e.dir === "N") && rng() < 0.2) {
+        props.push({ piece: pick(rng, hoard), gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0 });
+      }
+    }
+  } else if (desc.roomType === "shop") {
+    // the shopkeeper's stall (he stands at w/2, h/2-2 facing the shop row)
+    const sx = w / 2 - 0.5, sy = Math.floor(h / 2) - 3.2;
+    props.push({ piece: "table_long_tablecloth", gx: sx, gy: sy, rot: 0 });
+    props.push({ piece: "shelf_large", gx: sx - 2, gy: sy, rot: 0 });
+    props.push({ piece: "keg_decorated", gx: sx + 2, gy: sy, rot: 0 });
+  }
+
+  // Pass 7 — the exit: a doorway frame per DOOR cell plus a gate that the
   // renderer slides open on room clear. Boss/floor exits also get a staircase
   // rising behind the doorway (outside the grid — purely visual).
   const door = { cells: [], frame: "wall_doorway", gate: "wall_gated" };
