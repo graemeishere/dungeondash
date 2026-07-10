@@ -251,18 +251,25 @@ const VIGNETTES = {
   },
 };
 
+// Heroes render 1.42x their native KayKit size (gameplay readability), so
+// props scale up to match — otherwise tables read knee-high on characters.
+const PROP_SCALE = 1.4;
+
 // Stamp a vignette's elements at an anchor (planner-side rotation into ox/oz
-// so the renderer needs no new machinery).
+// so the renderer needs no new machinery). Offsets and heights scale with
+// PROP_SCALE so arrangements stay proportional (plates stay ON tables).
 function stampVignette(v, anchor, props, flames) {
   const c = Math.cos(anchor.rot), s = Math.sin(anchor.rot);
+  const S = PROP_SCALE;
   for (const el of v.elements) {
-    const ox = (el.dx || 0) * c - (el.dz || 0) * s;
-    const oz = (el.dx || 0) * s + (el.dz || 0) * c;
+    const ox = ((el.dx || 0) * c - (el.dz || 0) * s) * S;
+    const oz = ((el.dx || 0) * s + (el.dz || 0) * c) * S;
     props.push({
       piece: el.piece, gx: anchor.gx, gy: anchor.gy, ox, oz,
-      rot: anchor.rot + (el.rot || 0), up: el.up || 0, fit: el.fit,
+      rot: anchor.rot + (el.rot || 0), up: (el.up || 0) * S, fit: el.fit,
+      scale: el.fit ? undefined : S,
     });
-    if (el.flame) flames.push({ gx: anchor.gx, gy: anchor.gy, ox, oz, up: (el.up || 0) + 0.28 });
+    if (el.flame) flames.push({ gx: anchor.gx, gy: anchor.gy, ox, oz, up: ((el.up || 0) + 0.28) * S });
   }
 }
 
@@ -458,7 +465,9 @@ export function planRoomDecor(desc) {
         const piece = desc.isLobby
           ? ["banner_triple_green", "banner_triple_yellow", "banner_triple_red"][Math.min(2, Math.floor((e.gx / w) * 3))]
           : (desc.roomType === "boss" ? pal.banner.replace("banner_", "banner_triple_").replace(/pattern[A-C]_/, "") : pal.banner);
-        props.push({ piece, gx: e.gx, gy: e.gy, rot: 0, mount: "N", up: 0.55 });
+        // banners are modeled to stand at floor level (cloth spans 0.5..3.7u),
+        // so up stays 0 — lifting them pokes the pole above the wall cap
+        props.push({ piece, gx: e.gx, gy: e.gy, rot: 0, mount: "N", up: 0 });
       }
     }
   }
@@ -475,7 +484,7 @@ export function planRoomDecor(desc) {
     const piece = desc.roomType === "boss" && isSide ? "sword_shield" : pick(rng, pal.features);
     if (piece === "sword_shield") {
       // trophy: a prop hung on the wall, not a wall-panel replacement
-      props.push({ piece, gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0.42 });
+      props.push({ piece, gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0.42, scale: PROP_SCALE });
     } else {
       edgePiece.set(e, piece);
     }
@@ -500,11 +509,11 @@ export function planRoomDecor(desc) {
       const e = run.edges[i];
       if (!e || doorAdjacent(e) || featureEdges.has(e)) continue;
       if (pal.torchOnFloor) {
-        props.push({ piece: pal.torch, gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0 });
-        flames.push({ gx: e.gx, gy: e.gy, mount: e.dir, up: 0.18 });
+        props.push({ piece: pal.torch, gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0, scale: PROP_SCALE });
+        flames.push({ gx: e.gx, gy: e.gy, mount: e.dir, up: 0.25 });
       } else {
-        props.push({ piece: pal.torch, gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0.45 });
-        flames.push({ gx: e.gx, gy: e.gy, mount: e.dir, up: 0.62 });
+        props.push({ piece: pal.torch, gx: e.gx, gy: e.gy, rot: 0, mount: e.dir, up: 0.45, scale: PROP_SCALE });
+        flames.push({ gx: e.gx, gy: e.gy, mount: e.dir, up: 0.68 });
       }
     }
   }
@@ -544,11 +553,14 @@ export function planRoomDecor(desc) {
       piece: pal.corner, gx: Px - 1, gy: Py - 1, ox: 0.5, oz: 0.5,
       rot: CORNER_ROT[Q],
     });
-    // corner vignette anchor: the floor cell diagonal into the open quadrant,
-    // facing away from the corner (forward = (sin rot, cos rot))
+    // corner vignette anchor: the floor cell diagonal into the open quadrant.
+    // Facing snaps to the nearest cardinal — furniture at 45° reads dropped
+    // rather than placed.
     const cx = openE ? Px : Px - 1, cy = openS ? Py : Py - 1;
     if (at(cx, cy) === FLOOR && !mask.has(idx(cx, cy))) {
-      cornerAnchors.push({ gx: cx, gy: cy, rot: Math.atan2(openE ? 1 : -1, openS ? 1 : -1), kind: "corner" });
+      const diag = Math.atan2(openE ? 1 : -1, openS ? 1 : -1);
+      const rot = Math.round(diag / (Math.PI / 2)) * (Math.PI / 2);
+      cornerAnchors.push({ gx: cx, gy: cy, rot, kind: "corner" });
     }
   }
 
@@ -640,14 +652,14 @@ export function planRoomDecor(desc) {
       const e = run.edges[i];
       if (edgePiece.get(e) === pal.beam || doorAdjacent(e)) continue;
       const piece = pick(rng, [["candle_lit", 45], ["coin_stack_small", 30], ["barrel_small", 25]]);
-      props.push({ piece, gx: e.gx, gy: e.gy, oz: -0.5, up: 1.0, rot: rng() * Math.PI * 2 });
-      if (piece === "candle_lit") flames.push({ gx: e.gx, gy: e.gy, oz: -0.5, up: 1.0 + 0.28 });
+      props.push({ piece, gx: e.gx, gy: e.gy, oz: -0.5, up: 1.0, rot: rng() * Math.PI * 2, scale: PROP_SCALE });
+      if (piece === "candle_lit") flames.push({ gx: e.gx, gy: e.gy, oz: -0.5, up: 1.0 + 0.28 * PROP_SCALE });
       placed++;
     }
   }
 
-  // ---- pass 9: exit (door frames/gate + stairs) ----------------------------
-  const door = { cells: doorCells, frame: "wall_doorway", gate: "wall_gated" };
+  // ---- pass 9: exit (doorway frames whose own leaves swing open) + stairs --
+  const door = { cells: doorCells, frame: "wall_doorway" };
   if (doorCells.length && desc.exit === "stairs") {
     const cx = doorCells.reduce((s, c) => s + c.gx, 0) / doorCells.length;
     const gy = doorCells[0].gy;
@@ -668,7 +680,7 @@ export function planRoomDecor(desc) {
   for (const f of floors) pieces.add(f.piece);
   for (const wl of walls) pieces.add(wl.piece);
   for (const p of props) pieces.add(p.piece);
-  if (doorCells.length) { pieces.add(door.frame); pieces.add(door.gate); }
+  if (doorCells.length) pieces.add(door.frame);
   if (spikes.length) pieces.add("floor_tile_big_spikes");
 
   return { floors, walls, props, flames, door, spikes, lights, atmosphere: pal.atmosphere, pieces: [...pieces] };

@@ -281,9 +281,11 @@ export class DungeonRenderer {
     }
     this.pointLights[1].intensity = 0;
 
-    // Doorway frames + gates. Cloned (not instanced): wall_doorway is a
-    // multi-mesh piece and there are at most a couple of door cells. The gate
-    // slides up out of the frame on setDoorOpen — no room rebuild involved.
+    // Doorways. Cloned (not instanced): wall_doorway is a multi-mesh piece —
+    // a frame plus its own wooden door leaf ("wall_doorway_door"). The leaf
+    // becomes the gate: each door cell's leaf hinges on its outer edge and
+    // the pair swings open like double doors on setDoorOpen. No spare
+    // wall_gated panel, no room rebuild.
     if (this.doorGroup) { this.scene.remove(this.doorGroup); this.doorGroup = null; }
     this.gates = [];
     this._doorOpen = null; // force game3d's per-frame diff to re-apply state
@@ -292,33 +294,36 @@ export class DungeonRenderer {
       const dc = plan.door.cells;
       const avg = dc.reduce((a, c) => { const p = this._cellWorld(c.gx, c.gy); a.x += p.x; a.z += p.z; return a; }, { x: 0, z: 0 });
       this._doorCenter = { x: avg.x / dc.length, z: avg.z / dc.length + this.CELL / 2 };
-    }
-    if (plan.door && plan.door.cells.length) {
+
       const frameProto = this.pieceProtos.get(plan.door.frame);
-      const gateProto = this.pieceProtos.get(plan.door.gate);
-      const dg = new THREE.Group();
-      for (const c of plan.door.cells) {
-        // the doorway stands on the wall line's inner face (the boundary the
-        // neighbouring wall panels sit on)
-        const pos = this._cellWorld(c.gx, c.gy);
-        pos.z += this.CELL / 2;
-        const shadowify = (root) => root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-        if (frameProto && frameProto.scene) {
+      if (frameProto && frameProto.scene) {
+        const dg = new THREE.Group();
+        const minX = Math.min(...dc.map((c) => c.gx));
+        for (const c of dc) {
+          // the doorway stands on the wall line's inner face (the boundary
+          // the neighbouring wall panels sit on)
+          const pos = this._cellWorld(c.gx, c.gy);
+          pos.z += this.CELL / 2;
           const f = frameProto.scene.clone(true);
           f.position.copy(pos);
-          shadowify(f);
+          f.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          let leaf = null;
+          f.traverse((o) => { if (!leaf && o.isMesh && /_door$/.test(o.name)) leaf = o; });
+          if (leaf) {
+            // hinge on the cell's outer edge so the pair opens from the middle
+            const hingeX = c.gx === minX ? -1 : 1;
+            const pivot = new THREE.Group();
+            pivot.position.set(hingeX, 0, 0);
+            leaf.parent.add(pivot);
+            leaf.position.x -= hingeX;
+            pivot.add(leaf);
+            this.gates.push({ pivot, dir: -hingeX });
+          }
           dg.add(f);
         }
-        if (gateProto && gateProto.scene) {
-          const gt = gateProto.scene.clone(true);
-          gt.position.copy(pos);
-          shadowify(gt);
-          dg.add(gt);
-          this.gates.push(gt);
-        }
+        this.scene.add(dg);
+        this.doorGroup = dg;
       }
-      this.scene.add(dg);
-      this.doorGroup = dg;
     }
 
     // Spike traps: InstancedMeshes (one per submesh of the spike tile) whose
@@ -421,7 +426,8 @@ export class DungeonRenderer {
       T.makeTranslation(pos.x, (p.up || 0) * this.wallH, pos.z);
       R.makeRotationY(p.edge ? (p.rot || 0) : rot);
       M.multiplyMatrices(T, R);
-      if (p.fit) { const k = this._fitScale(fitProto || proto, p.fit); S.makeScale(k, k, k); M.multiply(S); }
+      const k = (p.fit ? this._fitScale(fitProto || proto, p.fit) : 1) * (p.scale || 1);
+      if (k !== 1) { S.makeScale(k, k, k); M.multiply(S); }
       M.multiply(proto.base);
       inst.setMatrixAt(i, M);
     });
@@ -630,17 +636,15 @@ export class DungeonRenderer {
   }
 
   render() {
-    // gate open/close tween (~0.55s), driven by wall-clock frame delta
+    // door open/close tween (~0.55s): the two leaves swing away from the
+    // middle on their outer hinges, like double doors
     if (this.gates && this.gates.length && this._doorOpen !== null) {
       const now = performance.now();
       const dt = Math.min(0.05, (now - (this._lastRenderT || now)) / 1000);
       this._doorAnimT = Math.min(1, (this._doorAnimT == null ? 1 : this._doorAnimT) + dt / 0.55);
       const k = this._doorAnimT;
-      const lift = (this._doorOpen ? k : 1 - k) * this.wallH * 0.92;
-      for (const gt of this.gates) {
-        gt.position.y = lift;
-        gt.visible = !(this._doorOpen && k >= 1); // fully open = out of sight
-      }
+      const swing = (this._doorOpen ? k : 1 - k) * 1.9; // ~110° open
+      for (const gt of this.gates) gt.pivot.rotation.y = swing * gt.dir;
       // warm glow spilling from the open doorway — "the way forward"
       const glow = this.pointLights[1];
       if (this._doorCenter) {
