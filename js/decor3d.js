@@ -342,6 +342,34 @@ export function planRoomDecor(desc) {
   const intent = INTENTS[intentName] || null;
   const vigTableSrc = (intent && intent.vignettes) || pal.vignettes || {};
   const obstacle2xSrc = (intent && intent.obstacle2x) || pal.obstacle2x || {};
+
+  // floor mode: each room resolves its own intent from its type/seed, so a
+  // storeroom is crates and a dining hall is tables — the grid isn't one
+  // global intent. Single-room mode keeps the vigTableSrc/obstacle2xSrc above.
+  const floorRooms = desc.rooms || null;
+  const _roomTables = new Map();
+  const roomAt = (gx, gy) => {
+    if (!floorRooms) return null;
+    for (const r of floorRooms) {
+      const R = r.rect;
+      if (gx >= R.x && gx < R.x + R.w && gy >= R.y && gy < R.y + R.h) return r;
+    }
+    return null;
+  };
+  const tablesAt = (gx, gy) => {
+    if (!floorRooms) return { vig: vigTableSrc, obs: obstacle2xSrc };
+    const r = roomAt(gx, gy);
+    const id = r ? r.id : -1;
+    if (_roomTables.has(id)) return _roomTables.get(id);
+    let name;
+    if (r && r.type === "treasure") name = "hoardRoom";
+    else if (r && r.intent) name = r.intent;
+    else name = pick(makeRng((((r ? r.seed : seed) ^ 0x9e3779b9) >>> 0)), Object.entries(pal.intents || { storage: 1 }));
+    const it = INTENTS[name] || null;
+    const t = { vig: (it && it.vignettes) || pal.vignettes || {}, obs: (it && it.obstacle2x) || pal.obstacle2x || {} };
+    _roomTables.set(id, t);
+    return t;
+  };
   const aisle = new Set();
   if (wantAisle) {
     for (const x of doorXs) {
@@ -620,7 +648,7 @@ export function planRoomDecor(desc) {
       props.push({ piece: pick(rng, pal.obstacleSingles), gx, gy, rot: Math.floor(rng() * 4) * (Math.PI / 2), fit: 0.85 });
       continue;
     }
-    const table = Object.entries(obstacle2xSrc);
+    const table = Object.entries(tablesAt(gx, gy).obs);
     const vName = table.length ? pick(rng, table) : null;
     const v = vName && VIGNETTES[vName];
     if (v) {
@@ -651,34 +679,51 @@ export function planRoomDecor(desc) {
     wallMidAnchors.push({ gx: e.gx, gy: e.gy, rot, ox, oz, kind: "wallMid" });
   }
   const anchors = shuffle(rng, [...cornerAnchors, ...wallMidAnchors]);
-  const vigTable = Object.entries(vigTableSrc);
-  let vigLeft = Math.max(1, Math.min(4, Math.round((w * h) / 36)));
   const claimed = new Set();
-  // mirrored twin of an anchor across the room's vertical center axis
+  // mirrored twin of an anchor across the room's vertical center axis (single
+  // room only — a floor mirrors within rooms, not across the whole grid)
   const mirrorOf = (a) => anchors.find((b) =>
     b !== a && b.kind === a.kind && b.gy === a.gy &&
     b.gx === (w - 1) - a.gx && !claimed.has(idx(b.gx, b.gy)));
   const stampAt = (v, a) => {
     stampVignette(v, a, props, flames);
     claimed.add(idx(a.gx, a.gy));
-    vigLeft--;
   };
-  if (desc.roomType === "treasure") {
-    // treasure rooms: a hoard takes the first available corner
-    const a = anchors.find((a) => a.kind === "corner");
-    if (a) stampAt(VIGNETTES.hoard, a);
-  }
-  for (const a of anchors) {
-    if (vigLeft <= 0 || !vigTable.length) break;
-    if (claimed.has(idx(a.gx, a.gy))) continue;
-    const name = pick(rng, vigTable);
-    const v = VIGNETTES[name];
-    if (!v || !v.anchors.includes(a.kind)) continue;
-    stampAt(v, a);
-    // symmetry: usually stamp the same vignette mirrored across the aisle
-    // (the twin anchor carries its own facing/wall-hug offsets)
-    const m = vigLeft > 0 ? mirrorOf(a) : null;
-    if (m && rng() < 0.75) stampAt(v, m);
+  if (floorRooms) {
+    // per-room budget: ~1-2 focal vignettes each, drawn from the room's intent
+    const perRoom = new Map();
+    for (const a of anchors) {
+      if (claimed.has(idx(a.gx, a.gy))) continue;
+      const room = roomAt(a.gx, a.gy);
+      if (!room) continue;
+      const cap = Math.max(1, Math.min(2, Math.round((room.rect.w * room.rect.h) / 45)));
+      if ((perRoom.get(room.id) || 0) >= cap) continue;
+      const vigTable = Object.entries(tablesAt(a.gx, a.gy).vig);
+      if (!vigTable.length) continue;
+      const name = pick(rng, vigTable);
+      const v = VIGNETTES[name];
+      if (!v || !v.anchors.includes(a.kind)) continue;
+      stampAt(v, a);
+      perRoom.set(room.id, (perRoom.get(room.id) || 0) + 1);
+    }
+  } else {
+    let vigLeft = Math.max(1, Math.min(4, Math.round((w * h) / 36)));
+    const stampG = (v, a) => { stampAt(v, a); vigLeft--; };
+    if (desc.roomType === "treasure") {
+      const a = anchors.find((a) => a.kind === "corner");
+      if (a) stampG(VIGNETTES.hoard, a);
+    }
+    for (const a of anchors) {
+      if (vigLeft <= 0) break;
+      if (claimed.has(idx(a.gx, a.gy))) continue;
+      const vigTable = Object.entries(vigTableSrc);
+      const name = pick(rng, vigTable);
+      const v = VIGNETTES[name];
+      if (!v || !v.anchors.includes(a.kind)) continue;
+      stampG(v, a);
+      const m = vigLeft > 0 ? mirrorOf(a) : null;
+      if (m && rng() < 0.75) stampG(v, m);
+    }
   }
   if (desc.roomType === "shop") {
     stampVignette(VIGNETTES.shopStall, { gx: w / 2 - 0.5, gy: Math.floor(h / 2) - 3.2, rot: 0 }, props, flames);

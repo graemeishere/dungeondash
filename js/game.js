@@ -290,6 +290,48 @@
     freshGameState();
   }
 
+  // Phase 1 dev walkthrough: boot straight into a connected floor to free-roam
+  // its rooms + corridors (no combat gating yet). Reuses startRun's setup, then
+  // installs a generated floor instead of a single room.
+  function startFloorWalk(classKey, dungeonId = "catacombs", tier = 0) {
+    const hero = DD.profile.getOrCreateHero(classKey);
+    game.hero = hero;
+    game.classKey = classKey;
+    game.dungeonId = dungeonId;
+    game.tier = tier;
+    game.peaceful = false;
+    game.raidMode = false;
+    game.townNpcs = [];
+    game.nearbyNpc = null;
+    DD.room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
+    game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
+    game.localIndex = 0;
+    game.floor = 0;
+    game.xp = hero.xp || 0;
+    game.level = hero.level || 1;
+    game.gold = 0;
+    game.kills = 0;
+    game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
+    game.time = 0;
+
+    const plan = game.floorCfg().plan.filter((t) => t !== "shop");
+    const floor = DD.generateFloor({ plan, boss: plan[plan.length - 1] === "boss" });
+    DD.room.setFloor(floor);
+    game.skeletons = [];
+    game.projectiles = [];
+    game.enemyShots = [];
+    game.pickups = [];
+    game.chests = [];
+    game.shopItems = [];
+    game.shopkeeper = null;
+    game.spawnQueue = [];
+    game.shake = 0;
+    game.roomCleared = true; // Phase 1: free-roam, nothing to clear
+    DD.particles.clear();
+    for (const p of game.players) { p.x = floor.entry.x; p.y = floor.entry.y; }
+    freshGameState();
+  }
+
   function resumeRun(save) {
     const hero = DD.profile.getOrCreateHero(save.classKey);
     game.hero = hero;
@@ -1527,8 +1569,8 @@
         return;
       }
 
-      // room-clear conditions
-      if (!game.roomCleared) {
+      // room-clear conditions (single-room mode; floors gate per-room — Phase 3)
+      if (!DD.room.isFloor && !game.roomCleared) {
         if (game.roomType === "treasure") {
           if (game.chests.every((c) => c.opened)) setRoomCleared();
         } else if (game.skeletons.every((s) => s.dying) && game.spawnQueue.length === 0) {
@@ -1543,8 +1585,8 @@
         return;
       }
 
-      // walk through the open door -> next room
-      if (game.roomCleared && DD.room.doorOpen &&
+      // walk through the open door -> next room (single-room mode)
+      if (!DD.room.isFloor && game.roomCleared && DD.room.doorOpen &&
           game.players.some((p) => p.alive() && DD.room.inDoorway(p.x, p.y - p.r))) {
         startTransition();
       }
@@ -2235,6 +2277,14 @@
     // ?dungeon=crypt (warlocks/necromancers) | goblinMines (shamans) | catacombs
     const dng = params.get("dungeon");
     startRun(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
+  }
+
+  // Phase 1: ?floors boots a connected-floor free-roam walkthrough.
+  if (params.has("floors")) {
+    document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
+    const cls = params.get("class");
+    const dng = params.get("dungeon");
+    startFloorWalk(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
   }
 
   window.addEventListener("resize", () => {
