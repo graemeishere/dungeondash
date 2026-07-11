@@ -13,22 +13,22 @@
 
   // Macro-grid: each room lives in one macro cell; corridors bridge adjacent
   // cells. Cell size leaves room for the largest template plus wall margins.
-  const MACRO_W = 10, MACRO_H = 9;
+  const MACRO_W = 8, MACRO_H = 7;
 
   // Room templates by type: interior size in tiles (walls are the uncarved
-  // border around each). Small, tight rooms — ~1/3 the old area — to match the
+  // border around each). Small, tight rooms — tightened to ~2/3 again to hug the
   // KayKit sample scale. intent maps to the decor planner's composition intents.
   const TEMPLATES = {
-    entry:    { w: 6, h: 5, intent: "storage" },
-    combat:   { w: 7, h: 5, intent: null },   // intent null -> theme default roll
-    elite:    { w: 8, h: 6, intent: "storage" },
-    trap:     { w: 8, h: 4, intent: "ruin" },
-    treasure: { w: 5, h: 4, intent: "hoardRoom" },
-    shrine:   { w: 5, h: 5, intent: "shrine" },
-    storage:  { w: 6, h: 5, intent: "storage" },
-    dining:   { w: 7, h: 6, intent: "messHall" },
-    stairs:   { w: 6, h: 5, intent: "storage" },
-    boss:     { w: 9, h: 8, intent: "ruin" },
+    entry:    { w: 5, h: 4, intent: "storage" },
+    combat:   { w: 5, h: 4, intent: null },   // intent null -> theme default roll
+    elite:    { w: 6, h: 5, intent: "storage" },
+    trap:     { w: 7, h: 4, intent: "ruin" },
+    treasure: { w: 4, h: 3, intent: "hoardRoom" },
+    shrine:   { w: 4, h: 4, intent: "shrine" },
+    storage:  { w: 5, h: 4, intent: "storage" },
+    dining:   { w: 6, h: 5, intent: "messHall" },
+    stairs:   { w: 5, h: 4, intent: "storage" },
+    boss:     { w: 7, h: 6, intent: "ruin" },
   };
   // side rooms hang off the critical path as optional detours
   const SIDE_TYPES = ["treasure", "shrine", "storage", "dining"];
@@ -42,12 +42,12 @@
     }
   }
 
-  // Carve a 3-wide L corridor between two points (ax,ay)->(bx,by), horizontal
+  // Carve a 2-wide L corridor between two points (ax,ay)->(bx,by), horizontal
   // leg first then vertical (or vice-versa, chosen by `hFirst`).
   function carveCorridor(tiles, W, H, ax, ay, bx, by, hFirst) {
     const wide = (x, y) => {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = 0; dy <= 1; dy++) {
+        for (let dx = 0; dx <= 1; dx++) {
           const nx = x + dx, ny = y + dy;
           if (nx > 0 && ny > 0 && nx < W - 1 && ny < H - 1) {
             const i = ny * W + nx;
