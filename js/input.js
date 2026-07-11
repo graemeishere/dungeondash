@@ -1,7 +1,10 @@
 "use strict";
 (function (DD) {
   const keys = {};
-  const mouse = { x: DD.WIDTH / 2, y: DD.HEIGHT / 2, down: false };
+  // x/y are the world-ground point under the cursor (for aim); sx/sy are the
+  // raw canvas pixel position (kept so aim can be recomputed each frame as the
+  // follow camera moves).
+  const mouse = { x: DD.WIDTH / 2, y: DD.HEIGHT / 2, sx: 0, sy: 0, down: false };
   // Twin-stick touch: left half of the screen moves, right half aims/attacks.
   const touch = {
     move: { id: null, active: false, ox: 0, oy: 0, x: 0, y: 0 },
@@ -14,13 +17,23 @@
   const STICK_RADIUS = 48;
   const DEADZONE = 9;
 
-  function toWorld(canvas, clientX, clientY) {
+  // Raw canvas pixel coordinates of a pointer event.
+  function toScreen(canvas, clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    const cx = (clientX - rect.left) * (canvas.width / rect.width);
-    const cy = (clientY - rect.top) * (canvas.height / rect.height);
     return {
-      x: (cx - DD.view.ox) / DD.view.scale,
-      y: (cy - DD.view.oy) / DD.view.scale,
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+
+  // Screen pixel -> DD.view world (the 2D letterbox). Used for mouse.x/y, which
+  // the 2D map screen reads for hover. Combat aim instead ray-casts through the
+  // live 3D camera (see aimAngle) so it's correct under the follow camera.
+  function toWorld(canvas, clientX, clientY) {
+    const s = toScreen(canvas, clientX, clientY);
+    return {
+      x: (s.x - DD.view.ox) / DD.view.scale,
+      y: (s.y - DD.view.oy) / DD.view.scale,
     };
   }
 
@@ -40,10 +53,12 @@
     touchSeen: false,
     STICK_RADIUS,
 
-    dashBtn() { return { x: DD.WIDTH - 64, y: DD.HEIGHT - 76,  r: 32 }; },
-    invBtn()  { return { x: DD.WIDTH - 64, y: DD.HEIGHT - 152, r: 26 }; },
+    // Touch buttons live in SCREEN space (canvas px), bottom-right corner.
+    dashBtn() { const c = this._canvas; return { x: (c ? c.width : DD.WIDTH) - 64, y: (c ? c.height : DD.HEIGHT) - 76,  r: 32 }; },
+    invBtn()  { const c = this._canvas; return { x: (c ? c.width : DD.WIDTH) - 64, y: (c ? c.height : DD.HEIGHT) - 152, r: 26 }; },
 
     init(canvas) {
+      this._canvas = canvas;
       window.addEventListener("keydown", (e) => {
         const k = e.key.toLowerCase();
         if (k === "e" && !keys[k]) interactTap = true; // edge-triggered talk
@@ -60,9 +75,10 @@
       });
 
       const onMouse = (e) => {
+        const s = toScreen(canvas, e.clientX, e.clientY);
+        mouse.sx = s.x; mouse.sy = s.y;      // for the 3D-camera aim raycast
         const p = toWorld(canvas, e.clientX, e.clientY);
-        mouse.x = p.x;
-        mouse.y = p.y;
+        mouse.x = p.x; mouse.y = p.y;        // letterbox world, for the 2D map
       };
       canvas.addEventListener("mousemove", onMouse);
       canvas.addEventListener("mousedown", (e) => {
@@ -79,7 +95,7 @@
         this.touchSeen = true;
         DD.audio.unlock();
         for (const t of e.changedTouches) {
-          const p = toWorld(canvas, t.clientX, t.clientY);
+          const p = toScreen(canvas, t.clientX, t.clientY); // screen px
           const pl = DD.game && DD.game.localPlayer;
           const ibtn = this.invBtn();
           if (DD.dist(p.x, p.y, ibtn.x, ibtn.y) < ibtn.r + 12) {
@@ -91,7 +107,7 @@
             dashTap = true;
             continue;
           }
-          const stick = p.x < DD.WIDTH / 2 ? touch.move : touch.aim;
+          const stick = p.x < canvas.width / 2 ? touch.move : touch.aim;
           if (stick.id !== null) continue;
           stick.id = t.identifier;
           stick.active = true;
@@ -103,7 +119,7 @@
       canvas.addEventListener("touchmove", (e) => {
         e.preventDefault();
         for (const t of e.changedTouches) {
-          const p = toWorld(canvas, t.clientX, t.clientY);
+          const p = toScreen(canvas, t.clientX, t.clientY);
           for (const stick of [touch.move, touch.aim]) {
             if (stick.id === t.identifier) { stick.x = p.x; stick.y = p.y; }
           }
@@ -137,11 +153,22 @@
     },
 
     // Where the player should face: aim stick if active, otherwise the mouse.
+    // The aim stick's vector is in screen space, whose axes align with the game
+    // axes (screen-right = +x, screen-down = +y) regardless of camera pan/tilt,
+    // so atan2 gives the facing directly. The mouse ray-casts through the live
+    // 3D camera each call so it stays correct as the follow camera moves.
     aimAngle(player) {
       if (touch.aim.active) {
         const v = stickVector(touch.aim);
         if (v.len > 0) return Math.atan2(v.dy, v.dx);
-        return DD.angleTo(player.x, player.y, touch.aim.ox, touch.aim.oy);
+        return player.aim || 0; // stick held at rest: keep the last facing
+      }
+      const dr = DD.render3d;
+      if (dr && dr.proto) {
+        let sx = mouse.sx, sy = mouse.sy;
+        if (!sx && !sy) { sx = dr._w / 2; sy = dr._h / 2; } // before first move
+        const g = dr.screenToGround(sx, sy);
+        if (g) return DD.angleTo(player.x, player.y, g.x, g.y);
       }
       return DD.angleTo(player.x, player.y, mouse.x, mouse.y);
     },

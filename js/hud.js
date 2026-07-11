@@ -5,6 +5,9 @@
       const pl = game.localPlayer;
       if (!pl) return;
       const font = "'Trebuchet MS', Verdana, sans-serif";
+      // HUD is drawn on the overlay canvas in screen space, so anchor to the
+      // canvas — not DD.WIDTH/HEIGHT, which is the (possibly huge) floor grid.
+      const SW = ctx.canvas.width, SH = ctx.canvas.height;
 
       // --- HP bar ---
       const bx = 16, by = 14, bw = 190, bh = 18;
@@ -42,7 +45,7 @@
       ctx.fillStyle = "#9b90b8";
       ctx.fillText(`Kills ${game.kills}`, bx + 150, by + bh + 26);
 
-      const narrow = DD.WIDTH < 720;
+      const narrow = SW < 720;
       const typeLabel = {
         combat: "Combat", treasure: "Treasure", boss: "BOSS",
         trap: "Trap Gauntlet", elite: "Elite", shop: "Shop",
@@ -59,9 +62,9 @@
       } else {
         ctx.textAlign = "center";
         ctx.fillStyle = "rgba(10,8,18,0.7)";
-        ctx.fillRect(DD.WIDTH / 2 - 95, 44, 190, 22);
+        ctx.fillRect(SW / 2 - 95, 44, 190, 22);
         ctx.fillStyle = "#bdb3d6";
-        ctx.fillText(roomLabel, DD.WIDTH / 2, 59);
+        ctx.fillText(roomLabel, SW / 2, 59);
       }
 
       // --- teammate HP (co-op) ---
@@ -87,8 +90,8 @@
       const boss = game.skeletons.find((s) => s instanceof DD.Boss);
       if (boss) {
         // boss HP bar, top center (under the player HUD on phones)
-        const bbw = Math.min(320, DD.WIDTH - 48);
-        const bbx = DD.WIDTH / 2 - bbw / 2;
+        const bbw = Math.min(320, SW - 48);
+        const bbx = SW / 2 - bbw / 2;
         const bby = narrow ? 70 : 16;
         ctx.fillStyle = "rgba(10,8,18,0.7)";
         ctx.fillRect(bbx - 4, bby - 4, bbw + 8, 22);
@@ -99,29 +102,29 @@
         ctx.textAlign = "center";
         ctx.font = `bold 11px ${font}`;
         ctx.fillStyle = "#f2ecdd";
-        ctx.fillText(boss.label || "BOSS", DD.WIDTH / 2, bby + 11);
+        ctx.fillText(boss.label || "BOSS", SW / 2, bby + 11);
       } else {
         const remaining = game.skeletons.filter((s) => !s.dead && !s.dying).length + game.spawnQueue.length;
         const chestsLeft = game.chests.filter((c) => !c.opened).length;
         const boxW = narrow ? 130 : 234;
         ctx.fillStyle = "rgba(10,8,18,0.7)";
-        ctx.fillRect(DD.WIDTH - boxW - 16, 12, boxW, 26);
+        ctx.fillRect(SW - boxW - 16, 12, boxW, 26);
         if (game.roomType === "treasure" && chestsLeft > 0) {
           ctx.fillStyle = "#ffd14a";
-          ctx.fillText(narrow ? `Chests: ${chestsLeft}` : `Open the chests! ${chestsLeft} left`, DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? `Chests: ${chestsLeft}` : `Open the chests! ${chestsLeft} left`, SW - 26, 31);
         } else if (remaining > 0) {
           ctx.fillStyle = "#f2ecdd";
           const eLabel = game.floorCfg().enemyLabel || "Enemies";
-          ctx.fillText(narrow ? `Foes: ${remaining}` : `${eLabel}: ${remaining}`, DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? `Foes: ${remaining}` : `${eLabel}: ${remaining}`, SW - 26, 31);
         } else if (game.roomType === "shop") {
           ctx.fillStyle = "#ffd95e";
-          ctx.fillText(narrow ? "Shop · Exit ▲" : "Spend your gold, then exit ▲", DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? "Shop · Exit ▲" : "Spend your gold, then exit ▲", SW - 26, 31);
         } else if (game.roomType === "trap") {
           ctx.fillStyle = "#ff9234";
-          ctx.fillText(narrow ? "Spikes! ▲" : "Mind the spikes! Exit ▲", DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? "Spikes! ▲" : "Mind the spikes! Exit ▲", SW - 26, 31);
         } else if (game.roomCleared && game.state === "play") {
           ctx.fillStyle = "#ffd95e";
-          ctx.fillText(narrow ? "Exit ▲" : "Cleared! Exit through the door ▲", DD.WIDTH - 26, 31);
+          ctx.fillText(narrow ? "Exit ▲" : "Cleared! Exit through the door ▲", SW - 26, 31);
         }
       }
       ctx.textAlign = "left";
@@ -135,7 +138,7 @@
           ? "left thumb: move • right thumb: aim & attack"
           : "WASD move • click / space attack • aim with mouse";
         if (pl.cfg.dash && !DD.input.touchSeen) hint += " • shift dash";
-        ctx.fillText(hint, 16, DD.HEIGHT - 14);
+        ctx.fillText(hint, 16, SH - 14);
         ctx.globalAlpha = 1;
       }
 
