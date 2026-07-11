@@ -498,7 +498,7 @@ export class DungeonRenderer {
   // the player (was CELL*5, far too close).
   setCameraMode(mode) {
     this.camMode = mode === "follow" ? "follow" : "fixed";
-    this._camDist = this.camMode === "follow" ? this.CELL * 9 : (this._fixedDist || this._span * 1.15);
+    this._camDist = this.camMode === "follow" ? this.CELL * 7 : (this._fixedDist || this._span * 1.15);
   }
   // Track the player, centred. The dark space between rooms is the intended
   // "rooms floating in the void" look (as in the KayKit samples), so we don't
