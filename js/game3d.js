@@ -111,7 +111,7 @@
         tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h,
         seed: d.seed, theme: d.theme, roomType: d.roomType,
         isLobby: !!d.isLobby, isTown: !!d.isTown, exit: d.exit, spikes: d.spikes,
-        isFloor: !!d.isFloor, rooms: d.rooms,
+        isFloor: !!d.isFloor, rooms: d.rooms, floorDoors: d.floorDoors,
       });
       dr._builtVersion = DD.room.version;
       if (DD.fx3d) DD.fx3d.setFlames(dr.flameWorld);
@@ -121,15 +121,16 @@
     if (dr.gates && dr._doorOpen !== DD.room.doorOpen) {
       dr.setDoorOpen(DD.room.doorOpen, dr._doorOpen === null);
     }
-    // floor gates: swing each room opening on its per-room lock state. A fresh
-    // rebuild recreates every gate open, so re-apply all states instantly then.
+    // floor gates: a shared door swings shut while any bordering room is locked.
+    // A fresh rebuild recreates every gate open, so re-apply all states then.
     if (dr.floorGates && dr.floorGates.length && DD.room.isFloor && DD.room.rooms) {
       const rebuilt = dr._floorGateBuiltAt !== dr._builtVersion;
-      for (const r of DD.room.rooms) {
-        const open = !r.locked;
-        if (rebuilt || r.__gateOpen !== open) {
-          dr.setRoomDoorState(r.id, open, rebuilt);
-          r.__gateOpen = open;
+      for (const fg of dr.floorGates) {
+        const open = !fg.roomIds.some((id) => { const r = DD.room.roomById(id); return r && r.locked; });
+        if (rebuilt || fg._openState !== open) {
+          fg.open = open;
+          fg.animT = rebuilt ? 1 : 0;
+          fg._openState = open;
         }
       }
       dr._floorGateBuiltAt = dr._builtVersion;
