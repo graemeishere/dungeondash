@@ -354,8 +354,6 @@ export class DungeonRenderer {
       this.updateSpikes(this.spikeList.map(() => 0));
     }
 
-    this._buildDividerFill(desc);
-
     this.scene.add(g);
     this.dungeon = g;
     this._frameCamera();
@@ -424,42 +422,6 @@ export class DungeonRenderer {
     }
     this.scene.add(dg);
     this.floorDoorGroup = dg;
-  }
-
-  // Walls are thin panels placed on each floor cell's edge, so a 1-tile wall
-  // with floor on BOTH sides (a corridor-to-room divider) shows two panels a
-  // full cell apart with the cell's void between them. Fill those divider cells
-  // with a solid block so the single wall reads as one solid wall.
-  _buildDividerFill(desc) {
-    if (this._dividerMesh) { this.scene.remove(this._dividerMesh); this._dividerMesh = null; }
-    const { tiles, w, h } = desc;
-    if (!tiles) return;
-    const isFloor = (x, y) => x >= 0 && y >= 0 && x < w && y < h && tiles[y * w + x] === FLOOR;
-    const cells = [];
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      if (tiles[y * w + x] !== WALL) continue;
-      if ((isFloor(x, y - 1) && isFloor(x, y + 1)) || (isFloor(x - 1, y) && isFloor(x + 1, y))) cells.push({ x, y });
-    }
-    if (!cells.length) return;
-    // a plain stone material — the KayKit wall texture is an atlas, so mapping
-    // it onto a box UV-garbles into rainbow; a flat tone reads as solid wall
-    // (the fill is mostly hidden behind the two textured panels anyway).
-    if (!this._dividerMat) this._dividerMat = new THREE.MeshStandardMaterial({ color: 0x8f929c, roughness: 0.95, metalness: 0 });
-    const mat = this._dividerMat;
-    const geo = new THREE.BoxGeometry(this.CELL, this.wallH, this.CELL);
-    const inst = new THREE.InstancedMesh(geo, mat, cells.length);
-    inst.castShadow = true;
-    inst.receiveShadow = true;
-    inst.frustumCulled = false;
-    const M = new THREE.Matrix4();
-    cells.forEach((c, i) => {
-      const p = this._cellWorld(c.x, c.y);
-      M.makeTranslation(p.x, this.wallH / 2, p.z);
-      inst.setMatrixAt(i, M);
-    });
-    inst.instanceMatrix.needsUpdate = true;
-    this.scene.add(inst);
-    this._dividerMesh = inst;
   }
 
   // World position for a planner placement: cell center, pushed to the wall
