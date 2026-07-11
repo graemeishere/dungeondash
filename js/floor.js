@@ -12,24 +12,26 @@
   const FLOOR = 0, WALL = 1, DOOR = 2, OBSTACLE = 3;
 
   // Macro-grid: each room lives in one macro cell; corridors bridge adjacent
-  // cells. Cell size leaves room for the largest template plus wall margins.
-  const MACRO_W = 8, MACRO_H = 7;
+  // cells. Cell size leaves room for the largest template plus a corridor gap.
+  const MACRO_W = 12, MACRO_H = 10;
 
   // Room templates by type: interior size in tiles (walls are the uncarved
-  // border around each). Small, tight rooms — tightened to ~2/3 again to hug the
-  // KayKit sample scale. intent maps to the decor planner's composition intents.
+  // border around each). Combat/elite/boss rooms lock their doors, so they need
+  // room to fight in; side rooms stay small for the tight KayKit feel.
   const TEMPLATES = {
-    entry:    { w: 5, h: 4, intent: "storage" },
-    combat:   { w: 5, h: 4, intent: null },   // intent null -> theme default roll
-    elite:    { w: 6, h: 5, intent: "storage" },
-    trap:     { w: 7, h: 4, intent: "ruin" },
-    treasure: { w: 4, h: 3, intent: "hoardRoom" },
-    shrine:   { w: 4, h: 4, intent: "shrine" },
-    storage:  { w: 5, h: 4, intent: "storage" },
-    dining:   { w: 6, h: 5, intent: "messHall" },
-    stairs:   { w: 5, h: 4, intent: "storage" },
-    boss:     { w: 7, h: 6, intent: "ruin" },
+    entry:    { w: 6, h: 4, intent: "storage" },
+    combat:   { w: 7, h: 5, intent: null },   // intent null -> theme default roll
+    elite:    { w: 8, h: 6, intent: "storage" },
+    trap:     { w: 8, h: 5, intent: "ruin" },
+    treasure: { w: 5, h: 4, intent: "hoardRoom" },
+    shrine:   { w: 5, h: 4, intent: "shrine" },
+    storage:  { w: 6, h: 4, intent: "storage" },
+    dining:   { w: 7, h: 5, intent: "messHall" },
+    stairs:   { w: 6, h: 4, intent: "storage" },
+    boss:     { w: 9, h: 7, intent: "ruin" },
   };
+  // only these room types lock (get real doors); others open with archways
+  const GATED = { combat: 1, elite: 1, boss: 1 };
   // side rooms hang off the critical path as optional detours
   const SIDE_TYPES = ["treasure", "shrine", "storage", "dining"];
 
@@ -42,27 +44,48 @@
     }
   }
 
-  // Carve a 2-wide L corridor between two points (ax,ay)->(bx,by), horizontal
-  // leg first then vertical (or vice-versa, chosen by `hFirst`).
-  function carveCorridor(tiles, W, H, ax, ay, bx, by, hFirst) {
-    const wide = (x, y) => {
-      for (let dy = 0; dy <= 1; dy++) {
-        for (let dx = 0; dx <= 1; dx++) {
-          const nx = x + dx, ny = y + dy;
-          if (nx > 0 && ny > 0 && nx < W - 1 && ny < H - 1) {
-            const i = ny * W + nx;
-            if (tiles[i] === WALL) tiles[i] = FLOOR;
-          }
-        }
+  // Connect two adjacent rooms with a clean 2-wide corridor: each room exits
+  // perpendicular from the centre of its facing wall, and the two legs meet with
+  // one bend in the mid-gap between the rooms — so a corridor never clips a room
+  // corner (which used to spawn stray side-wall doorways). Returns the 2-cell
+  // door opening on each room's facing side.
+  function connect(tiles, W, ra, rb) {
+    const A = ra.rect, B = rb.rect;
+    const doorsA = [], doorsB = [];
+    if (rb.mr !== ra.mr) {
+      // vertical neighbour: exits on the top/bottom walls
+      const down = rb.mr > ra.mr;
+      const aCol = A.x + Math.floor((A.w - 2) / 2);
+      const bCol = B.x + Math.floor((B.w - 2) / 2);
+      const aRing = down ? A.y + A.h : A.y - 1;
+      const bRing = down ? B.y - 1 : B.y + B.h;
+      const mid = Math.round((aRing + bRing) / 2);
+      carveRect(tiles, W, aCol, Math.min(aRing, mid), 2, Math.abs(mid - aRing) + 1, FLOOR);
+      carveRect(tiles, W, bCol, Math.min(bRing, mid), 2, Math.abs(mid - bRing) + 1, FLOOR);
+      const cx0 = Math.min(aCol, bCol), cx1 = Math.max(aCol, bCol) + 1;
+      carveRect(tiles, W, cx0, mid, cx1 - cx0 + 1, 2, FLOOR);
+      for (let i = 0; i < 2; i++) {
+        doorsA.push({ x: aCol + i, y: aRing, side: down ? "S" : "N" });
+        doorsB.push({ x: bCol + i, y: bRing, side: down ? "N" : "S" });
       }
-    };
-    if (hFirst) {
-      for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) wide(x, ay);
-      for (let y = Math.min(ay, by); y <= Math.max(ay, by); y++) wide(bx, y);
     } else {
-      for (let y = Math.min(ay, by); y <= Math.max(ay, by); y++) wide(ax, y);
-      for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) wide(x, by);
+      // horizontal neighbour: exits on the left/right walls
+      const right = rb.mc > ra.mc;
+      const aRow = A.y + Math.floor((A.h - 2) / 2);
+      const bRow = B.y + Math.floor((B.h - 2) / 2);
+      const aRing = right ? A.x + A.w : A.x - 1;
+      const bRing = right ? B.x - 1 : B.x + B.w;
+      const mid = Math.round((aRing + bRing) / 2);
+      carveRect(tiles, W, Math.min(aRing, mid), aRow, Math.abs(mid - aRing) + 1, 2, FLOOR);
+      carveRect(tiles, W, Math.min(bRing, mid), bRow, Math.abs(mid - bRing) + 1, 2, FLOOR);
+      const ry0 = Math.min(aRow, bRow), ry1 = Math.max(aRow, bRow) + 1;
+      carveRect(tiles, W, mid, ry0, 2, ry1 - ry0 + 1, FLOOR);
+      for (let i = 0; i < 2; i++) {
+        doorsA.push({ x: aRing, y: aRow + i, side: right ? "E" : "W" });
+        doorsB.push({ x: bRing, y: bRow + i, side: right ? "W" : "E" });
+      }
     }
+    return { doorsA, doorsB };
   }
 
   // Build the room graph on a macro-grid, then realize it as a tiles grid.
@@ -158,32 +181,36 @@
       carveRect(tiles, W, rm.rect.x, rm.rect.y, rm.rect.w, rm.rect.h, FLOOR);
     }
 
-    // corridors between connected rooms (L from center to center; the wide
-    // carve punches through the shared walls, forming natural mouths)
+    // corridors + door openings: each edge carves a clean corridor and yields
+    // the 2-cell opening on each room's facing side.
+    for (const rm of rooms) rm._openings = [];
     for (const [a, b] of edges) {
       const ra = rooms[a], rb = rooms[b];
-      carveCorridor(tiles, W, H,
-        Math.round(ra.cx), Math.round(ra.cy),
-        Math.round(rb.cx), Math.round(rb.cy),
-        Math.random() < 0.5);
+      const { doorsA, doorsB } = connect(tiles, W, ra, rb);
+      ra._openings.push({ side: doorsA[0].side, cells: doorsA });
+      rb._openings.push({ side: doorsB[0].side, cells: doorsB });
     }
 
-    // door mouths: where a corridor punched through a room's wall ring, stamp a
-    // DOOR tile and record it on the room. Doors gate combat (they lock on
-    // entering an uncleared room, Isaac-style) and drive the swinging-gate mesh.
+    // Only gated rooms (combat/elite/boss) get real doors: stamp DOOR tiles and
+    // record the openings so they can lock. Other rooms keep open archways
+    // (their opening cells stay FLOOR), which reads as a corridor mouth.
     for (const rm of rooms) {
-      const { x, y, w, h } = rm.rect;
-      const edgesRing = [];
-      for (let ix = x; ix < x + w; ix++) { edgesRing.push([ix, y - 1, "N"]); edgesRing.push([ix, y + h, "S"]); }
-      for (let iy = y; iy < y + h; iy++) { edgesRing.push([x - 1, iy, "W"]); edgesRing.push([x + w, iy, "E"]); }
-      const mouth = [];
-      for (const [cx, cy, side] of edgesRing) {
-        if (cx <= 0 || cy <= 0 || cx >= W - 1 || cy >= H - 1) continue;
-        if (tiles[cy * W + cx] === FLOOR) { tiles[cy * W + cx] = DOOR; mouth.push({ x: cx, y: cy, side }); }
+      if (GATED[rm.type]) {
+        rm.doors = rm._openings;
+        rm.doorCells = [];
+        for (const op of rm._openings) {
+          for (const c of op.cells) {
+            if (c.x > 0 && c.y > 0 && c.x < W - 1 && c.y < H - 1) {
+              tiles[c.y * W + c.x] = DOOR;
+              rm.doorCells.push(c);
+            }
+          }
+        }
+      } else {
+        rm.doors = [];
+        rm.doorCells = [];
       }
-      // group contiguous mouth cells (same side, adjacent) into openings
-      rm.doors = groupOpenings(mouth);
-      rm.doorCells = mouth;
+      delete rm._openings;
     }
 
     // entry spawn: center-bottom of the entry room's interior
@@ -200,30 +227,6 @@
       seed: (Math.random() * 0x7fffffff) | 0,
     };
   };
-
-  // Group a room's mouth cells into openings: contiguous same-side cells become
-  // one door (a 2-wide corridor yields a 2-cell double-door).
-  function groupOpenings(mouth) {
-    const openings = [];
-    const bySide = { N: [], S: [], E: [], W: [] };
-    for (const m of mouth) bySide[m.side].push(m);
-    for (const side of ["N", "S", "E", "W"]) {
-      const cells = bySide[side];
-      if (!cells.length) continue;
-      // sort along the wall (N/S vary in x, E/W vary in y) and split on gaps
-      const horiz = side === "N" || side === "S";
-      cells.sort((a, b) => (horiz ? a.x - b.x : a.y - b.y));
-      let run = [cells[0]];
-      for (let i = 1; i < cells.length; i++) {
-        const prev = run[run.length - 1], cur = cells[i];
-        const adj = horiz ? cur.x - prev.x === 1 : cur.y - prev.y === 1;
-        if (adj) run.push(cur);
-        else { openings.push({ side, cells: run }); run = [cur]; }
-      }
-      openings.push({ side, cells: run });
-    }
-    return openings;
-  }
 
   function shuffleArr(arr) {
     const a = arr.slice();

@@ -99,7 +99,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`${BASE}/?floors&cam=fixed&dungeon=catacombs`, { waitUntil: "load" });
   await page.waitForFunction(() => window.DD && DD.room.isFloor && DD.game.state === "play", null, { timeout: 20000 });
-  await page.waitForTimeout(3500); // decor + doorway pieces stream in, one rebuild
+  await page.waitForTimeout(5500); // decor + doorway pieces stream in, one rebuild
 
   const r = await page.evaluate(() => {
     const info = DD.render3d.render();
@@ -115,7 +115,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
       roomCount: rooms.length,
       reachesAll: seen.size === rooms.length,
       reachesStairs: seen.has(DD.room.stairsRoomId),
-      everyRoomHasDoor: rooms.every((rm) => (rm.doors || []).length > 0),
+      gatedHaveDoors: rooms.filter((rm) => rm.type === "combat" || rm.type === "elite" || rm.type === "boss").every((rm) => (rm.doors || []).length > 0),
       gates: DD.render3d.floorGates ? DD.render3d.floorGates.length : 0,
       enemiesFrozen: DD.game.skeletons.length > 0 && DD.game.skeletons.every((s) => s.frozen),
       enemiesTagged: DD.game.skeletons.every((s) => s.roomId != null),
@@ -124,7 +124,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   });
   check(`floor: BFS reaches every room`, r.reachesAll, `${r.roomCount} rooms`);
   check(`floor: BFS reaches the stairs room`, r.reachesStairs);
-  check(`floor: every room has a door mouth`, r.everyRoomHasDoor);
+  check(`floor: gated rooms have doors (side rooms open)`, r.gatedHaveDoors);
   check(`floor: gate meshes built`, r.gates > 0, `gates=${r.gates}`);
   check(`floor: enemies spawn frozen + room-tagged`, r.enemiesFrozen && r.enemiesTagged);
   check(`floor: boss chamber present`, r.boss);
