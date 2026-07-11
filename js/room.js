@@ -124,15 +124,43 @@
       this.isTown = false;
       this.spikes = [];
       this.doorCols = [];
-      this.doorOpen = true;         // Phase 1: corridors are open gaps
+      this.doorOpen = true;         // floors gate per-room (see room.locked)
       this.rooms = f.rooms;
       this.edges = f.edges;
       this.stairsRoomId = f.stairsRoomId;
       this.seed = f.seed;
       this.roomType = "floor";
       this.exit = "door";
+      // per-room combat gating: rooms start unlocked + uncleared; entering an
+      // uncleared combat room locks it until its enemies are down.
+      for (const r of this.rooms) { r.locked = false; r.cleared = !!r.cleared; }
+      this._indexDoors();
       this.prerender();
     },
+
+    // Map every DOOR cell to the room that owns it, so isSolid can consult that
+    // room's lock state (a locked door is solid; an open one is passable).
+    _indexDoors() {
+      this._doorRoom = new Map();
+      if (!this.rooms) return;
+      for (const r of this.rooms) {
+        for (const c of (r.doorCells || [])) this._doorRoom.set(c.y * DD.ROOM_W + c.x, r.id);
+      }
+    },
+
+    // The room whose interior rect contains this world-space point (or null in
+    // corridors / the void). Used for combat-gating room-entry detection.
+    roomAt(x, y) {
+      if (!this.isFloor || !this.rooms) return null;
+      const tx = Math.floor(x / DD.TILE), ty = Math.floor(y / DD.TILE);
+      for (const r of this.rooms) {
+        const rc = r.rect;
+        if (tx >= rc.x && tx < rc.x + rc.w && ty >= rc.y && ty < rc.y + rc.h) return r;
+      }
+      return null;
+    },
+
+    roomById(id) { return this.rooms && this.rooms.find((r) => r.id === id); },
 
     // A themed entry room with three glowing floor pads, one per dungeon tier.
     // tierInfo (optional): [{ sub, color, locked, req }] per tier, from the caller.
@@ -221,7 +249,14 @@
 
     isSolid(tx, ty) {
       const t = tileAt(tx, ty);
-      if (t === DOOR) return !this.doorOpen; // door unlocks when the room is cleared
+      if (t === DOOR) {
+        if (this.isFloor && this._doorRoom) {
+          const rid = this._doorRoom.get(ty * DD.ROOM_W + tx);
+          const rm = rid != null ? this.roomById(rid) : null;
+          return rm ? !!rm.locked : false; // floor doors: solid only while locked
+        }
+        return !this.doorOpen; // single-room door unlocks when the room is cleared
+      }
       return t === WALL || t === OBSTACLE;
     },
 
@@ -261,6 +296,16 @@
       return this.isSolid(Math.floor(x / DD.TILE), Math.floor(y / DD.TILE));
     },
 
+    // Random open-floor position inside a room rect (floor mode per-room spawns).
+    randomFloorInRect(rect, tries = 80) {
+      for (let i = 0; i < tries; i++) {
+        const tx = DD.randi(rect.x, rect.x + rect.w - 1);
+        const ty = DD.randi(rect.y, rect.y + rect.h - 1);
+        if (tileAt(tx, ty) === FLOOR) return { x: tx * DD.TILE + DD.TILE / 2, y: ty * DD.TILE + DD.TILE / 2 };
+      }
+      return { x: (rect.x + rect.w / 2) * DD.TILE, y: (rect.y + rect.h / 2) * DD.TILE };
+    },
+
     // Random open-floor position at least minDist away from (fx, fy).
     randomFloorPos(fx, fy, minDist) {
       for (let tries = 0; tries < 200; tries++) {
@@ -282,9 +327,15 @@
         // decor inputs: guests re-derive identical room dressing from these
         seed: this.seed || 1, theme: this.theme, roomType: this.roomType || "combat",
         isLobby: this.isLobby ? 1 : 0, isTown: this.isTown ? 1 : 0, exit: this.exit || "door",
-        // floor mode: per-room rects/intents drive the decor planner + minimap
+        // floor mode: per-room rects/intents drive the decor planner + minimap;
+        // doors + lock/clear state drive gating, the gate meshes and the map.
         isFloor: this.isFloor ? 1 : 0,
-        rooms: this.isFloor ? this.rooms.map((r) => ({ id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed })) : null,
+        stairsRoomId: this.isFloor ? this.stairsRoomId : null,
+        rooms: this.isFloor ? this.rooms.map((r) => ({
+          id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed,
+          doors: r.doors, doorCells: r.doorCells,
+          locked: !!r.locked, cleared: !!r.cleared,
+        })) : null,
       };
     },
 

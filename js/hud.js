@@ -51,7 +51,14 @@
         trap: "Trap Gauntlet", elite: "Elite", shop: "Shop",
       }[game.roomType];
       const floorName = game.floorCfg().name || `Floor ${game.floor + 1}`;
-      const roomLabel = `${floorName} · Tier ${game.tier + 1} · Room ${game.roomIndex + 1}/${game.plan().length} — ${typeLabel}`;
+      let roomLabel;
+      if (DD.room.isFloor && DD.room.rooms) {
+        const gated = DD.room.rooms.filter((r) => r.type === "combat" || r.type === "elite" || r.type === "boss");
+        const done = gated.filter((r) => r.cleared).length;
+        roomLabel = `${floorName} · Tier ${game.tier + 1} · Rooms ${done}/${gated.length}`;
+      } else {
+        roomLabel = `${floorName} · Tier ${game.tier + 1} · Room ${game.roomIndex + 1}/${game.plan().length} — ${typeLabel}`;
+      }
 
       // --- room progress ---
       ctx.font = `bold 13px ${font}`;
@@ -87,7 +94,8 @@
       // --- objective (top right) ---
       ctx.textAlign = "right";
       ctx.font = `bold 15px ${font}`;
-      const boss = game.skeletons.find((s) => s instanceof DD.Boss);
+      // a frozen boss (floor mode, chamber not yet entered) shows no bar
+      const boss = game.skeletons.find((s) => s instanceof DD.Boss && !s.frozen && !s.dead);
       if (boss) {
         // boss HP bar, top center (under the player HUD on phones)
         const bbw = Math.min(320, SW - 48);
@@ -103,6 +111,22 @@
         ctx.font = `bold 11px ${font}`;
         ctx.fillStyle = "#f2ecdd";
         ctx.fillText(boss.label || "BOSS", SW / 2, bby + 11);
+      } else if (DD.room.isFloor) {
+        // floor objective: foes remaining in the locked room, else rooms left
+        const arm = game.activeRoomId != null ? DD.room.roomById(game.activeRoomId) : null;
+        const boxW = narrow ? 150 : 250;
+        ctx.fillStyle = "rgba(10,8,18,0.7)";
+        ctx.fillRect(SW - boxW - 16, 12, boxW, 26);
+        if (arm) {
+          const foes = game.skeletons.filter((s) => s.roomId === arm.id && !s.dead && !s.dying).length;
+          ctx.fillStyle = "#ff6b6b";
+          ctx.fillText(narrow ? `Locked · ${foes}` : `Doors locked — foes: ${foes}`, SW - 26, 31);
+        } else {
+          const gated = (DD.room.rooms || []).filter((r) => r.type === "combat" || r.type === "elite" || r.type === "boss");
+          const left = gated.filter((r) => !r.cleared).length;
+          ctx.fillStyle = "#ffd95e";
+          ctx.fillText(narrow ? `Rooms · ${left}` : (left > 0 ? `Clear the floor — ${left} left` : "Descend the stairs ▼"), SW - 26, 31);
+        }
       } else {
         const remaining = game.skeletons.filter((s) => !s.dead && !s.dying).length + game.spawnQueue.length;
         const chestsLeft = game.chests.filter((c) => !c.opened).length;
@@ -128,6 +152,9 @@
         }
       }
       ctx.textAlign = "left";
+
+      // --- floor minimap (top-right, under the objective) ---
+      if (DD.room.isFloor && DD.room.rooms) this.drawMinimap(ctx, game, SW, narrow);
 
       // --- controls hint, fades out ---
       if (game.hintT > 0) {
@@ -201,6 +228,78 @@
         ctx.textAlign = "left";
         ctx.globalAlpha = 1;
       }
+    },
+
+    // Corner minimap built from the floor's room rects: discovered rooms as
+    // blocks (colored by type), corridors between them, and the player dot.
+    drawMinimap(ctx, game, SW, narrow) {
+      const rooms = DD.room.rooms.filter((r) => r.seen);
+      if (!rooms.length) return;
+      const font = "'Trebuchet MS', Verdana, sans-serif";
+      // floor extent in tiles (from every room, so the map doesn't jump as more
+      // rooms are revealed)
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const r of DD.room.rooms) {
+        minX = Math.min(minX, r.rect.x); minY = Math.min(minY, r.rect.y);
+        maxX = Math.max(maxX, r.rect.x + r.rect.w); maxY = Math.max(maxY, r.rect.y + r.rect.h);
+      }
+      const boxW = narrow ? 116 : 150, boxH = narrow ? 92 : 118;
+      const pad = 8;
+      const bx = SW - boxW - 16, by = 46;
+      const s = Math.min((boxW - pad * 2) / (maxX - minX), (boxH - pad * 2) / (maxY - minY));
+      const ox = bx + pad + ((boxW - pad * 2) - (maxX - minX) * s) / 2;
+      const oy = by + pad + ((boxH - pad * 2) - (maxY - minY) * s) / 2;
+      const sx = (tx) => ox + (tx - minX) * s;
+      const sy = (ty) => oy + (ty - minY) * s;
+
+      ctx.fillStyle = "rgba(10,8,18,0.72)";
+      ctx.fillRect(bx, by, boxW, boxH);
+      ctx.strokeStyle = "rgba(120,110,150,0.5)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 0.5, by + 0.5, boxW - 1, boxH - 1);
+
+      // corridors between discovered connected rooms
+      ctx.strokeStyle = "rgba(150,140,175,0.55)";
+      ctx.lineWidth = 1;
+      for (const [a, b] of (DD.room.edges || [])) {
+        const ra = DD.room.roomById(a), rb = DD.room.roomById(b);
+        if (!ra || !rb || !ra.seen || !rb.seen) continue;
+        ctx.beginPath();
+        ctx.moveTo(sx(ra.rect.x + ra.rect.w / 2), sy(ra.rect.y + ra.rect.h / 2));
+        ctx.lineTo(sx(rb.rect.x + rb.rect.w / 2), sy(rb.rect.y + rb.rect.h / 2));
+        ctx.stroke();
+      }
+
+      const pl = game.localPlayer;
+      const curId = pl ? (DD.room.roomAt(pl.x, pl.y) || {}).id : null;
+      const COLOR = { boss: "#e8484f", treasure: "#ffd14a", elite: "#e88a3a", shrine: "#8ad0ff" };
+      for (const r of rooms) {
+        const x = sx(r.rect.x), y = sy(r.rect.y), w = r.rect.w * s, h = r.rect.h * s;
+        ctx.fillStyle = r.id === DD.room.stairsRoomId ? "#e8484f"
+          : (COLOR[r.type] || (r.cleared ? "#5a5470" : "#8b83a6"));
+        ctx.fillRect(x, y, Math.max(2, w), Math.max(2, h));
+        if (r.locked) {
+          ctx.strokeStyle = "#ff5252"; ctx.lineWidth = 1.5;
+          ctx.strokeRect(x - 0.5, y - 0.5, Math.max(2, w) + 1, Math.max(2, h) + 1);
+        }
+        if (r.id === curId) {
+          ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
+          ctx.strokeRect(x - 1, y - 1, Math.max(2, w) + 2, Math.max(2, h) + 2);
+        }
+      }
+
+      // player dot
+      if (pl) {
+        ctx.fillStyle = "#7fd6ff";
+        ctx.beginPath();
+        ctx.arc(sx(pl.x / DD.TILE), sy(pl.y / DD.TILE), 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = "#bdb3d6";
+      ctx.font = `9px ${font}`;
+      ctx.textAlign = "left";
+      ctx.fillText("MAP", bx + 5, by + 11);
     },
   };
 })(window.DD);

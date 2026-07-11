@@ -332,8 +332,13 @@ export function planRoomDecor(desc) {
     for (let x = 1; x < w - 1; x++) { mask.add(idx(x, cy)); mask.add(idx(x, cy - 1)); mask.add(idx(x, cy - 2)); }
   }
 
+  // floor mode has many per-room doors, not one top-center door, so the
+  // single-door dressing (aisle to the door, flanking banner pair, exit frame)
+  // is scoped to single-room mode; floors get their own door pass below.
+  const floorMode = !!desc.rooms;
+
   // ---- pass 1: aisle roll + the room's composition intent ------------------
-  const wantAisle = doorXs.length &&
+  const wantAisle = !floorMode && doorXs.length &&
     (desc.roomType === "treasure" || rng() < (pal.aisleChance || 0));
   // one intent per room: all its vignettes tell the same story
   const intentName = desc.roomType === "treasure"
@@ -508,8 +513,8 @@ export function planRoomDecor(desc) {
 
   // per-edge claims: piece per edge, default plain wall
   const edgePiece = new Map(); // edge -> piece
-  // 4a. banner pair flanking the doorway
-  if (doorXs.length) {
+  // 4a. banner pair flanking the doorway (single-room only)
+  if (!floorMode && doorXs.length) {
     const dy = doorCells[0].gy + 1; // the floor row below the top-wall door
     const lo = Math.min(...doorXs) - 1, hi = Math.max(...doorXs) + 1;
     for (const e of edges) {
@@ -747,11 +752,28 @@ export function planRoomDecor(desc) {
 
   // ---- pass 9: exit (doorway frames whose own leaves swing open) + stairs --
   const door = { cells: doorCells, frame: "wall_doorway" };
-  if (doorCells.length && desc.exit === "stairs") {
+  if (!floorMode && doorCells.length && desc.exit === "stairs") {
     const cx = doorCells.reduce((s, c) => s + c.gx, 0) / doorCells.length;
     const gy = doorCells[0].gy;
     props.push({ piece: "stairs_wide", gx: cx, gy: gy - 0.85, rot: 0 });
     for (const c of doorCells) floors.push({ piece: pal.base, gx: c.gx, gy: gy - 1, rot: 0 });
+  }
+
+  // floor mode: one gate group per room opening (each swings on its room's lock
+  // state), and a staircase centered in the stairs room.
+  const doors = [];
+  if (floorMode) {
+    for (const r of desc.rooms) {
+      for (const op of (r.doors || [])) {
+        doors.push({
+          roomId: r.id, side: op.side, frame: "wall_doorway",
+          cells: op.cells.map((c) => ({ gx: c.x, gy: c.y })),
+        });
+      }
+      if (r.type === "stairs") {
+        props.push({ piece: "stairs_wide", gx: r.rect.x + r.rect.w / 2 - 0.5, gy: r.rect.y + r.rect.h / 2 - 0.5, rot: 0 });
+      }
+    }
   }
 
   // ---- pass 10: scripted lights (no rng) -----------------------------------
@@ -768,7 +790,8 @@ export function planRoomDecor(desc) {
   for (const wl of walls) pieces.add(wl.piece);
   for (const p of props) pieces.add(p.piece);
   if (doorCells.length) pieces.add(door.frame);
+  if (doors.length) pieces.add("wall_doorway");
   if (spikes.length) pieces.add("floor_tile_big_spikes");
 
-  return { floors, walls, props, flames, door, spikes, lights, atmosphere: pal.atmosphere, pieces: [...pieces] };
+  return { floors, walls, props, flames, door, doors, spikes, lights, atmosphere: pal.atmosphere, pieces: [...pieces] };
 }

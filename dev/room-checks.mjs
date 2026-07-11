@@ -91,6 +91,52 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   await page.close();
 }
 
+// connected-floor path: generation connectivity, per-room doors + gating,
+// gate meshes, and draw budget for a whole floor of small rooms.
+{
+  const page = await browser.newPage({ viewport: { width: 1024, height: 640 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`${BASE}/?floors&cam=fixed&dungeon=catacombs`, { waitUntil: "load" });
+  await page.waitForFunction(() => window.DD && DD.room.isFloor && DD.game.state === "play", null, { timeout: 20000 });
+  await page.waitForTimeout(3500); // decor + doorway pieces stream in, one rebuild
+
+  const r = await page.evaluate(() => {
+    const info = DD.render3d.render();
+    const rooms = DD.room.rooms, edges = DD.room.edges;
+    // BFS from the entry room over the corridor graph
+    const adj = new Map(rooms.map((rm) => [rm.id, []]));
+    for (const [a, b] of edges) { adj.get(a).push(b); adj.get(b).push(a); }
+    const seen = new Set([rooms[0].id]);
+    const q = [rooms[0].id];
+    while (q.length) { for (const n of adj.get(q.shift())) if (!seen.has(n)) { seen.add(n); q.push(n); } }
+    return {
+      calls: info.calls, triangles: info.triangles,
+      roomCount: rooms.length,
+      reachesAll: seen.size === rooms.length,
+      reachesStairs: seen.has(DD.room.stairsRoomId),
+      everyRoomHasDoor: rooms.every((rm) => (rm.doors || []).length > 0),
+      gates: DD.render3d.floorGates ? DD.render3d.floorGates.length : 0,
+      enemiesFrozen: DD.game.skeletons.length > 0 && DD.game.skeletons.every((s) => s.frozen),
+      enemiesTagged: DD.game.skeletons.every((s) => s.roomId != null),
+      boss: DD.game.skeletons.some((s) => s instanceof DD.Boss),
+    };
+  });
+  check(`floor: BFS reaches every room`, r.reachesAll, `${r.roomCount} rooms`);
+  check(`floor: BFS reaches the stairs room`, r.reachesStairs);
+  check(`floor: every room has a door mouth`, r.everyRoomHasDoor);
+  check(`floor: gate meshes built`, r.gates > 0, `gates=${r.gates}`);
+  check(`floor: enemies spawn frozen + room-tagged`, r.enemiesFrozen && r.enemiesTagged);
+  check(`floor: boss chamber present`, r.boss);
+  // a whole floor is many rooms + cloned gate frames, so it runs more draw
+  // calls than a single room; per-room visibility culling lands in Phase 5.
+  const FLOOR_CALL_BUDGET = 240;
+  check(`floor: draw calls ${r.calls} <= ${FLOOR_CALL_BUDGET}`, r.calls <= FLOOR_CALL_BUDGET);
+  check(`floor: triangles ${r.triangles} <= ${TRI_BUDGET}`, r.triangles <= TRI_BUDGET);
+  check(`floor: no page errors`, errors.length === 0, errors.join(" | "));
+  await page.close();
+}
+
 await browser.close();
 if (failed) { console.log(`\n${failed} check(s) FAILED`); process.exit(1); }
 console.log("\nall room checks passed");

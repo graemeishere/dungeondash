@@ -168,6 +168,24 @@
         Math.random() < 0.5);
     }
 
+    // door mouths: where a corridor punched through a room's wall ring, stamp a
+    // DOOR tile and record it on the room. Doors gate combat (they lock on
+    // entering an uncleared room, Isaac-style) and drive the swinging-gate mesh.
+    for (const rm of rooms) {
+      const { x, y, w, h } = rm.rect;
+      const edgesRing = [];
+      for (let ix = x; ix < x + w; ix++) { edgesRing.push([ix, y - 1, "N"]); edgesRing.push([ix, y + h, "S"]); }
+      for (let iy = y; iy < y + h; iy++) { edgesRing.push([x - 1, iy, "W"]); edgesRing.push([x + w, iy, "E"]); }
+      const mouth = [];
+      for (const [cx, cy, side] of edgesRing) {
+        if (cx <= 0 || cy <= 0 || cx >= W - 1 || cy >= H - 1) continue;
+        if (tiles[cy * W + cx] === FLOOR) { tiles[cy * W + cx] = DOOR; mouth.push({ x: cx, y: cy, side }); }
+      }
+      // group contiguous mouth cells (same side, adjacent) into openings
+      rm.doors = groupOpenings(mouth);
+      rm.doorCells = mouth;
+    }
+
     // entry spawn: center-bottom of the entry room's interior
     const entryRoom = rooms[0];
     const entry = {
@@ -182,6 +200,30 @@
       seed: (Math.random() * 0x7fffffff) | 0,
     };
   };
+
+  // Group a room's mouth cells into openings: contiguous same-side cells become
+  // one door (a 2-wide corridor yields a 2-cell double-door).
+  function groupOpenings(mouth) {
+    const openings = [];
+    const bySide = { N: [], S: [], E: [], W: [] };
+    for (const m of mouth) bySide[m.side].push(m);
+    for (const side of ["N", "S", "E", "W"]) {
+      const cells = bySide[side];
+      if (!cells.length) continue;
+      // sort along the wall (N/S vary in x, E/W vary in y) and split on gaps
+      const horiz = side === "N" || side === "S";
+      cells.sort((a, b) => (horiz ? a.x - b.x : a.y - b.y));
+      let run = [cells[0]];
+      for (let i = 1; i < cells.length; i++) {
+        const prev = run[run.length - 1], cur = cells[i];
+        const adj = horiz ? cur.x - prev.x === 1 : cur.y - prev.y === 1;
+        if (adj) run.push(cur);
+        else { openings.push({ side, cells: run }); run = [cur]; }
+      }
+      openings.push({ side, cells: run });
+    }
+    return openings;
+  }
 
   function shuffleArr(arr) {
     const a = arr.slice();

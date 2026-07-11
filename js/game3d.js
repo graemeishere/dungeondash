@@ -121,6 +121,19 @@
     if (dr.gates && dr._doorOpen !== DD.room.doorOpen) {
       dr.setDoorOpen(DD.room.doorOpen, dr._doorOpen === null);
     }
+    // floor gates: swing each room opening on its per-room lock state. A fresh
+    // rebuild recreates every gate open, so re-apply all states instantly then.
+    if (dr.floorGates && dr.floorGates.length && DD.room.isFloor && DD.room.rooms) {
+      const rebuilt = dr._floorGateBuiltAt !== dr._builtVersion;
+      for (const r of DD.room.rooms) {
+        const open = !r.locked;
+        if (rebuilt || r.__gateOpen !== open) {
+          dr.setRoomDoorState(r.id, open, rebuilt);
+          r.__gateOpen = open;
+        }
+      }
+      dr._floorGateBuiltAt = dr._builtVersion;
+    }
 
     // Camera mode (fixed whole-room vs follow the local player). Backdrop
     // screens and the walkable hubs (town/lobby) frame the whole room; combat
