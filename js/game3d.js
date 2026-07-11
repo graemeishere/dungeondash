@@ -111,7 +111,7 @@
         tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h,
         seed: d.seed, theme: d.theme, roomType: d.roomType,
         isLobby: !!d.isLobby, isTown: !!d.isTown, exit: d.exit, spikes: d.spikes,
-        isFloor: !!d.isFloor, rooms: d.rooms, floorDoors: d.floorDoors,
+        isFloor: !!d.isFloor, rooms: d.rooms, floorDoors: d.floorDoors, walls: d.floorWalls,
       });
       dr._builtVersion = DD.room.version;
       if (DD.fx3d) DD.fx3d.setFlames(dr.flameWorld);

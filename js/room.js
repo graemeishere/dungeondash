@@ -128,6 +128,8 @@
       this.rooms = f.rooms;
       this.edges = f.edges;
       this.floorDoors = f.doors;
+      this.floorWalls = f.walls || [];
+      this._buildEdgeWalls();
       this.stairsRoomId = f.stairsRoomId;
       this.seed = f.seed;
       this.roomType = "floor";
@@ -137,6 +139,20 @@
       for (const r of this.rooms) { r.locked = false; r.cleared = !!r.cleared; }
       this._indexDoors();
       this.prerender();
+    },
+
+    // Seam walls sit on a tile boundary (both flanking cells are FLOOR), so
+    // they can't be tiles — turn each into a thin solid barrier in world px that
+    // boxHitsWall consults, blocking movement across that seam.
+    _buildEdgeWalls() {
+      const T = 2; // barrier half-thickness (px), just past the seam
+      this._edgeWalls = (this.floorWalls || []).map((wl) => {
+        const cx = wl.x * DD.TILE, cy = wl.y * DD.TILE;
+        if (wl.dir === "E") return { x0: cx + DD.TILE, y0: cy, x1: cx + DD.TILE + T, y1: cy + DD.TILE };
+        if (wl.dir === "W") return { x0: cx - T, y0: cy, x1: cx, y1: cy + DD.TILE };
+        if (wl.dir === "S") return { x0: cx, y0: cy + DD.TILE, x1: cx + DD.TILE, y1: cy + DD.TILE + T };
+        return { x0: cx, y0: cy - T, x1: cx + DD.TILE, y1: cy }; // "N"
+      });
     },
 
     // Map every DOOR cell to its owning room(s), so isSolid can make a shared
@@ -267,13 +283,18 @@
              (this.doorCols.includes(tx) && y < DD.TILE * 1.6);
     },
 
-    // Does an axis-aligned box (in world px) overlap any solid tile?
+    // Does an axis-aligned box (in world px) overlap any solid tile or seam wall?
     boxHitsWall(x, y, w, h) {
       const x0 = Math.floor(x / DD.TILE), x1 = Math.floor((x + w - 1) / DD.TILE);
       const y0 = Math.floor(y / DD.TILE), y1 = Math.floor((y + h - 1) / DD.TILE);
       for (let ty = y0; ty <= y1; ty++) {
         for (let tx = x0; tx <= x1; tx++) {
           if (this.isSolid(tx, ty)) return true;
+        }
+      }
+      if (this._edgeWalls) {
+        for (const e of this._edgeWalls) {
+          if (x < e.x1 && x + w > e.x0 && y < e.y1 && y + h > e.y0) return true;
         }
       }
       return false;
@@ -332,6 +353,7 @@
         isFloor: this.isFloor ? 1 : 0,
         stairsRoomId: this.isFloor ? this.stairsRoomId : null,
         floorDoors: this.isFloor ? this.floorDoors : null,
+        floorWalls: this.isFloor ? this.floorWalls : null,
         rooms: this.isFloor ? this.rooms.map((r) => ({
           id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed,
           doors: r.doors, doorCells: r.doorCells,
