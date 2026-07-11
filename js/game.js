@@ -219,7 +219,7 @@
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         classKey: pl.classKey, dungeonId: game.dungeonId, tier: game.tier,
-        floor: game.floor, level: game.level, xp: game.xp,
+        floor: game.floor, floorMode: !!game.floorMode, level: game.level, xp: game.xp,
         gold: game.gold, kills: game.kills, time: game.time,
         maxHp: pl.maxHp, hp: pl.hp, killHeal: pl.killHeal,
         runBuffs: pl.runBuffs, stats: pl.stats,
@@ -272,6 +272,7 @@
     game.classKey = classKey;
     game.dungeonId = dungeonId;
     game.tier = tier;
+    game.floorMode = false;
     game.peaceful = false;
     game.raidMode = false;
     game.townNpcs = [];
@@ -290,15 +291,16 @@
     freshGameState();
   }
 
-  // Phase 1 dev walkthrough: boot straight into a connected floor to free-roam
-  // its rooms + corridors (no combat gating yet). Reuses startRun's setup, then
-  // installs a generated floor instead of a single room.
-  function startFloorWalk(classKey, dungeonId = "catacombs", tier = 0) {
+  // Connected-floor run (Phase 3): explore a floor of small rooms joined by
+  // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock
+  // on clear; the boss chamber gates the descent to the next floor.
+  function startFloorRun(classKey, dungeonId = "catacombs", tier = 0) {
     const hero = DD.profile.getOrCreateHero(classKey);
     game.hero = hero;
     game.classKey = classKey;
     game.dungeonId = dungeonId;
     game.tier = tier;
+    game.floorMode = true;
     game.peaceful = false;
     game.raidMode = false;
     game.townNpcs = [];
@@ -313,10 +315,17 @@
     game.kills = 0;
     game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = 0;
+    loadFloor();
+    freshGameState();
+  }
 
+  // Generate + install the current floor, then spawn every room's entities at
+  // once (dormant + roomId-tagged) so entering a room can wake just that room.
+  function loadFloor() {
     const plan = game.floorCfg().plan.filter((t) => t !== "shop");
     const floor = DD.generateFloor({ plan, boss: plan[plan.length - 1] === "boss" });
     DD.room.setFloor(floor);
+    DD.updateView(canvas);
     game.skeletons = [];
     game.projectiles = [];
     game.enemyShots = [];
@@ -326,10 +335,132 @@
     game.shopkeeper = null;
     game.spawnQueue = [];
     game.shake = 0;
-    game.roomCleared = true; // Phase 1: free-roam, nothing to clear
+    game.endT = 0;
+    game.roomCleared = true;      // whole-floor flag unused; rooms gate per-room
+    game.activeRoomId = null;     // the currently locked (in-combat) room
+    game._stairsTaken = false;
+    game.roomType = "floor";
     DD.particles.clear();
+    spawnFloorEntities(floor);
     for (const p of game.players) { p.x = floor.entry.x; p.y = floor.entry.y; }
-    freshGameState();
+  }
+
+  // Combat rooms lock on entry; these types gate. Others (treasure/side rooms)
+  // are free to walk through.
+  const GATED_ROOM = { combat: 1, elite: 1, boss: 1 };
+
+  function spawnFloorEntities(floor) {
+    const cfg = game.floorCfg();
+    const faction = cfg.faction || "skeleton";
+    const factionFor = (kind) => cfg.multiFaction ? (DD.KIND_FACTION[kind] || faction) : faction;
+    const grade = () => DD.rollGrade(game.floor, game.tier);
+    let combatIdx = 0; // ramps enemy variety per successive combat room
+    for (const rm of floor.rooms) {
+      if (rm.type === "combat") {
+        const allKinds = cfg.kinds || ["melee"];
+        const kinds = allKinds.slice(0, Math.min(allKinds.length, combatIdx + 1));
+        const count = DD.clamp(3 + game.floor + combatIdx, 3, 6);
+        for (let i = 0; i < count; i++) {
+          const pos = DD.room.randomFloorInRect(rm.rect);
+          const kind = i > 0 && Math.random() < 0.4 ? DD.choice(kinds) : kinds[0];
+          game.skeletons.push(new DD.Skeleton(pos.x, pos.y, {
+            kind, faction, inactive: true, frozen: true, roomId: rm.id, scale: cfg.scale, grade: grade(),
+          }));
+        }
+        combatIdx++;
+      } else if (rm.type === "elite") {
+        const eliteKinds = cfg.eliteKinds || cfg.kinds || ["melee"];
+        const ek = DD.choice(eliteKinds);
+        const eliteNames = ELITE_NAMES[factionFor(ek)] || ELITE_NAMES.skeleton || ["ELITE"];
+        const ep = DD.room.randomFloorInRect(rm.rect);
+        game.skeletons.push(new DD.Skeleton(ep.x, ep.y, {
+          kind: ek, faction: factionFor(ek), big: true, elite: true, name: DD.choice(eliteNames),
+          inactive: true, frozen: true, roomId: rm.id, scale: cfg.scale, grade: grade(),
+        }));
+        const minionKinds = (cfg.kinds || ["melee"]).filter((k) => k !== "shade");
+        for (let i = 0; i < 2; i++) {
+          const mp = DD.room.randomFloorInRect(rm.rect);
+          const mk = DD.choice(minionKinds);
+          game.skeletons.push(new DD.Skeleton(mp.x, mp.y, {
+            kind: mk, faction: factionFor(mk), inactive: true, frozen: true, roomId: rm.id, scale: cfg.scale, grade: grade(),
+          }));
+        }
+        combatIdx++;
+      } else if (rm.type === "boss") {
+        const cx = (rm.rect.x + rm.rect.w / 2) * DD.TILE, cy = (rm.rect.y + rm.rect.h / 2) * DD.TILE;
+        game.skeletons.push(new DD.Boss(cx, cy, {
+          hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
+          faction: cfg.bossFaction || cfg.faction, frozen: true, roomId: rm.id,
+        }));
+      } else if (rm.type === "treasure") {
+        for (let i = 0; i < 3; i++) {
+          const pos = DD.room.randomFloorInRect(rm.rect);
+          game.chests.push(new DD.Chest(pos.x, pos.y));
+        }
+      }
+    }
+  }
+
+  function roomHasEnemies(roomId) {
+    return game.skeletons.some((s) => s.roomId === roomId && !s.dead && !s.dying);
+  }
+
+  // Wake every enemy in a room (drop `frozen`; their own inactive->awaken logic,
+  // now room-scoped, rises them the moment the doors shut).
+  function activateRoom(roomId) {
+    for (const s of game.skeletons) if (s.roomId === roomId) s.frozen = false;
+  }
+
+  // Player crossed into / cleared a floor room: lock on entry, unlock on clear,
+  // and descend when the boss chamber (the stairs room) falls.
+  function updateFloorGating() {
+    const pl = game.localPlayer;
+    if (!pl || !pl.alive()) return;
+    const rm = DD.room.roomAt(pl.x, pl.y);
+    // reveal the current room + its neighbours on the minimap
+    if (rm && !rm.seen) {
+      rm.seen = true;
+      for (const [a, b] of (DD.room.edges || [])) {
+        if (a === rm.id) { const n = DD.room.roomById(b); if (n) n.seen = true; }
+        else if (b === rm.id) { const n = DD.room.roomById(a); if (n) n.seen = true; }
+      }
+    }
+    if (rm && !rm.cleared && !rm.locked && GATED_ROOM[rm.type] && roomHasEnemies(rm.id)) {
+      rm.locked = true;
+      game.activeRoomId = rm.id;
+      activateRoom(rm.id);
+      DD.audio.door();
+      DD.particles.text((rm.rect.x + rm.rect.w / 2) * DD.TILE, (rm.rect.y - 0.2) * DD.TILE, "The doors slam shut!", "#ff9234");
+    }
+    if (game.activeRoomId != null) {
+      const arm = DD.room.roomById(game.activeRoomId);
+      if (arm && !roomHasEnemies(arm.id)) {
+        arm.locked = false;
+        arm.cleared = true;
+        game.activeRoomId = null;
+        DD.audio.door();
+        if (arm.id === DD.room.stairsRoomId) { reachStairs(); return; }
+        DD.particles.text((arm.rect.x + arm.rect.w / 2) * DD.TILE, (arm.rect.y - 0.2) * DD.TILE, "Cleared!", "#ffd95e");
+      }
+    }
+  }
+
+  // The boss chamber fell — checkpoint and descend to the next floor (or win).
+  function reachStairs() {
+    if (game._stairsTaken) return;
+    game._stairsTaken = true;
+    const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
+    writeSave();
+    if (game.floor >= dungeon.floors.length - 1) { endRun(true); return; }
+    const nextFloor = dungeon.floors[game.floor + 1];
+    const pl = game.localPlayer;
+    if (pl) DD.particles.text(pl.x, pl.y - DD.TILE, `Onward to ${nextFloor ? nextFloor.name : "the depths"}...`, "#ffd95e");
+    startTransition();
+  }
+
+  function advanceFloor() {
+    game.floor++;
+    loadFloor();
   }
 
   function resumeRun(save) {
@@ -362,7 +493,8 @@
     game.kills = save.kills;
     game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = save.time;
-    loadRoom(game.plan().length - 1);
+    if (save.floorMode) { game.floorMode = true; loadFloor(); }
+    else { game.floorMode = false; loadRoom(game.plan().length - 1); }
     freshGameState();
   }
 
@@ -1490,7 +1622,7 @@
       game.transitionT += dt * 2.6;
       if (game.transitionT >= 1) {
         if (game.transitionPhase === "out") {
-          advanceRoom();
+          if (game.floorMode) advanceFloor(); else advanceRoom();
           game.transitionPhase = "in";
           game.transitionT = 0;
         } else {
@@ -1569,7 +1701,11 @@
         return;
       }
 
-      // room-clear conditions (single-room mode; floors gate per-room — Phase 3)
+      // floor mode: per-room combat gating (lock on entry, unlock on clear,
+      // descend when the boss chamber falls)
+      if (DD.room.isFloor) updateFloorGating();
+
+      // room-clear conditions (single-room mode; floors gate per-room)
       if (!DD.room.isFloor && !game.roomCleared) {
         if (game.roomType === "treasure") {
           if (game.chests.every((c) => c.opened)) setRoomCleared();
@@ -2279,12 +2415,12 @@
     startRun(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
   }
 
-  // Phase 1: ?floors boots a connected-floor free-roam walkthrough.
+  // ?floors boots a connected-floor run with per-room combat gating + descent.
   if (params.has("floors")) {
     document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
     const cls = params.get("class");
     const dng = params.get("dungeon");
-    startFloorWalk(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
+    startFloorRun(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
   }
 
   window.addEventListener("resize", () => {

@@ -326,6 +326,13 @@ export class DungeonRenderer {
       }
     }
 
+    // Floor mode: a gate per room opening, oriented to its wall side. Each
+    // carries its roomId so game3d can swing it on that room's lock state
+    // (open = passable, closed = locked). Reuses the doorway leaf-hinge.
+    if (this.floorDoorGroup) { this.scene.remove(this.floorDoorGroup); this.floorDoorGroup = null; }
+    this.floorGates = [];
+    if (plan.doors && plan.doors.length) this._buildFloorDoors(plan.doors);
+
     // Spike traps: InstancedMeshes (one per submesh of the spike tile) whose
     // per-instance Y follows the trap cycle (sunk / warning tips / up), driven
     // by updateSpikes() each frame. Timing stays authoritative in room.js.
@@ -376,6 +383,55 @@ export class DungeonRenderer {
   setDoorOpen(open, instant = false) {
     this._doorOpen = !!open;
     this._doorAnimT = instant ? 1 : 0;
+  }
+
+  // Build a swinging gate for each floor room opening. N/S doorways keep the
+  // frame's default orientation; E/W doorways rotate 90° so the leaves span the
+  // vertical wall. The leaf-hinge is identical in the frame's local space, so
+  // the same hinge math works for every side once the frame is rotated.
+  _buildFloorDoors(doors) {
+    const frameProto = this.pieceProtos.get("wall_doorway");
+    if (!frameProto || !frameProto.scene) return;
+    const dg = new THREE.Group();
+    for (const op of doors) {
+      const horiz = op.side === "N" || op.side === "S";
+      const cells = op.cells;
+      const minK = Math.min(...cells.map((c) => (horiz ? c.gx : c.gy)));
+      const gates = [];
+      for (const c of cells) {
+        const pos = this._cellWorld(c.gx, c.gy);
+        const f = frameProto.scene.clone(true);
+        f.position.copy(pos);
+        f.rotation.y = horiz ? 0 : Math.PI / 2;
+        f.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        let leaf = null;
+        f.traverse((o) => { if (!leaf && o.isMesh && /_door$/.test(o.name)) leaf = o; });
+        if (leaf) {
+          const hingeX = (horiz ? c.gx : c.gy) === minK ? -1 : 1;
+          const pivot = new THREE.Group();
+          pivot.position.set(hingeX, 0, 0);
+          leaf.parent.add(pivot);
+          leaf.position.x -= hingeX;
+          pivot.add(leaf);
+          gates.push({ pivot, dir: -hingeX });
+        }
+        dg.add(f);
+      }
+      // start open (passable); rooms lock on entry via setRoomDoorState
+      this.floorGates.push({ roomId: op.roomId, gates, open: true, animT: 1 });
+    }
+    this.scene.add(dg);
+    this.floorDoorGroup = dg;
+  }
+
+  // Swing every gate belonging to a room. open=false locks it shut.
+  setRoomDoorState(roomId, open, instant = false) {
+    if (!this.floorGates) return;
+    for (const fg of this.floorGates) {
+      if (fg.roomId !== roomId) continue;
+      fg.open = !!open;
+      fg.animT = instant ? 1 : 0;
+    }
   }
 
   // World position for a planner placement: cell center, pushed to the wall
@@ -685,11 +741,22 @@ export class DungeonRenderer {
   }
 
   render() {
+    const now = performance.now();
+    const doorDt = Math.min(0.05, (now - (this._lastRenderT || now)) / 1000);
+
+    // floor gates: each room opening swings on its own lock state (~0.55s)
+    if (this.floorGates) {
+      for (const fg of this.floorGates) {
+        fg.animT = Math.min(1, fg.animT + doorDt / 0.55);
+        const swing = (fg.open ? fg.animT : 1 - fg.animT) * 1.9;
+        for (const gt of fg.gates) gt.pivot.rotation.y = swing * gt.dir;
+      }
+    }
+
     // door open/close tween (~0.55s): the two leaves swing away from the
     // middle on their outer hinges, like double doors
     if (this.gates && this.gates.length && this._doorOpen !== null) {
-      const now = performance.now();
-      const dt = Math.min(0.05, (now - (this._lastRenderT || now)) / 1000);
+      const dt = doorDt;
       this._doorAnimT = Math.min(1, (this._doorAnimT == null ? 1 : this._doorAnimT) + dt / 0.55);
       const k = this._doorAnimT;
       const swing = (this._doorOpen ? k : 1 - k) * 1.9; // ~110° open

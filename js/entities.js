@@ -637,6 +637,11 @@
         this.coinDrop = [this.coinDrop[0] + 1, this.coinDrop[1] + 2];
       }
 
+      // floor gating: enemies belong to a roomId and stay `frozen` (dormant, not
+      // targetable, no AI) until the player enters that room and it activates.
+      this.roomId = opts.roomId != null ? opts.roomId : null;
+      this.frozen = !!opts.frozen;
+
       // inactive: lies dormant on the floor and wakes when a player approaches
       // (inactive -> awaken -> chase). Otherwise the normal rise (spawn -> chase).
       this.state = opts.inactive ? "inactive" : "spawn"; // -> chase -> windup/fuse -> recover
@@ -682,6 +687,9 @@
         if (this.deathT <= 0) this.dead = true;
         return;
       }
+      // frozen: dormant in an unentered floor room — hold the inactive pose,
+      // run no AI and never wake until the room activates.
+      if (this.frozen) return;
       this.stateT -= dt;
       this.flash -= dt;
       this.animT += dt;
@@ -711,8 +719,11 @@
           // only enemies left (so the room can never soft-lock — the last ambush
           // rises to finish the fight).
           const near = pl && DD.dist(this.x, this.y, pl.x, pl.y) < SKELETON_WAKE_R;
+          // floor mode: only this room's enemies count toward the last-ambush
+          // wake, so clearing another room can't rouse a distant room.
           const lastEnemies = game.spawnQueue.length === 0 &&
-            game.enemies().every((s) => s === this || s.dead || s.dying || s.state === "inactive");
+            game.enemies().every((s) => s === this || s.dead || s.dying || s.state === "inactive" ||
+              (this.roomId != null && s.roomId !== this.roomId));
           if (near || this.stateT <= 0 || lastEnemies) {
             this.state = "awaken";
             this.stateT = SKELETON_AWAKEN_T;
@@ -1002,6 +1013,7 @@
         dmg: opts.dmg ?? 2,
         xpValue: 40,
         coinDrop: [12, 18],
+        roomId: opts.roomId, frozen: opts.frozen,
       });
       this.bossName = opts.name || "SKELETON KING";
       this.label = this.bossName;
@@ -1023,6 +1035,7 @@
     }
 
     update(dt, game) {
+      if (this.frozen) return; // dormant until its floor room activates
       const pl = game.nearestAlivePlayer(this.x, this.y);
       this.slamCd -= dt;
       this.summonCd -= dt;
