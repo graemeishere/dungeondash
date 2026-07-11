@@ -393,15 +393,20 @@ export class DungeonRenderer {
     const frameProto = this.pieceProtos.get("wall_doorway");
     if (!frameProto || !frameProto.scene) return;
     const dg = new THREE.Group();
+    const off = this.CELL / 2;
     for (const op of doors) {
       const horiz = op.side === "N" || op.side === "S";
       const cells = op.cells;
       const minK = Math.min(...cells.map((c) => (horiz ? c.gx : c.gy)));
+      // the door sits on the seam at the cell's edge toward the room, not the
+      // cell centre
+      const ox = op.side === "E" ? off : op.side === "W" ? -off : 0;
+      const oz = op.side === "S" ? off : op.side === "N" ? -off : 0;
       const gates = [];
       for (const c of cells) {
         const pos = this._cellWorld(c.gx, c.gy);
         const f = frameProto.scene.clone(true);
-        f.position.copy(pos);
+        f.position.set(pos.x + ox, pos.y, pos.z + oz);
         f.rotation.y = horiz ? 0 : Math.PI / 2;
         f.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
         let leaf = null;

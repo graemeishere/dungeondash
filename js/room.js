@@ -127,9 +127,7 @@
       this.doorOpen = true;         // floors gate per-room (see room.locked)
       this.rooms = f.rooms;
       this.edges = f.edges;
-      this.floorDoors = f.doors;
-      this.floorWalls = f.walls || [];
-      this._buildEdgeWalls();
+      this.floorDoors = f.doors || [];
       this.stairsRoomId = f.stairsRoomId;
       this.seed = f.seed;
       this.roomType = "floor";
@@ -137,31 +135,31 @@
       // per-room combat gating: rooms start unlocked + uncleared; entering an
       // uncleared combat room locks it until its enemies are down.
       for (const r of this.rooms) { r.locked = false; r.cleared = !!r.cleared; }
-      this._indexDoors();
+      this._buildDoorBarriers();
       this.prerender();
     },
 
-    // Seam walls sit on a tile boundary (both flanking cells are FLOOR), so
-    // they can't be tiles — turn each into a thin solid barrier in world px that
-    // boxHitsWall consults, blocking movement across that seam.
-    _buildEdgeWalls() {
-      const T = 2; // barrier half-thickness (px), just past the seam
-      this._edgeWalls = (this.floorWalls || []).map((wl) => {
-        const cx = wl.x * DD.TILE, cy = wl.y * DD.TILE;
-        if (wl.dir === "E") return { x0: cx + DD.TILE, y0: cy, x1: cx + DD.TILE + T, y1: cy + DD.TILE };
-        if (wl.dir === "W") return { x0: cx - T, y0: cy, x1: cx, y1: cy + DD.TILE };
-        if (wl.dir === "S") return { x0: cx, y0: cy + DD.TILE, x1: cx + DD.TILE, y1: cy + DD.TILE + T };
-        return { x0: cx, y0: cy - T, x1: cx + DD.TILE, y1: cy }; // "N"
+    // Each door sits on a seam between two floor cells, so it can't be a tile —
+    // precompute a thin solid barrier (world px) per door cell. The barrier only
+    // blocks while the door is CLOSED (see doorClosed), so an open door is
+    // freely passable.
+    _buildDoorBarriers() {
+      const T = 2; // barrier thickness (px), just past the seam
+      this._doorBars = (this.floorDoors || []).map((d) => {
+        const bars = d.cells.map((c) => {
+          const cx = c.x * DD.TILE, cy = c.y * DD.TILE;
+          if (d.dir === "E") return { x0: cx + DD.TILE, y0: cy, x1: cx + DD.TILE + T, y1: cy + DD.TILE };
+          if (d.dir === "W") return { x0: cx - T, y0: cy, x1: cx, y1: cy + DD.TILE };
+          if (d.dir === "S") return { x0: cx, y0: cy + DD.TILE, x1: cx + DD.TILE, y1: cy + DD.TILE + T };
+          return { x0: cx, y0: cy - T, x1: cx + DD.TILE, y1: cy }; // "N"
+        });
+        return { door: d, bars };
       });
     },
 
-    // Map every DOOR cell to its owning room(s), so isSolid can make a shared
-    // door solid while EITHER bordering room is locked.
-    _indexDoors() {
-      this._doorOwners = new Map();
-      for (const d of (this.floorDoors || [])) {
-        if (d.owners && d.owners.length) this._doorOwners.set(d.cell.y * DD.ROOM_W + d.cell.x, d.owners);
-      }
+    // A floor door is closed (solid) while either room it connects is locked.
+    doorClosed(d) {
+      return (d.rooms || []).some((id) => { const r = this.roomById(id); return r && r.locked; });
     },
 
     // The room whose interior rect contains this world-space point (or null in
@@ -265,14 +263,7 @@
 
     isSolid(tx, ty) {
       const t = tileAt(tx, ty);
-      if (t === DOOR) {
-        if (this.isFloor && this._doorOwners) {
-          const owners = this._doorOwners.get(ty * DD.ROOM_W + tx);
-          // shared door: solid while any bordering room is locked
-          return owners ? owners.some((id) => { const r = this.roomById(id); return r && r.locked; }) : false;
-        }
-        return !this.doorOpen; // single-room door unlocks when the room is cleared
-      }
+      if (t === DOOR) return !this.doorOpen; // single-room door (floors gate via seam barriers)
       return t === WALL || t === OBSTACLE;
     },
 
@@ -292,9 +283,12 @@
           if (this.isSolid(tx, ty)) return true;
         }
       }
-      if (this._edgeWalls) {
-        for (const e of this._edgeWalls) {
-          if (x < e.x1 && x + w > e.x0 && y < e.y1 && y + h > e.y0) return true;
+      if (this._doorBars) {
+        for (const db of this._doorBars) {
+          if (!this.doorClosed(db.door)) continue; // open door: passable
+          for (const e of db.bars) {
+            if (x < e.x1 && x + w > e.x0 && y < e.y1 && y + h > e.y0) return true;
+          }
         }
       }
       return false;
@@ -353,7 +347,6 @@
         isFloor: this.isFloor ? 1 : 0,
         stairsRoomId: this.isFloor ? this.stairsRoomId : null,
         floorDoors: this.isFloor ? this.floorDoors : null,
-        floorWalls: this.isFloor ? this.floorWalls : null,
         rooms: this.isFloor ? this.rooms.map((r) => ({
           id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed,
           doors: r.doors, doorCells: r.doorCells,

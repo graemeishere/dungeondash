@@ -113,16 +113,25 @@
     }
 
     // corridors: 2-wide, dead straight (rooms are aligned). The corridor floor
-    // runs FLUSH up to the destination room, and a single thin wall sits on the
-    // seam (the room's own border) — one wall, no tile-wide gap. The door goes
-    // into that seam wall next.
-    const walls = []; // seam walls: { x, y, dir } — corridor cell + dir to room
+    // runs FLUSH up to the destination room; a single door sits on the seam
+    // (the room's own border). The door is closed while EITHER room it connects
+    // is locked, so a locked room is sealed on every corridor that touches it.
+    const doors = []; // { cells:[{x,y}], dir, rooms:[aId,bId] }
     for (const [ai, bi] of edges) {
-      const open = rooms[ai], walled = rooms[bi]; // lower id opens, higher gets the seam wall
-      carveCorridor(tiles, W, open, walled, walls);
+      const open = rooms[ai], walled = rooms[bi]; // corridor opens from `open`, door at `walled`'s border
+      carveCorridor(tiles, W, open, walled, doors);
     }
 
+    // per-room door lists (for the minimap / HUD / gating)
     for (const rm of rooms) { rm.doors = []; rm.doorCells = []; }
+    for (const dr of doors) {
+      for (const rid of dr.rooms) {
+        const rm = rooms.find((r) => r.id === rid);
+        if (!rm) continue;
+        rm.doors.push(dr);
+        for (const c of dr.cells) rm.doorCells.push(c);
+      }
+    }
 
     const entryRoom = rooms[0];
     const entry = {
@@ -132,7 +141,7 @@
     const stairsRoom = rooms.find((r) => r.type === "stairs" || r.type === "boss") || rooms[rooms.length - 1];
 
     return {
-      tiles, w: W, h: H, rooms, edges, doors: [], walls,
+      tiles, w: W, h: H, rooms, edges, doors,
       entry, stairsRoomId: stairsRoom.id,
       seed: (Math.random() * 0x7fffffff) | 0,
     };
@@ -140,35 +149,36 @@
 
   // Carve a straight 2-wide corridor between two aligned rooms. The `open` room
   // gets an opening in its facing wall (a doorway); the corridor floor runs
-  // FLUSH up to the `walled` room's border, and a thin seam wall (recorded in
-  // `walls`) sits on that border so the two rooms are separated by one wall.
-  function carveCorridor(tiles, W, open, walled, walls) {
+  // FLUSH up to the `walled` room's border, and a door sits on that border seam.
+  // Records one door (its 2 seam cells + facing dir + the two rooms it joins).
+  function carveCorridor(tiles, W, open, walled, doors) {
     const A = open.rect, B = walled.rect;
+    const cells = [];
+    let dir;
     if (open.mr === walled.mr) {
-      // horizontal neighbours -> corridor runs along the shared rows
-      const y0 = A.y + Math.floor((A.h - 2) / 2); // top of the 2-wide corridor
+      // horizontal neighbours -> a 1-wide corridor along the centre row, so the
+      // seam holds a single door
+      const y0 = A.y + Math.floor((A.h - 1) / 2);
       const openLeft = open.mc < walled.mc;
       const openWall = openLeft ? A.x + A.w : A.x - 1;     // open room's doorway column
       const border = openLeft ? B.x - 1 : B.x + B.w;       // walled room's border column
       const lo = Math.min(openWall, border), hi = Math.max(openWall, border);
       // carve the whole span INCLUDING the border cell -> flush to the room
-      for (let x = lo; x <= hi; x++)
-        for (let y = y0; y < y0 + 2; y++) tiles[y * W + x] = FLOOR;
-      // seam wall on the border cell, facing the room interior
-      const dir = openLeft ? "E" : "W";
-      for (let y = y0; y < y0 + 2; y++) walls.push({ x: border, y, dir });
+      for (let x = lo; x <= hi; x++) tiles[y0 * W + x] = FLOOR;
+      dir = openLeft ? "E" : "W"; // door faces the room interior
+      cells.push({ x: border, y: y0 });
     } else {
-      // vertical neighbours -> corridor runs along the shared columns
-      const x0 = A.x + Math.floor((A.w - 2) / 2);
+      // vertical neighbours -> a 1-wide corridor along the centre column
+      const x0 = A.x + Math.floor((A.w - 1) / 2);
       const openTop = open.mr < walled.mr;
       const openWall = openTop ? A.y + A.h : A.y - 1;
       const border = openTop ? B.y - 1 : B.y + B.h;
       const lo = Math.min(openWall, border), hi = Math.max(openWall, border);
-      for (let y = lo; y <= hi; y++)
-        for (let x = x0; x < x0 + 2; x++) tiles[y * W + x] = FLOOR;
-      const dir = openTop ? "S" : "N";
-      for (let x = x0; x < x0 + 2; x++) walls.push({ x, y: border, dir });
+      for (let y = lo; y <= hi; y++) tiles[y * W + x0] = FLOOR;
+      dir = openTop ? "S" : "N";
+      cells.push({ x: x0, y: border });
     }
+    doors.push({ cells, dir, rooms: [open.id, walled.id] });
   }
 
   function shuffleArr(arr) {

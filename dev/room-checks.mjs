@@ -118,12 +118,15 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
       enemiesFrozen: DD.game.skeletons.length > 0 && DD.game.skeletons.every((s) => s.frozen),
       enemiesTagged: DD.game.skeletons.every((s) => s.roomId != null),
       boss: DD.game.skeletons.some((s) => s instanceof DD.Boss),
+      doors: DD.room.floorDoors.length,
+      gates: DD.render3d.floorGates ? DD.render3d.floorGates.length : 0,
+      doorsStartOpen: !DD.room.floorDoors.some((d) => DD.room.doorClosed(d)),
     };
   });
   check(`floor: room graph reaches every room`, r.reachesAll, `${r.roomCount} rooms`);
   check(`floor: room graph reaches the stairs room`, r.reachesStairs);
-  // doors are mid-rebuild (step 1: open doorway + walled corridor end); the
-  // door-in-wall + gating checks come back once that lands.
+  check(`floor: doors + gates built`, r.doors > 0 && r.gates > 0, `doors=${r.doors} gates=${r.gates}`);
+  check(`floor: doors start open (traversable)`, r.doorsStartOpen);
   check(`floor: enemies spawn frozen + room-tagged`, r.enemiesFrozen && r.enemiesTagged);
   check(`floor: boss chamber present`, r.boss);
   // a whole floor is many rooms + cloned gate frames, so it runs more draw
