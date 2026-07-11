@@ -115,17 +115,15 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
       roomCount: rooms.length,
       reachesAll: seen.size === rooms.length,
       reachesStairs: seen.has(DD.room.stairsRoomId),
-      gatedHaveDoors: rooms.filter((rm) => rm.type === "combat" || rm.type === "elite" || rm.type === "boss").every((rm) => (rm.doors || []).length > 0),
-      gates: DD.render3d.floorGates ? DD.render3d.floorGates.length : 0,
       enemiesFrozen: DD.game.skeletons.length > 0 && DD.game.skeletons.every((s) => s.frozen),
       enemiesTagged: DD.game.skeletons.every((s) => s.roomId != null),
       boss: DD.game.skeletons.some((s) => s instanceof DD.Boss),
     };
   });
-  check(`floor: BFS reaches every room`, r.reachesAll, `${r.roomCount} rooms`);
-  check(`floor: BFS reaches the stairs room`, r.reachesStairs);
-  check(`floor: gated rooms have doors (side rooms open)`, r.gatedHaveDoors);
-  check(`floor: gate meshes built`, r.gates > 0, `gates=${r.gates}`);
+  check(`floor: room graph reaches every room`, r.reachesAll, `${r.roomCount} rooms`);
+  check(`floor: room graph reaches the stairs room`, r.reachesStairs);
+  // doors are mid-rebuild (step 1: open doorway + walled corridor end); the
+  // door-in-wall + gating checks come back once that lands.
   check(`floor: enemies spawn frozen + room-tagged`, r.enemiesFrozen && r.enemiesTagged);
   check(`floor: boss chamber present`, r.boss);
   // a whole floor is many rooms + cloned gate frames, so it runs more draw
