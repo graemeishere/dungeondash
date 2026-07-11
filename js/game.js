@@ -405,6 +405,14 @@
     return game.skeletons.some((s) => s.roomId === roomId && !s.dead && !s.dying);
   }
 
+  // Is the entity at least `margin` tiles inside the room rect on every side?
+  // Used so the combat lock fires only once the player is past the doorway.
+  function insideRoom(ent, rm, margin) {
+    const R = rm.rect, tx = ent.x / DD.TILE, ty = ent.y / DD.TILE;
+    return tx > R.x + margin && tx < R.x + R.w - margin &&
+           ty > R.y + margin && ty < R.y + R.h - margin;
+  }
+
   // Wake every enemy in a room (drop `frozen`; their own inactive->awaken logic,
   // now room-scoped, rises them the moment the doors shut).
   function activateRoom(roomId) {
@@ -425,7 +433,9 @@
         else if (b === rm.id) { const n = DD.room.roomById(a); if (n) n.seen = true; }
       }
     }
-    if (rm && !rm.cleared && !rm.locked && GATED_ROOM[rm.type] && roomHasEnemies(rm.id)) {
+    // Only lock once the player is clear of the doorway (a tile inside), so the
+    // closing door never catches them mid-threshold.
+    if (rm && !rm.cleared && !rm.locked && GATED_ROOM[rm.type] && roomHasEnemies(rm.id) && insideRoom(pl, rm, 1)) {
       rm.locked = true;
       game.activeRoomId = rm.id;
       activateRoom(rm.id);
