@@ -576,6 +576,17 @@ export function planRoomDecor(desc) {
   }
   for (const e of edges) walls.push({ piece: edgePiece.get(e) || pal.wall, gx: e.gx, gy: e.gy, dir: e.dir });
 
+  // seam walls (floor mode): a thin wall on a floor|floor boundary — the auto
+  // edge pass misses it (both sides are floor), so emit both faces back-to-back
+  // (one panel into the room, one into the corridor) for a single flush wall.
+  const OPP = { N: "S", S: "N", E: "W", W: "E" };
+  const STEP = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
+  for (const sw of (desc.walls || [])) {
+    walls.push({ piece: pal.wall, gx: sw.x, gy: sw.y, dir: sw.dir });
+    const [dx, dy] = STEP[sw.dir];
+    walls.push({ piece: pal.wall, gx: sw.x + dx, gy: sw.y + dy, dir: OPP[sw.dir] });
+  }
+
   // ---- pass 5: corner caps (lattice points; no rng) ------------------------
   // Each edge spans two lattice points; a point with two perpendicular edges
   // is a corner. Identify its open quadrant from the edge directions.
