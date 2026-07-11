@@ -759,17 +759,18 @@ export function planRoomDecor(desc) {
     for (const c of doorCells) floors.push({ piece: pal.base, gx: c.gx, gy: gy - 1, rot: 0 });
   }
 
-  // floor mode: one gate group per room opening (each swings on its room's lock
-  // state), and a staircase centered in the stairs room.
+  // floor mode: one gate per shared-wall door (owned by the gated room(s) it
+  // borders; a door with no owners is an always-open archway), and a staircase
+  // centered in the stairs room.
   const doors = [];
   if (floorMode) {
+    for (const d of (desc.floorDoors || [])) {
+      doors.push({
+        roomIds: d.owners || [], side: d.side, frame: "wall_doorway",
+        cells: [{ gx: d.cell.x, gy: d.cell.y }],
+      });
+    }
     for (const r of desc.rooms) {
-      for (const op of (r.doors || [])) {
-        doors.push({
-          roomId: r.id, side: op.side, frame: "wall_doorway",
-          cells: op.cells.map((c) => ({ gx: c.x, gy: c.y })),
-        });
-      }
       if (r.type === "stairs") {
         props.push({ piece: "stairs_wide", gx: r.rect.x + r.rect.w / 2 - 0.5, gy: r.rect.y + r.rect.h / 2 - 0.5, rot: 0 });
       }

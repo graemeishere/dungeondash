@@ -127,6 +127,7 @@
       this.doorOpen = true;         // floors gate per-room (see room.locked)
       this.rooms = f.rooms;
       this.edges = f.edges;
+      this.floorDoors = f.doors;
       this.stairsRoomId = f.stairsRoomId;
       this.seed = f.seed;
       this.roomType = "floor";
@@ -138,13 +139,12 @@
       this.prerender();
     },
 
-    // Map every DOOR cell to the room that owns it, so isSolid can consult that
-    // room's lock state (a locked door is solid; an open one is passable).
+    // Map every DOOR cell to its owning room(s), so isSolid can make a shared
+    // door solid while EITHER bordering room is locked.
     _indexDoors() {
-      this._doorRoom = new Map();
-      if (!this.rooms) return;
-      for (const r of this.rooms) {
-        for (const c of (r.doorCells || [])) this._doorRoom.set(c.y * DD.ROOM_W + c.x, r.id);
+      this._doorOwners = new Map();
+      for (const d of (this.floorDoors || [])) {
+        if (d.owners && d.owners.length) this._doorOwners.set(d.cell.y * DD.ROOM_W + d.cell.x, d.owners);
       }
     },
 
@@ -250,10 +250,10 @@
     isSolid(tx, ty) {
       const t = tileAt(tx, ty);
       if (t === DOOR) {
-        if (this.isFloor && this._doorRoom) {
-          const rid = this._doorRoom.get(ty * DD.ROOM_W + tx);
-          const rm = rid != null ? this.roomById(rid) : null;
-          return rm ? !!rm.locked : false; // floor doors: solid only while locked
+        if (this.isFloor && this._doorOwners) {
+          const owners = this._doorOwners.get(ty * DD.ROOM_W + tx);
+          // shared door: solid while any bordering room is locked
+          return owners ? owners.some((id) => { const r = this.roomById(id); return r && r.locked; }) : false;
         }
         return !this.doorOpen; // single-room door unlocks when the room is cleared
       }
@@ -328,9 +328,10 @@
         seed: this.seed || 1, theme: this.theme, roomType: this.roomType || "combat",
         isLobby: this.isLobby ? 1 : 0, isTown: this.isTown ? 1 : 0, exit: this.exit || "door",
         // floor mode: per-room rects/intents drive the decor planner + minimap;
-        // doors + lock/clear state drive gating, the gate meshes and the map.
+        // floorDoors (shared-wall openings) drive the gate meshes + gating.
         isFloor: this.isFloor ? 1 : 0,
         stairsRoomId: this.isFloor ? this.stairsRoomId : null,
+        floorDoors: this.isFloor ? this.floorDoors : null,
         rooms: this.isFloor ? this.rooms.map((r) => ({
           id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed,
           doors: r.doors, doorCells: r.doorCells,

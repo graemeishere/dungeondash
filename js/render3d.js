@@ -417,21 +417,11 @@ export class DungeonRenderer {
         }
         dg.add(f);
       }
-      // start open (passable); rooms lock on entry via setRoomDoorState
-      this.floorGates.push({ roomId: op.roomId, gates, open: true, animT: 1 });
+      // start open (passable); game3d swings it shut when an owner room locks
+      this.floorGates.push({ roomIds: op.roomIds || [], gates, open: true, animT: 1 });
     }
     this.scene.add(dg);
     this.floorDoorGroup = dg;
-  }
-
-  // Swing every gate belonging to a room. open=false locks it shut.
-  setRoomDoorState(roomId, open, instant = false) {
-    if (!this.floorGates) return;
-    for (const fg of this.floorGates) {
-      if (fg.roomId !== roomId) continue;
-      fg.open = !!open;
-      fg.animT = instant ? 1 : 0;
-    }
   }
 
   // World position for a planner placement: cell center, pushed to the wall
