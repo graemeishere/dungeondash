@@ -471,24 +471,39 @@ export class DungeonRenderer {
     // two spans drives it so nothing clips off-screen.
     this._fixedDist = this._span * 1.15;
     if (this.camMode === "fixed") this._camDist = this._fixedDist;
-    // fit the sun + its ortho shadow frustum to the room
-    const span = this._span || 40;
-    this.sun.position.set(span * 0.35, span * 0.8, span * 0.45);
-    this.sun.target.position.set(0, 0, 0);
-    if (this.shadows) {
-      const r = span * 0.72;
-      const sc = this.sun.shadow.camera;
-      sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r;
-      sc.near = 1; sc.far = span * 3;
-      sc.updateProjectionMatrix();
-    }
+    // half-extent of the floor in world units, for the follow-target clamp
+    this._halfW = (this.W / 2) * this.CELL;
+    this._halfH = (this.H / 2) * this.CELL;
   }
 
-  // "fixed" frames the whole room; "follow" tracks the player at a closer zoom.
+  // Position the sun + its ortho shadow frustum. In follow mode a tight window
+  // tracks the target so the 1024 map stays sharp on a big floor; in fixed mode
+  // it fits the whole room. Direction is constant (offset relative to centre).
+  _fitShadow(cx, cz) {
+    if (!this.shadows) return;
+    const follow = this.camMode === "follow";
+    const r = follow ? this.CELL * 11 : (this._span || 40) * 0.72;
+    const off = follow ? this.CELL * 16 : (this._span || 40) * 0.8;
+    this.sun.position.set(cx + off * 0.4, off, cz + off * 0.5);
+    this.sun.target.position.set(cx, 0, cz);
+    this.sun.target.updateMatrixWorld();
+    const sc = this.sun.shadow.camera;
+    sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r;
+    sc.near = 1; sc.far = off * 3;
+    sc.updateProjectionMatrix();
+  }
+
+  // "fixed" frames the whole room; "follow" tracks the player. The follow zoom
+  // is pulled back to ~9 cells so a good slice of the floor is visible around
+  // the player (was CELL*5, far too close).
   setCameraMode(mode) {
     this.camMode = mode === "follow" ? "follow" : "fixed";
-    this._camDist = this.camMode === "follow" ? this.CELL * 5 : (this._fixedDist || this._span * 1.15);
+    this._camDist = this.camMode === "follow" ? this.CELL * 9 : (this._fixedDist || this._span * 1.15);
   }
+  // Track the player, centred. The dark space between rooms is the intended
+  // "rooms floating in the void" look (as in the KayKit samples), so we don't
+  // clamp to hide it — the player stays centred and the dungeon moves around
+  // them.
   setFollowTarget(x, z) { this.followT.set(x, 0, z); }
 
   resize(w, h) {
@@ -496,6 +511,24 @@ export class DungeonRenderer {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+  }
+
+  // Screen pixel (canvas px) -> the game-world point on the floor (y=0) under
+  // it, in the same tile-px space as entity x/y. Ray from the camera through
+  // the pixel, intersected with the ground plane — replaces the old linear
+  // letterbox map so mouse aim is correct under the moving follow camera.
+  screenToGround(px, py) {
+    const TILE = (window.DD && window.DD.TILE) || 32;
+    const ndcX = (px / this._w) * 2 - 1;
+    const ndcY = -((py / this._h) * 2 - 1);
+    const v = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(this.camera);
+    const dir = v.sub(this.camera.position).normalize();
+    if (Math.abs(dir.y) < 1e-6) return null;
+    const t = -this.camera.position.y / dir.y;
+    if (t < 0) return null;
+    const wx = this.camera.position.x + dir.x * t;
+    const wz = this.camera.position.z + dir.z * t;
+    return { x: (wx / this.CELL + this.W / 2) * TILE, y: (wz / this.CELL + this.H / 2) * TILE };
   }
 
   // gx,gy may be fractional (entity world position in cells) -> screen px + depth.
@@ -658,6 +691,7 @@ export class DungeonRenderer {
     this._lastRenderT = performance.now();
 
     const tgt = this.camMode === "follow" ? this.followT : ORIGIN;
+    this._fitShadow(tgt.x, tgt.z); // shadow window tracks the view
     const dist = this._camDist || (this._span || 10) * 1.15;
     const horiz = dist * Math.cos(this.elev), cy = dist * Math.sin(this.elev);
     // camAngle=0 puts the camera on the +Z (front) side looking toward -Z, the

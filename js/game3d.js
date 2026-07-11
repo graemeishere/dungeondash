@@ -123,9 +123,9 @@
     }
 
     // Camera mode (fixed whole-room vs follow the local player). Backdrop
-    // screens always use the fixed whole-room camera; floors use fixed in
-    // Phase 1 (whole-floor overview) until the follow camera lands in Phase 2.
-    const camMode = (menuish || DD.room.isFloor) ? "fixed" : camMode3d;
+    // screens and the walkable hubs (town/lobby) frame the whole room; combat
+    // and floors follow the player.
+    const camMode = (menuish || peaceful) ? "fixed" : camMode3d;
     if (dr.camMode !== camMode) dr.setCameraMode(camMode);
     if (camMode === "follow" && game.localPlayer) {
       const w = dr.cellToWorld(game.localPlayer.x / DD.TILE, game.localPlayer.y / DD.TILE);
