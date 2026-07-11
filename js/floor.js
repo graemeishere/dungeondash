@@ -13,21 +13,22 @@
 
   // Macro-grid: each room lives in one macro cell; corridors bridge adjacent
   // cells. Cell size leaves room for the largest template plus wall margins.
-  const MACRO_W = 15, MACRO_H = 13;
+  const MACRO_W = 10, MACRO_H = 9;
 
   // Room templates by type: interior size in tiles (walls are the uncarved
-  // border around each). intent maps to the decor planner's composition intents.
+  // border around each). Small, tight rooms — ~1/3 the old area — to match the
+  // KayKit sample scale. intent maps to the decor planner's composition intents.
   const TEMPLATES = {
-    entry:    { w: 9, h: 7, intent: "storage" },
-    combat:   { w: 11, h: 9, intent: null },   // intent null -> theme default roll
-    elite:    { w: 12, h: 10, intent: "storage" },
-    trap:     { w: 13, h: 6, intent: "ruin" },
-    treasure: { w: 8, h: 7, intent: "hoardRoom" },
-    shrine:   { w: 8, h: 7, intent: "shrine" },
-    storage:  { w: 9, h: 7, intent: "storage" },
-    dining:   { w: 10, h: 8, intent: "messHall" },
-    stairs:   { w: 9, h: 8, intent: "storage" },
-    boss:     { w: 14, h: 12, intent: "ruin" },
+    entry:    { w: 6, h: 5, intent: "storage" },
+    combat:   { w: 7, h: 5, intent: null },   // intent null -> theme default roll
+    elite:    { w: 8, h: 6, intent: "storage" },
+    trap:     { w: 8, h: 4, intent: "ruin" },
+    treasure: { w: 5, h: 4, intent: "hoardRoom" },
+    shrine:   { w: 5, h: 5, intent: "shrine" },
+    storage:  { w: 6, h: 5, intent: "storage" },
+    dining:   { w: 7, h: 6, intent: "messHall" },
+    stairs:   { w: 6, h: 5, intent: "storage" },
+    boss:     { w: 9, h: 8, intent: "ruin" },
   };
   // side rooms hang off the critical path as optional detours
   const SIDE_TYPES = ["treasure", "shrine", "storage", "dining"];

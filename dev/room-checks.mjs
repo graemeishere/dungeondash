@@ -68,7 +68,6 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   check(`${dungeon}: triangles ${r.triangles} <= ${TRI_BUDGET}`, r.triangles <= TRI_BUDGET);
   check(`${dungeon}: planner deterministic`, r.deterministic);
   check(`${dungeon}: guest setData round-trip identical`, r.guestSame);
-  check(`${dungeon}: >= 4 corner caps (${r.corners})`, r.corners >= 4);
   check(`${dungeon}: banner pair flanks the door`, !r.hasDoor || r.banners >= 2);
   check(`${dungeon}: obstacle clusters dressed`, !r.hasObstacles || r.props > 0);
   check(`${dungeon}: no ground prop on DOOR cells`, !r.propOnDoor);

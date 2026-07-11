@@ -256,9 +256,9 @@ const VIGNETTES = {
   },
 };
 
-// Heroes render 1.42x their native KayKit size (gameplay readability), so
-// props scale up to match — otherwise tables read knee-high on characters.
-const PROP_SCALE = 1.4;
+// Characters and props both render at native KayKit size (1x), matching the
+// pack's own sample-scene proportions.
+const PROP_SCALE = 1.0;
 
 // Composition intents: one per room, so its vignettes agree with each other
 // (a storage room is crates everywhere, a mess hall is tables and kegs)
@@ -601,10 +601,10 @@ export function planRoomDecor(desc) {
     const openS = hE.dir === "N"; // floor below the horizontal wall line
     const openE = vE.dir === "W"; // floor right of the vertical wall line
     const Q = (openS ? "S" : "N") + (openE ? "E" : "W");
-    props.push({
-      piece: pal.corner, gx: Px - 1, gy: Py - 1, ox: 0.5, oz: 0.5,
-      rot: CORNER_ROT[Q],
-    });
+    // No chunky corner cap: the two perpendicular wall panels already meet in
+    // a clean L. The wall_corner piece overlaid on them protruded diagonally
+    // into the room (read as a cross), so corners now come purely from the
+    // panels. We still register the corner as a vignette anchor below.
     // corner vignette anchor: the floor cell diagonal into the open quadrant.
     // Facing snaps to the nearest cardinal (45° furniture reads dropped, not
     // placed) and the anchor hugs the corner's two walls instead of floating

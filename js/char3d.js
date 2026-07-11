@@ -26,54 +26,54 @@ const MANNEQUIN = "KayKit Character Animations/Mannequin Character/characters/Ma
 // (played in order as a single attack, e.g. bow Draw -> Release). Edit freely.
 export const RIG = {
   "class:warrior": {
-    model: HERO + "Knight.glb", scale: 1.42, weapon: GEAR + "sword_1handed.gltf", hand: "r",
+    model: HERO + "Knight.glb", scale: 1.0, weapon: GEAR + "sword_1handed.gltf", hand: "r",
     idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
     attacks: ["Melee_1H_Attack_Slice_Diagonal", "Melee_1H_Attack_Stab", "Melee_2H_Attack_Chop", "Melee_Unarmed_Attack_Punch_A"],
   },
   "class:rogue": {
-    model: HERO + "Rogue.glb", scale: 1.42, weapon: GEAR + "dagger.gltf", hand: "r",
+    model: HERO + "Rogue.glb", scale: 1.0, weapon: GEAR + "dagger.gltf", hand: "r",
     idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1.21,
     attacks: ["Melee_Unarmed_Attack_Punch_A", "Melee_Unarmed_Attack_Kick", "Melee_1H_Attack_Slice_Horizontal", "Melee_1H_Attack_Stab"],
   },
   "class:mage": {
-    model: HERO + "Mage.glb", scale: 1.42, weapon: GEAR + "staff.gltf", hand: "r", ranged: true,
+    model: HERO + "Mage.glb", scale: 1.0, weapon: GEAR + "staff.gltf", hand: "r", ranged: true,
     idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
     attacks: ["Ranged_Magic_Shoot"],
   },
   "class:ranger": {
-    model: HERO + "Ranger.glb", scale: 1.42, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
+    model: HERO + "Ranger.glb", scale: 1.0, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
     weaponRot: [4.97, 9.69, 6.28], // user-tuned in anim3d
     idle: "Idle_A", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 0.32,
     attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
   },
   // ---- skeleton enemies (share Rig_Medium) ----
   "enemy:minion": {
-    model: SKEL + "Skeleton_Minion.glb", scale: 1.33, weapon: SKGEAR + "Skeleton_Blade.gltf", hand: "r",
+    model: SKEL + "Skeleton_Minion.glb", scale: 1.0, weapon: SKGEAR + "Skeleton_Blade.gltf", hand: "r",
     idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1.32,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Melee_1H_Attack_Stab", "Melee_1H_Attack_Slice_Horizontal"],
   },
   "enemy:warrior": {
-    model: SKEL + "Skeleton_Warrior.glb", scale: 1.42, weapon: SKGEAR + "Skeleton_Axe.gltf", hand: "r",
+    model: SKEL + "Skeleton_Warrior.glb", scale: 1.0, weapon: SKGEAR + "Skeleton_Axe.gltf", hand: "r",
     idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 2.01,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Melee_1H_Attack_Chop", "Melee_2H_Attack_Chop"],
   },
   "enemy:archer": {
-    model: SKEL + "Skeleton_Rogue.glb", scale: 1.33, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
+    model: SKEL + "Skeleton_Rogue.glb", scale: 1.0, weapon: GEAR + "bow_withString.gltf", hand: "l", ranged: true, seq: true,
     weaponRot: [4.97, 9.69, 6.28],
     idle: "Skeletons_Idle", run: "Running_HoldingBow", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Ranged_Bow_Draw", "Ranged_Bow_Release"],
   },
   "enemy:mage": {
-    model: SKEL + "Skeleton_Mage.glb", scale: 1.33, weapon: SKGEAR + "Skeleton_Staff.gltf", hand: "r", ranged: true,
+    model: SKEL + "Skeleton_Mage.glb", scale: 1.0, weapon: SKGEAR + "Skeleton_Staff.gltf", hand: "r", ranged: true,
     idle: "Skeletons_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Ranged_Magic_Shoot"],
   },
   "fallback": {
-    model: MANNEQUIN, scale: 1.42, weapon: null, hand: "r",
+    model: MANNEQUIN, scale: 1.0, weapon: null, hand: "r",
     idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
     attacks: ["Melee_1H_Attack_Chop"],
   },
