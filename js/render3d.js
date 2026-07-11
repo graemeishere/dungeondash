@@ -493,12 +493,26 @@ export class DungeonRenderer {
     sc.updateProjectionMatrix();
   }
 
-  // "fixed" frames the whole room; "follow" tracks the player. The follow zoom
-  // is pulled back to ~9 cells so a good slice of the floor is visible around
-  // the player (was CELL*5, far too close).
+  // Follow-camera distance. The perspective camera's FOV is *vertical*, so a
+  // fixed distance keeps the player a constant fraction of screen HEIGHT — but
+  // a wide landscape screen then reveals far more world sideways, leaving the
+  // player looking tiny and lost. Pull the camera in as the aspect widens so
+  // the framing (and the player's on-screen size) stays close to the portrait
+  // feel the user likes. Tall screens (aspect <= REF) keep the CELL*7 base.
+  _followDist() {
+    const aspect = (this._w && this._h) ? this._w / this._h : 1;
+    const REF = 0.7; // portrait-ish reference aspect where CELL*7 feels right
+    // pull in as the screen widens; clamp so ultra-wide monitors don't crop the
+    // room to the player's feet.
+    const f = aspect > REF ? Math.max(0.55, Math.pow(REF / aspect, 0.4)) : 1;
+    return this.CELL * 7 * f;
+  }
+
+  // "fixed" frames the whole room; "follow" tracks the player at a zoom that
+  // adapts to the viewport aspect (see _followDist).
   setCameraMode(mode) {
     this.camMode = mode === "follow" ? "follow" : "fixed";
-    this._camDist = this.camMode === "follow" ? this.CELL * 7 : (this._fixedDist || this._span * 1.15);
+    this._camDist = this.camMode === "follow" ? this._followDist() : (this._fixedDist || this._span * 1.15);
   }
   // Track the player, centred. The dark space between rooms is the intended
   // "rooms floating in the void" look (as in the KayKit samples), so we don't
@@ -511,6 +525,8 @@ export class DungeonRenderer {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    // aspect changed (e.g. device rotation) -> re-derive the follow zoom
+    if (this.camMode === "follow") this._camDist = this._followDist();
   }
 
   // Screen pixel (canvas px) -> the game-world point on the floor (y=0) under
