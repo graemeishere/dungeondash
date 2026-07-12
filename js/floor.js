@@ -143,29 +143,34 @@
     };
   };
 
-  // Carve a straight 1-wide corridor between two aligned rooms, running flush
-  // into BOTH rooms' borders. Each room gets its own door on its border seam
-  // (owned by that room), so a locked room is sealed at its own edges on every
-  // corridor. Records the two doors { cell, dir(->room interior), rooms:[owner] }.
+  // Carve a straight 2-wide corridor between two aligned rooms, running flush
+  // into BOTH rooms' borders. The corridor body is 2 lanes wide for breathing
+  // room, but pinches to a SINGLE door on each room's border (the second lane is
+  // re-walled at the seam). Each door is owned by its room, so a locked room is
+  // sealed at its own edges. Records { cell, dir(->room interior), rooms:[owner] }.
   function carveCorridor(tiles, W, a, b, doors) {
     const A = a.rect, B = b.rect;
     if (a.mr === b.mr) {
-      // horizontal neighbours -> 1-wide corridor along the centre row
-      const y0 = A.y + Math.floor((A.h - 1) / 2);
+      // horizontal neighbours -> 2-wide corridor on the middle rows (y0, y0+1)
+      const y0 = A.y + Math.floor((A.h - 2) / 2);
       const left = a.mc < b.mc ? a : b, right = a.mc < b.mc ? b : a;
       const lBorder = left.rect.x + left.rect.w;   // left room's east border cell
       const rBorder = right.rect.x - 1;            // right room's west border cell
-      for (let x = lBorder; x <= rBorder; x++) tiles[y0 * W + x] = FLOOR;
-      // left room's interior is west of its border -> door faces W; right faces E
+      for (let x = lBorder; x <= rBorder; x++) { tiles[y0 * W + x] = FLOOR; tiles[(y0 + 1) * W + x] = FLOOR; }
+      // pinch to a 1-wide door on each border (re-wall the second lane there)
+      tiles[(y0 + 1) * W + lBorder] = WALL;
+      tiles[(y0 + 1) * W + rBorder] = WALL;
       doors.push({ cells: [{ x: lBorder, y: y0 }], dir: "W", rooms: [left.id] });
       doors.push({ cells: [{ x: rBorder, y: y0 }], dir: "E", rooms: [right.id] });
     } else {
-      // vertical neighbours -> 1-wide corridor along the centre column
-      const x0 = A.x + Math.floor((A.w - 1) / 2);
+      // vertical neighbours -> 2-wide corridor on the middle columns (x0, x0+1)
+      const x0 = A.x + Math.floor((A.w - 2) / 2);
       const top = a.mr < b.mr ? a : b, bottom = a.mr < b.mr ? b : a;
       const tBorder = top.rect.y + top.rect.h;     // top room's south border cell
       const bBorder = bottom.rect.y - 1;           // bottom room's north border cell
-      for (let y = tBorder; y <= bBorder; y++) tiles[y * W + x0] = FLOOR;
+      for (let y = tBorder; y <= bBorder; y++) { tiles[y * W + x0] = FLOOR; tiles[y * W + x0 + 1] = FLOOR; }
+      tiles[tBorder * W + x0 + 1] = WALL;
+      tiles[bBorder * W + x0 + 1] = WALL;
       doors.push({ cells: [{ x: x0, y: tBorder }], dir: "N", rooms: [top.id] });
       doors.push({ cells: [{ x: x0, y: bBorder }], dir: "S", rooms: [bottom.id] });
     }
