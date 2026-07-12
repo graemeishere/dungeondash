@@ -144,10 +144,11 @@
   };
 
   // Carve a straight 2-wide corridor between two aligned rooms, running flush
-  // into BOTH rooms' borders. The corridor body is 2 lanes wide for breathing
-  // room, but pinches to a SINGLE door on each room's border (the second lane is
-  // re-walled at the seam). Each door is owned by its room, so a locked room is
-  // sealed at its own edges. Records { cell, dir(->room interior), rooms:[owner] }.
+  // into BOTH rooms' borders. The opening stays a full 2 tiles wide (no funnel):
+  // one tile carries the visible door, the other is a `seal` tile that only
+  // turns solid while the room is locked. Each door is owned by its room, so a
+  // locked room is sealed at its own edges. Records
+  // { cells:[door], seal:[cell], dir(->room interior), rooms:[owner] }.
   function carveCorridor(tiles, W, a, b, doors) {
     const A = a.rect, B = b.rect;
     if (a.mr === b.mr) {
@@ -157,11 +158,8 @@
       const lBorder = left.rect.x + left.rect.w;   // left room's east border cell
       const rBorder = right.rect.x - 1;            // right room's west border cell
       for (let x = lBorder; x <= rBorder; x++) { tiles[y0 * W + x] = FLOOR; tiles[(y0 + 1) * W + x] = FLOOR; }
-      // pinch to a 1-wide door on each border (re-wall the second lane there)
-      tiles[(y0 + 1) * W + lBorder] = WALL;
-      tiles[(y0 + 1) * W + rBorder] = WALL;
-      doors.push({ cells: [{ x: lBorder, y: y0 }], dir: "W", rooms: [left.id] });
-      doors.push({ cells: [{ x: rBorder, y: y0 }], dir: "E", rooms: [right.id] });
+      doors.push({ cells: [{ x: lBorder, y: y0 }], seal: [{ x: lBorder, y: y0 + 1 }], dir: "W", rooms: [left.id] });
+      doors.push({ cells: [{ x: rBorder, y: y0 }], seal: [{ x: rBorder, y: y0 + 1 }], dir: "E", rooms: [right.id] });
     } else {
       // vertical neighbours -> 2-wide corridor on the middle columns (x0, x0+1)
       const x0 = A.x + Math.floor((A.w - 2) / 2);
@@ -169,10 +167,8 @@
       const tBorder = top.rect.y + top.rect.h;     // top room's south border cell
       const bBorder = bottom.rect.y - 1;           // bottom room's north border cell
       for (let y = tBorder; y <= bBorder; y++) { tiles[y * W + x0] = FLOOR; tiles[y * W + x0 + 1] = FLOOR; }
-      tiles[tBorder * W + x0 + 1] = WALL;
-      tiles[bBorder * W + x0 + 1] = WALL;
-      doors.push({ cells: [{ x: x0, y: tBorder }], dir: "N", rooms: [top.id] });
-      doors.push({ cells: [{ x: x0, y: bBorder }], dir: "S", rooms: [bottom.id] });
+      doors.push({ cells: [{ x: x0, y: tBorder }], seal: [{ x: x0 + 1, y: tBorder }], dir: "N", rooms: [top.id] });
+      doors.push({ cells: [{ x: x0, y: bBorder }], seal: [{ x: x0 + 1, y: bBorder }], dir: "S", rooms: [bottom.id] });
     }
   }
 

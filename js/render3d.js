@@ -422,8 +422,25 @@ export class DungeonRenderer {
         }
         dg.add(f);
       }
+      // seal tiles: a wall panel that only shows while the door is closed, so
+      // the 2-wide opening stays fully open when unlocked but seals when locked
+      const seals = [];
+      const wallProto = this.pieceProtos.get(this.kit.wall);
+      if (wallProto) {
+        for (const c of (op.seal || [])) {
+          const sub = (wallProto.meshes || [wallProto])[0];
+          const m = sub.mesh.clone();
+          const pos = this._cellWorld(c.gx, c.gy);
+          m.position.set(pos.x + ox, 0, pos.z + oz);
+          m.rotation.y = DungeonRenderer._inwardRot(op.side);
+          m.castShadow = true; m.receiveShadow = true;
+          m.visible = false;
+          dg.add(m);
+          seals.push(m);
+        }
+      }
       // start open (passable); game3d swings it shut when an owner room locks
-      this.floorGates.push({ roomIds: op.roomIds || [], gates, open: true, animT: 1 });
+      this.floorGates.push({ roomIds: op.roomIds || [], gates, seals, open: true, animT: 1 });
     }
     this.scene.add(dg);
     this.floorDoorGroup = dg;

@@ -131,6 +131,8 @@
           fg.open = open;
           fg.animT = rebuilt ? 1 : 0;
           fg._openState = open;
+          // the seal tile's wall shows only while the door is closed
+          if (fg.seals) for (const m of fg.seals) m.visible = !open;
         }
       }
       dr._floorGateBuiltAt = dr._builtVersion;
