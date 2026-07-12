@@ -145,14 +145,16 @@
     // freely passable.
     _buildDoorBarriers() {
       const T = 2; // barrier thickness (px), just past the seam
+      const barFor = (c, dir) => {
+        const cx = c.x * DD.TILE, cy = c.y * DD.TILE;
+        if (dir === "E") return { x0: cx + DD.TILE, y0: cy, x1: cx + DD.TILE + T, y1: cy + DD.TILE };
+        if (dir === "W") return { x0: cx - T, y0: cy, x1: cx, y1: cy + DD.TILE };
+        if (dir === "S") return { x0: cx, y0: cy + DD.TILE, x1: cx + DD.TILE, y1: cy + DD.TILE + T };
+        return { x0: cx, y0: cy - T, x1: cx + DD.TILE, y1: cy }; // "N"
+      };
       this._doorBars = (this.floorDoors || []).map((d) => {
-        const bars = d.cells.map((c) => {
-          const cx = c.x * DD.TILE, cy = c.y * DD.TILE;
-          if (d.dir === "E") return { x0: cx + DD.TILE, y0: cy, x1: cx + DD.TILE + T, y1: cy + DD.TILE };
-          if (d.dir === "W") return { x0: cx - T, y0: cy, x1: cx, y1: cy + DD.TILE };
-          if (d.dir === "S") return { x0: cx, y0: cy + DD.TILE, x1: cx + DD.TILE, y1: cy + DD.TILE + T };
-          return { x0: cx, y0: cy - T, x1: cx + DD.TILE, y1: cy }; // "N"
-        });
+        // block both the door tile and its seal tile while the door is closed
+        const bars = [...d.cells, ...(d.seal || [])].map((c) => barFor(c, d.dir));
         return { door: d, bars };
       });
     },

@@ -768,6 +768,7 @@ export function planRoomDecor(desc) {
       doors.push({
         roomIds: d.rooms || [], side: d.dir, frame: "wall_doorway",
         cells: (d.cells || []).map((c) => ({ gx: c.x, gy: c.y })),
+        seal: (d.seal || []).map((c) => ({ gx: c.x, gy: c.y })),
       });
     }
     for (const r of desc.rooms) {
