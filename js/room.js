@@ -128,6 +128,7 @@
       this.rooms = f.rooms;
       this.edges = f.edges;
       this.floorDoors = f.doors || [];
+      this.floorWalls = f.walls || [];
       this.stairsRoomId = f.stairsRoomId;
       this.seed = f.seed;
       this.roomType = "floor";
@@ -136,6 +137,7 @@
       // uncleared combat room locks it until its enemies are down.
       for (const r of this.rooms) { r.locked = false; r.cleared = !!r.cleared; }
       this._buildDoorBarriers();
+      this._buildEdgeWalls();
       this.prerender();
     },
 
@@ -155,6 +157,21 @@
       this._doorBars = (this.floorDoors || []).map((d) => {
         const bars = d.cells.map((c) => barFor(c, d.dir));
         return { door: d, bars };
+      });
+    },
+
+    // The wall half of a corridor mouth sits on a floor|floor edge (both flanking
+    // cells are FLOOR), so it can't be a tile — turn each into a thin solid
+    // barrier (world px) that boxHitsWall always blocks. Unlike a door, it never
+    // opens.
+    _buildEdgeWalls() {
+      const T = 2; // barrier thickness (px), just past the seam
+      this._edgeWalls = (this.floorWalls || []).map((wl) => {
+        const cx = wl.x * DD.TILE, cy = wl.y * DD.TILE;
+        if (wl.dir === "E") return { x0: cx + DD.TILE, y0: cy, x1: cx + DD.TILE + T, y1: cy + DD.TILE };
+        if (wl.dir === "W") return { x0: cx - T, y0: cy, x1: cx, y1: cy + DD.TILE };
+        if (wl.dir === "S") return { x0: cx, y0: cy + DD.TILE, x1: cx + DD.TILE, y1: cy + DD.TILE + T };
+        return { x0: cx, y0: cy - T, x1: cx + DD.TILE, y1: cy }; // "N"
       });
     },
 
@@ -292,6 +309,11 @@
           }
         }
       }
+      if (this._edgeWalls) {
+        for (const e of this._edgeWalls) { // seam walls: always solid
+          if (x < e.x1 && x + w > e.x0 && y < e.y1 && y + h > e.y0) return true;
+        }
+      }
       return false;
     },
 
@@ -348,6 +370,7 @@
         isFloor: this.isFloor ? 1 : 0,
         stairsRoomId: this.isFloor ? this.stairsRoomId : null,
         floorDoors: this.isFloor ? this.floorDoors : null,
+        floorWalls: this.isFloor ? this.floorWalls : null,
         rooms: this.isFloor ? this.rooms.map((r) => ({
           id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed,
           doors: r.doors, doorCells: r.doorCells,
