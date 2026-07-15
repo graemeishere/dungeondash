@@ -153,8 +153,7 @@
         return { x0: cx, y0: cy - T, x1: cx + DD.TILE, y1: cy }; // "N"
       };
       this._doorBars = (this.floorDoors || []).map((d) => {
-        // block both the door tile and its seal tile while the door is closed
-        const bars = [...d.cells, ...(d.seal || [])].map((c) => barFor(c, d.dir));
+        const bars = d.cells.map((c) => barFor(c, d.dir));
         return { door: d, bars };
       });
     },
