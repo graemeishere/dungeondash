@@ -2427,10 +2427,25 @@
 
   // ?floors boots a connected-floor run with per-room combat gating + descent.
   if (params.has("floors")) {
-    document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
-    const cls = params.get("class");
-    const dng = params.get("dungeon");
-    startFloorRun(DD.CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
+    const cls = DD.CLASSES[params.get("class")] ? params.get("class") : "warrior";
+    const dng = DUNGEONS[params.get("dungeon")] ? params.get("dungeon") : "catacombs";
+    const boot = () => {
+      document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
+      startFloorRun(cls, dng, 0);
+    };
+    // A direct ?floors link boots straight into a floor, skipping the menus that
+    // normally cover the character preload — so hold on the menu until the
+    // player's 3D model is ready, then reveal the floor already-3D instead of
+    // flashing a 2D billboard. Capped so a slow/failed load can't hang the boot.
+    const mk = "class:" + cls;
+    const ready = () => DD.charMgr && DD.charMgr.factory && DD.charMgr.factory.spawnable(mk);
+    if (ready()) boot();
+    else {
+      const t0 = performance.now();
+      const iv = setInterval(() => {
+        if (ready() || performance.now() - t0 > 6000) { clearInterval(iv); boot(); }
+      }, 60);
+    }
   }
 
   window.addEventListener("resize", () => {
