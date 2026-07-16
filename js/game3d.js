@@ -179,7 +179,7 @@
       }
       // dying heroes fade out over the tail of the death animation
       const pOpacity = p.dying ? Math.min(1, p.deathT / 0.7) : 1;
-      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(p, mk, face, playerClip(p), pOpacity);
+      if (mgr && mk && mgr.factory.spawnable(mk)) asChar(p, mk, face, playerClip(p), pOpacity);
       else billboards.push(captureEntity(p));
     }
     // town NPCs stand as billboards (they carry a draw() sprite shim)
@@ -194,7 +194,7 @@
       const mk = C && C.enemyModelKey(s.kind);
       // fade dying corpses; shades are translucent ghosts (distinct from minions)
       const opacity = s.dying ? Math.min(1, s.deathT / 0.7) : (s.kind === "shade" ? 0.5 : 1);
-      if (mgr && mk && mgr.factory.protos.has(mk)) asChar(s, mk, faceFromMove(s), enemyClip(s), opacity);
+      if (mgr && mk && mgr.factory.spawnable(mk)) asChar(s, mk, faceFromMove(s), enemyClip(s), opacity);
       else billboards.push(captureEntity(s));
     }
     // 3D items (coins/potions/chests); everything else stays a billboard.
