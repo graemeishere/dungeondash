@@ -130,6 +130,16 @@ export class CharacterFactory {
 
   clipNames() { return [...this.clips.keys()]; }
 
+  // Ready to spawn as a 3D character: its model proto is loaded AND (if the rig
+  // holds a weapon) that weapon is loaded too — so a char never spawns weaponless
+  // during the parallel preload. Clips are NOT required (play() no-ops until they
+  // arrive), so a model can appear a beat before it animates.
+  spawnable(key) {
+    if (!this.protos.has(key)) return false;
+    const rig = RIG[key];
+    return !(rig && rig.weapon) || !!this.weaponProtos[rig.weapon];
+  }
+
   // Spawn an independently-animated instance, attaching the rig's weapon to the
   // configured hand bone (handslot.r / handslot.l -> sanitised "handslotr"/"l").
   spawn(key) {
@@ -233,13 +243,21 @@ export class CharacterManager {
   }
 
   async preloadAll() {
-    await this.factory.loadClips();
-    await this.factory.loadWeapons();
-    console.log("char3d: clips", this.factory.clips.size, "weapons", Object.keys(this.factory.weaponProtos).length);
     const keys = Object.keys(RIG);
-    const results = await Promise.allSettled(keys.map((k) => this.factory.loadModelByKey(k, RIG[k].model)));
+    // An entity stops being a 2D billboard the moment it becomes spawnable
+    // (game3d checks factory.spawnable(mk)), so load the MODELS in parallel with
+    // the clip + weapon libraries rather than behind them — this collapses the
+    // billboard-flash window on floors that boot straight in. The big clip
+    // library loads alongside (play() no-ops until its clip exists); spawnable()
+    // waits for both the model and its weapon, so a char never spawns weaponless.
+    const modelsP = Promise.allSettled(keys.map((k) => this.factory.loadModelByKey(k, RIG[k].model)));
+    const clipsP = this.factory.loadClips();
+    const weaponsP = this.factory.loadWeapons();
+    const results = await modelsP;
     results.forEach((r, i) => { if (r.status === "rejected") console.error("char3d: model FAILED", keys[i], r.reason); });
     console.log("char3d: models", results.filter((r) => r.status === "fulfilled").length, "/", keys.length);
+    await Promise.all([clipsP, weaponsP]);
+    console.log("char3d: clips", this.factory.clips.size, "weapons", Object.keys(this.factory.weaponProtos).length);
     return this;
   }
 
@@ -249,8 +267,8 @@ export class CharacterManager {
       seen.add(it.entity);
       let ch = this.chars.get(it.entity);
       if (!ch) {
-        const key = this.factory.protos.has(it.modelKey) ? it.modelKey
-          : (this.factory.protos.has("fallback") ? "fallback" : null);
+        const key = this.factory.spawnable(it.modelKey) ? it.modelKey
+          : (this.factory.spawnable("fallback") ? "fallback" : null);
         if (!key) continue;
         ch = this.factory.spawn(key);
         ch._baseScale = (RIG[key] || { scale: 1 }).scale;

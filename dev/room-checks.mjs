@@ -21,8 +21,23 @@ const check = (name, ok, detail) => {
   if (!ok) failed++;
 };
 
+// These are DECOR budgets. Characters are dynamic and their preload timing
+// varies, so exclude them from the count: hide the character meshes and clear
+// the entity/item/projectile billboards, then render. Keeps the budget a stable
+// measure of the room's decor regardless of how fast models stream in.
+const DECOR_ONLY = `window.decorOnlyRender = () => {
+  DD.render3d.setEntities([]); DD.render3d.setItems([]); DD.render3d.setProjectiles([]);
+  if (DD.charMgr) for (const ch of DD.charMgr.chars.values()) ch.root.visible = false;
+  return DD.render3d.render();
+};`;
+async function newPage(opts) {
+  const page = await browser.newPage(opts);
+  await page.addInitScript(DECOR_ONLY);
+  return page;
+}
+
 for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
-  const page = await browser.newPage({ viewport: { width: 1024, height: 640 } });
+  const page = await newPage({ viewport: { width: 1024, height: 640 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`${BASE}/?dev=combat&cam=fixed&dungeon=${dungeon}`, { waitUntil: "load" });
@@ -30,7 +45,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   await page.waitForTimeout(2500); // decor pieces stream in + one rebuild
 
   const r = await page.evaluate(async () => {
-    const info = DD.render3d.render();
+    const info = decorOnlyRender();
     const d = DD.room.getData();
     const desc = {
       tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h, seed: d.seed,
@@ -78,12 +93,12 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
 
 // the ?noshadow fallback path must not rot: shadows off + same budgets
 {
-  const page = await browser.newPage({ viewport: { width: 1024, height: 640 } });
+  const page = await newPage({ viewport: { width: 1024, height: 640 } });
   await page.goto(`${BASE}/?dev=combat&cam=fixed&noshadow`, { waitUntil: "load" });
   await page.waitForFunction(() => window.DD && DD.game3d && DD.game3d.active(DD.game.state), null, { timeout: 20000 });
   await page.waitForTimeout(2500);
   const r = await page.evaluate(() => {
-    const info = DD.render3d.render();
+    const info = decorOnlyRender();
     return { calls: info.calls, shadows: DD.render3d.shadows, mapOn: DD.render3d.renderer.shadowMap.enabled };
   });
   check(`noshadow: shadows disabled`, !r.shadows && !r.mapOn);
@@ -94,7 +109,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
 // connected-floor path: generation connectivity, per-room doors + gating,
 // gate meshes, and draw budget for a whole floor of small rooms.
 {
-  const page = await browser.newPage({ viewport: { width: 1024, height: 640 } });
+  const page = await newPage({ viewport: { width: 1024, height: 640 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`${BASE}/?floors&cam=fixed&dungeon=catacombs`, { waitUntil: "load" });
@@ -102,7 +117,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   await page.waitForTimeout(5500); // decor + doorway pieces stream in, one rebuild
 
   const r = await page.evaluate(() => {
-    const info = DD.render3d.render();
+    const info = decorOnlyRender();
     const rooms = DD.room.rooms, edges = DD.room.edges;
     // BFS from the entry room over the corridor graph
     const adj = new Map(rooms.map((rm) => [rm.id, []]));
