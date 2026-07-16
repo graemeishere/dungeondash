@@ -17,6 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Stamp the cache-bust token: every JS reference carries ?v=__BUILD__, so
+      # replacing it with this commit's short SHA makes each deploy fetch fresh
+      # files (index.html holds the classic <script>/dynamic-import refs;
+      # render3d.js holds the one nested module import of decor3d.js).
+      - name: Stamp cache-bust version
+        run: |
+          V="${GITHUB_SHA::8}"
+          sed -i "s/__BUILD__/$V/g" index.html js/render3d.js
       # Publishes the repo as-is to the gh-pages branch; the first push
       # auto-enables GitHub Pages on public repos without needing the
       # Pages API (which the workflow token may not be allowed to call).
