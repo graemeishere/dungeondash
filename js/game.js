@@ -9,6 +9,11 @@
   const params = new URLSearchParams(location.search);
   // freeze + disarm enemies for tweaking (?safe, or implied by ?camtest)
   const safeMode = params.has("camtest") || params.has("safe");
+  // Dungeons descend into connected floors by default; ?classic forces the old
+  // single-room-per-room run (kept as an escape hatch / comparison path).
+  const classicRun = params.has("classic");
+  const beginRun = (classKey, dungeonId, tier) =>
+    (classicRun ? startRun : startFloorRun)(classKey, dungeonId, tier);
 
   function fitCanvas() {
     canvas.width = Math.max(320, window.innerWidth);
@@ -976,7 +981,7 @@
       return;
     }
     const classKey = (game.hero && game.hero.classKey) || game.classKey;
-    startRun(classKey, game.lobbyDungeonId, ti);
+    beginRun(classKey, game.lobbyDungeonId, ti);
   }
 
   function spawnTownNpcs() {
@@ -2252,7 +2257,7 @@
   function playAgain() {
     if (DD.net.role) DD.net.reset();
     if (game.dungeonId === "townRaid") { showTownRoom(true); return; }
-    startRun(game.classKey, game.dungeonId, game.tier);
+    beginRun(game.classKey, game.dungeonId, game.tier);
   }
 
   document.getElementById("btn-again").addEventListener("click", playAgain);
