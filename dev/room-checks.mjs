@@ -30,8 +30,17 @@ const DECOR_ONLY = `window.decorOnlyRender = () => {
   if (DD.charMgr) for (const ch of DD.charMgr.chars.values()) ch.root.visible = false;
   return DD.render3d.render();
 };`;
+// Room layout + decor both draw on Math.random, so an unseeded page renders a
+// different room every run and the draw-call budgets flap. Pin Math.random to a
+// deterministic LCG before any game code runs, so each dungeon renders the same
+// room every time and the budgets are a stable, meaningful measure.
+const SEED_RNG = `(() => {
+  let s = 0x9e3779b1 >>> 0;
+  Math.random = () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return (s & 0x7fffffff) / 0x7fffffff; };
+})();`;
 async function newPage(opts) {
   const page = await browser.newPage(opts);
+  await page.addInitScript(SEED_RNG);
   await page.addInitScript(DECOR_ONLY);
   return page;
 }
@@ -42,7 +51,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`${BASE}/?dev=combat&cam=fixed&dungeon=${dungeon}`, { waitUntil: "load" });
   await page.waitForFunction(() => window.DD && DD.game3d && DD.game3d.active(DD.game.state), null, { timeout: 20000 });
-  await page.waitForTimeout(2500); // decor pieces stream in + one rebuild
+  await page.waitForTimeout(6000); // decor pieces stream in + one rebuild
 
   const r = await page.evaluate(async () => {
     const info = decorOnlyRender();
@@ -96,7 +105,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   const page = await newPage({ viewport: { width: 1024, height: 640 } });
   await page.goto(`${BASE}/?dev=combat&cam=fixed&noshadow`, { waitUntil: "load" });
   await page.waitForFunction(() => window.DD && DD.game3d && DD.game3d.active(DD.game.state), null, { timeout: 20000 });
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(6000);
   const r = await page.evaluate(() => {
     const info = decorOnlyRender();
     return { calls: info.calls, shadows: DD.render3d.shadows, mapOn: DD.render3d.renderer.shadowMap.enabled };
