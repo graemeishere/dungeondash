@@ -245,8 +245,19 @@
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
   }
 
+  // A save is only resumable if it matches the current run mode. An old
+  // single-room save (floorMode falsey) would resume as a big room now that
+  // connected floors are the default — so a mismatched save is stale: discard it
+  // and offer no Continue rather than dropping the player into the wrong layout.
+  function usableSave() {
+    const s = readSave();
+    if (!s || !DD.CLASSES[s.classKey]) return null;
+    if (!!s.floorMode !== !classicRun) { clearSave(); return null; }
+    return s;
+  }
+
   function refreshContinueButton() {
-    const save = readSave();
+    const save = usableSave();
     if (save && DD.CLASSES[save.classKey]) {
       const dungeonName = save.dungeonId && DUNGEONS[save.dungeonId] ? DUNGEONS[save.dungeonId].name : "Dungeon";
       continueBtn.textContent =
@@ -300,6 +311,7 @@
   // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock
   // on clear; the boss chamber gates the descent to the next floor.
   function startFloorRun(classKey, dungeonId = "catacombs", tier = 0) {
+    clearSave();
     const hero = DD.profile.getOrCreateHero(classKey);
     game.hero = hero;
     game.classKey = classKey;
@@ -883,7 +895,7 @@
 
     // Continue button
     const hcBtn = document.getElementById("btn-hub-continue");
-    const sv = readSave();
+    const sv = usableSave();
     if (sv && DD.CLASSES[sv.classKey]) {
       const svDungeonName = sv.dungeonId && DUNGEONS[sv.dungeonId] ? DUNGEONS[sv.dungeonId].name : "Dungeon";
       hcBtn.textContent = `Continue — ${svDungeonName} Fl.${sv.floor + 1}, ${DD.CLASSES[sv.classKey].name} Lv ${sv.level}`;
@@ -2266,7 +2278,7 @@
     if (game.hero) showMap(); else backToMenu();
   });
   continueBtn.addEventListener("click", () => {
-    const save = readSave();
+    const save = usableSave();
     if (save) { DD.audio.unlock(); resumeRun(save); }
   });
   window.addEventListener("keydown", (e) => {
@@ -2367,7 +2379,7 @@
   });
 
   document.getElementById("btn-hub-continue").addEventListener("click", () => {
-    const sv = readSave();
+    const sv = usableSave();
     if (sv) { DD.audio.unlock(); resumeRun(sv); }
   });
 
