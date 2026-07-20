@@ -129,6 +129,7 @@
       this.edges = f.edges;
       this.floorDoors = f.doors || [];
       this.floorWalls = f.walls || [];
+      this.floorStairs = f.stairs || null;
       this.stairsRoomId = f.stairsRoomId;
       this.seed = f.seed;
       this.roomType = "floor";
@@ -292,6 +293,15 @@
              (this.doorCols.includes(tx) && y < DD.TILE * 1.6);
     },
 
+    // Is this world-space point on the floor's descent staircase (its own cell
+    // or the one just in front)? Used to trigger the walk-onto-stairs descent.
+    onStairs(x, y) {
+      const s = this.floorStairs;
+      if (!s) return false;
+      const tx = Math.floor(x / DD.TILE), ty = Math.floor(y / DD.TILE);
+      return tx === s.x && (ty === s.y || ty === s.y + 1);
+    },
+
     // Does an axis-aligned box (in world px) overlap any solid tile or seam wall?
     boxHitsWall(x, y, w, h) {
       const x0 = Math.floor(x / DD.TILE), x1 = Math.floor((x + w - 1) / DD.TILE);
@@ -371,6 +381,7 @@
         stairsRoomId: this.isFloor ? this.stairsRoomId : null,
         floorDoors: this.isFloor ? this.floorDoors : null,
         floorWalls: this.isFloor ? this.floorWalls : null,
+        floorStairs: this.isFloor ? this.floorStairs : null,
         rooms: this.isFloor ? this.rooms.map((r) => ({
           id: r.id, type: r.type, intent: r.intent, rect: r.rect, seed: r.seed,
           doors: r.doors, doorCells: r.doorCells,

@@ -112,6 +112,7 @@
         seed: d.seed, theme: d.theme, roomType: d.roomType,
         isLobby: !!d.isLobby, isTown: !!d.isTown, exit: d.exit, spikes: d.spikes,
         isFloor: !!d.isFloor, rooms: d.rooms, floorDoors: d.floorDoors, floorWalls: d.floorWalls,
+        stairs: d.floorStairs,
       });
       dr._builtVersion = DD.room.version;
       if (DD.fx3d) DD.fx3d.setFlames(dr.flameWorld);

@@ -781,6 +781,11 @@ export function planRoomDecor(desc) {
         cells: (d.cells || []).map((c) => ({ gx: c.x, gy: c.y })),
       });
     }
+    // staircase at the boss chamber's back-centre; the player walks onto it to
+    // descend once the boss falls. desc.stairs is the cell (from generateFloor).
+    if (desc.stairs) {
+      props.push({ piece: "stairs_wide", gx: desc.stairs.x, gy: desc.stairs.y, rot: 0 });
+    }
     for (const r of desc.rooms) {
       if (r.type === "stairs") {
         props.push({ piece: "stairs_wide", gx: r.rect.x + r.rect.w / 2 - 0.5, gy: r.rect.y + r.rect.h / 2 - 0.5, rot: 0 });

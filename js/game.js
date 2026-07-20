@@ -356,6 +356,7 @@
     game.roomCleared = true;      // whole-floor flag unused; rooms gate per-room
     game.activeRoomId = null;     // the currently locked (in-combat) room
     game._stairsTaken = false;
+    game.stairsReady = false;     // set true once the boss chamber is cleared
     game.roomType = "floor";
     DD.particles.clear();
     spawnFloorEntities(floor);
@@ -466,7 +467,15 @@
         arm.cleared = true;
         game.activeRoomId = null;
         DD.audio.door();
-        if (arm.id === DD.room.stairsRoomId) { reachStairs(); return; }
+        if (arm.id === DD.room.stairsRoomId) {
+          // Boss chamber cleared: reveal the stairs instead of auto-descending,
+          // so the player gets a beat to loot/heal. Walking onto them descends
+          // (see the play-state floor branch below).
+          game.stairsReady = true;
+          const st = DD.room.floorStairs;
+          if (st) DD.particles.text((st.x + 0.5) * DD.TILE, (st.y - 0.3) * DD.TILE, "The stairs down are revealed...", "#ffd95e");
+          return;
+        }
         DD.particles.text((arm.rect.x + arm.rect.w / 2) * DD.TILE, (arm.rect.y - 0.2) * DD.TILE, "Cleared!", "#ffd95e");
       }
     }
@@ -1729,8 +1738,16 @@
       }
 
       // floor mode: per-room combat gating (lock on entry, unlock on clear,
-      // descend when the boss chamber falls)
+      // reveal the stairs when the boss chamber falls)
       if (DD.room.isFloor) updateFloorGating();
+
+      // walk onto the revealed stairs -> descend (or win on the last floor).
+      // reachStairs() branches to advanceFloor()/endRun(true) itself.
+      if (DD.room.isFloor && game.stairsReady && !game._stairsTaken &&
+          game.players.some((p) => p.alive() && DD.room.onStairs(p.x, p.y))) {
+        reachStairs();
+        return;
+      }
 
       // room-clear conditions (single-room mode; floors gate per-room)
       if (!DD.room.isFloor && !game.roomCleared) {
