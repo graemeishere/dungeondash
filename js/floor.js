@@ -15,9 +15,13 @@
   const FLOOR = 0, WALL = 1;
 
   // Macro cell holds one small room plus the corridor gap around it. Rooms are
-  // uniform + centred so neighbours line up and corridors run dead straight.
+  // centred in their cell so neighbours line up and corridors run dead straight
+  // — the boss chamber is bigger but stays centred, so its middle row/col still
+  // aligns with its neighbour's and the corridor connects unchanged.
   const MACRO_W = 10, MACRO_H = 9;
   const ROOM_W = 5, ROOM_H = 4;
+  const BOSS_W = 8, BOSS_H = 7; // climactic chamber (fits 10x9 with a 1-cell margin)
+  const roomDims = (rm) => rm.type === "boss" ? { w: BOSS_W, h: BOSS_H } : { w: ROOM_W, h: ROOM_H };
 
   // type -> composition intent for the decor planner
   const INTENT = {
@@ -105,10 +109,12 @@
     const usedCols = maxC - minC + 1, usedRows = maxR - minR + 1;
     const W = usedCols * MACRO_W, H = usedRows * MACRO_H;
     const tiles = new Array(W * H).fill(WALL);
-    const ox = Math.floor((MACRO_W - ROOM_W) / 2), oy = Math.floor((MACRO_H - ROOM_H) / 2);
     for (const rm of rooms) {
       const gx = (rm.mc - minC) * MACRO_W, gy = (rm.mr - minR) * MACRO_H;
-      rm.rect = { x: gx + ox, y: gy + oy, w: ROOM_W, h: ROOM_H };
+      const { w, h } = roomDims(rm);
+      // centre each room in its macro cell (keeps corridor centrelines aligned)
+      const ox = Math.floor((MACRO_W - w) / 2), oy = Math.floor((MACRO_H - h) / 2);
+      rm.rect = { x: gx + ox, y: gy + oy, w, h };
       carveRect(tiles, W, rm.rect.x, rm.rect.y, rm.rect.w, rm.rect.h, FLOOR);
     }
 
@@ -137,10 +143,16 @@
       y: (entryRoom.rect.y + entryRoom.rect.h - 1.5) * DD.TILE,
     };
     const stairsRoom = rooms.find((r) => r.type === "stairs" || r.type === "boss") || rooms[rooms.length - 1];
+    // stairs sit at the back-centre of the boss chamber — the player walks onto
+    // them to descend once the boss falls (game.js gates on this).
+    const stairs = {
+      x: stairsRoom.rect.x + Math.floor(stairsRoom.rect.w / 2),
+      y: stairsRoom.rect.y,
+    };
 
     return {
       tiles, w: W, h: H, rooms, edges, doors, walls,
-      entry, stairsRoomId: stairsRoom.id,
+      entry, stairsRoomId: stairsRoom.id, stairs,
       seed: (Math.random() * 0x7fffffff) | 0,
     };
   };

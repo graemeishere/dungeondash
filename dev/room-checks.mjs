@@ -125,7 +125,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   await page.waitForFunction(() => window.DD && DD.room.isFloor && DD.game.state === "play", null, { timeout: 20000 });
   await page.waitForTimeout(5500); // decor + doorway pieces stream in, one rebuild
 
-  const r = await page.evaluate(() => {
+  const r = await page.evaluate(async () => {
     const info = decorOnlyRender();
     const rooms = DD.room.rooms, edges = DD.room.edges;
     // BFS from the entry room over the corridor graph
@@ -134,6 +134,21 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
     const seen = new Set([rooms[0].id]);
     const q = [rooms[0].id];
     while (q.length) { for (const n of adj.get(q.shift())) if (!seen.has(n)) { seen.add(n); q.push(n); } }
+    // boss chamber should be bigger than a combat room; a staircase prop should
+    // sit inside it (the walk-onto descent point)
+    const bossRm = DD.room.roomById(DD.room.stairsRoomId);
+    const combatRm = rooms.find((rm) => rm.type === "combat");
+    const bossArea = bossRm ? bossRm.rect.w * bossRm.rect.h : 0;
+    const combatArea = combatRm ? combatRm.rect.w * combatRm.rect.h : 0;
+    const st = DD.room.floorStairs;
+    const stInBoss = st && bossRm && st.x >= bossRm.rect.x && st.x < bossRm.rect.x + bossRm.rect.w &&
+      st.y >= bossRm.rect.y && st.y < bossRm.rect.y + bossRm.rect.h;
+    const d = DD.room.getData();
+    const m = await import("./js/decor3d.js");
+    const plan = m.planRoomDecor({ tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h, seed: d.seed,
+      theme: d.theme, roomType: d.roomType, isFloor: true, rooms: d.rooms, floorDoors: d.floorDoors,
+      floorWalls: d.floorWalls, stairs: d.floorStairs });
+    const hasStairsProp = plan.props.some((pr) => pr.piece === "stairs_wide" && st && pr.gx === st.x && pr.gy === st.y);
     return {
       calls: info.calls, triangles: info.triangles,
       roomCount: rooms.length,
@@ -145,6 +160,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
       doors: DD.room.floorDoors.length,
       gates: DD.render3d.floorGates ? DD.render3d.floorGates.length : 0,
       doorsStartOpen: !DD.room.floorDoors.some((d) => DD.room.doorClosed(d)),
+      bossArea, combatArea, stInBoss, hasStairsProp,
     };
   });
   check(`floor: room graph reaches every room`, r.reachesAll, `${r.roomCount} rooms`);
@@ -153,6 +169,8 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   check(`floor: doors start open (traversable)`, r.doorsStartOpen);
   check(`floor: enemies spawn frozen + room-tagged`, r.enemiesFrozen && r.enemiesTagged);
   check(`floor: boss chamber present`, r.boss);
+  check(`floor: boss chamber bigger than a combat room`, r.bossArea > r.combatArea, `boss=${r.bossArea} combat=${r.combatArea}`);
+  check(`floor: staircase sits in the boss chamber`, r.stInBoss && r.hasStairsProp);
   // a whole floor is many rooms + cloned gate frames, so it runs more draw
   // calls than a single room; per-room visibility culling lands in Phase 5.
   const FLOOR_CALL_BUDGET = 240;
