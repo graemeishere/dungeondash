@@ -72,6 +72,14 @@ export const RIG = {
     inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
     attacks: ["Ranged_Magic_Shoot"],
   },
+  // boss (Skeleton King): the heavy warrior model wielding the axe two-handed.
+  // game3d maps any DD.Boss to this rig; its slam plays Melee_2H_Attack_Chop.
+  "enemy:boss": {
+    model: SKEL + "Skeleton_Warrior.glb", scale: 1.0, weapon: SKGEAR + "Skeleton_Axe.gltf", hand: "r",
+    idle: "Melee_2H_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
+    inactive: "Skeletons_Inactive_Floor_Pose", awaken: "Skeletons_Awaken_Floor",
+    attacks: ["Melee_2H_Attack_Chop", "Melee_2H_Attack_Slice"],
+  },
   "fallback": {
     model: MANNEQUIN, scale: 1.0, weapon: null, hand: "r",
     idle: "Idle_A", run: "Running_A", spawn: "Spawn_Ground", death: "Death_A", attackSpeed: 1,
@@ -275,7 +283,7 @@ export class CharacterManager {
         this.scene.add(ch.root);
         this.chars.set(it.entity, ch);
       }
-      ch.root.scale.setScalar(ch._baseScale * this.scaleMul);
+      ch.root.scale.setScalar(ch._baseScale * this.scaleMul * (it.scale || 1));
       ch.root.position.set(it.x, 0, it.z);
       ch.root.rotation.y = it.rotationY;
       if (it.opacity != null && it.opacity < 1) ch.setOpacity(it.opacity);

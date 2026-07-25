@@ -87,8 +87,18 @@
     if (p.downed || p.dying) return { clip: rig.death, once: true, timeScale: 1 };
     return rigClip(p, rig, { moving: p.moving });
   }
+  // The boss uses a dedicated rig (Skeleton_Warrior + axe + 2H clips); everything
+  // else maps by kind.
+  function enemyMk(s) { return (s instanceof DD.Boss) ? "enemy:boss" : DD.char3d.enemyModelKey(s.kind); }
   function enemyClip(s) {
-    const rig = DD.char3d.RIG[DD.char3d.enemyModelKey(s.kind)];
+    const rig = DD.char3d.RIG[enemyMk(s)];
+    // boss slam: a two-handed overhead chop timed so it lands at impact (slamT->0)
+    if (s instanceof DD.Boss && s.slamT > 0) {
+      const dur = (DD.charMgr && DD.charMgr.factory.clips.get("Melee_2H_Attack_Chop")?.duration) || 1.63;
+      const fresh = s.slamAnimAt != null && s.slamAnimAt !== s.__slamClipAt;
+      if (fresh) s.__slamClipAt = s.slamAnimAt;
+      return { clip: "Melee_2H_Attack_Chop", once: true, timeScale: dur / 0.85, restart: fresh };
+    }
     if (s.dying)                return { clip: rig.death, once: true, timeScale: 1 };
     if (s.state === "inactive") return { clip: rig.inactive || rig.idle, once: false, timeScale: 1 };
     if (s.state === "awaken")   return { clip: rig.awaken || rig.spawn, once: true, timeScale: 1 };
@@ -156,7 +166,7 @@
     const worldOf = (e) => dr.cellToWorld(e.x / DD.TILE, e.y / DD.TILE);
     const asChar = (e, modelKey, rotationY, anim, opacity) => {
       const w = worldOf(e);
-      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity });
+      chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity, scale: e.modelScale || 1 });
     };
 
     // Players + skeletons render as 3D characters once the models have loaded;
@@ -190,14 +200,25 @@
     // Combat-room content; the walkable hubs show only players + NPCs (stale
     // arrays from a finished run must not leak into town/lobby).
     if (!peaceful) {
+    let liveBoss = null;
     for (const s of game.skeletons) {
       if (!s || s.dead) continue;
-      const mk = C && C.enemyModelKey(s.kind);
+      const mk = C && enemyMk(s);
+      if (s instanceof DD.Boss) liveBoss = s;
+      // boss slam windup -> red ground danger telegraph (radius = the AoE reach)
+      if (DD.fx3d && s instanceof DD.Boss && s.slamAnimAt != null && s.slamAnimAt !== s.__slamFxAt) {
+        s.__slamFxAt = s.slamAnimAt;
+        const w = worldOf(s);
+        const radius = (105 / DD.TILE) * dr.CELL;
+        DD.fx3d.telegraph(w.x, 0, w.z, radius, 0.85, "#ff3b3b");
+      }
       // fade dying corpses; shades are translucent ghosts (distinct from minions)
       const opacity = s.dying ? Math.min(1, s.deathT / 0.7) : (s.kind === "shade" ? 0.5 : 1);
       if (mgr && mk && mgr.factory.spawnable(mk)) asChar(s, mk, faceFromMove(s), enemyClip(s), opacity);
       else billboards.push(captureEntity(s));
     }
+    // golden aura follows the living boss (cleared when it dies / no boss)
+    if (DD.fx3d) DD.fx3d.setBossGlow(liveBoss && !liveBoss.dying ? { ...worldOf(liveBoss), y: 1.8 } : null);
     // 3D items (coins/potions/chests); everything else stays a billboard.
     const asItem = (e, key) => items.push({ entity: e, key, gx: e.x / DD.TILE, gy: e.y / DD.TILE });
     const ITEM_FOR = { coin: "coin", heart: "heart" };
@@ -234,6 +255,8 @@
     }
     } // !peaceful
     } // !menuish
+    // no combat context -> ensure the boss aura is cleared
+    if (DD.fx3d && (menuish || peaceful)) DD.fx3d.setBossGlow(null);
 
     if (mgr) mgr.sync(chars, dt);
     if (DD.fx3d) { DD.fx3d.update(dt); DD.fx3d.setOrbs(orbs); }

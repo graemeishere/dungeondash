@@ -1020,9 +1020,11 @@
       this.summonKind = opts.summonKind || "melee";
       this.r = 18;
       this.drawSize = 96;
+      this.modelScale = 1.7; // towers over normal skeletons in 3D
       this.slamCd = 4.5;
       this.summonCd = 7;
       this.slamT = 0;     // active slam windup
+      this.slamAnimAt = null; // rising-edge marker for the 3D slam telegraph/anim
       this.stateT = 1.4;  // longer rise
     }
 
@@ -1065,6 +1067,7 @@
       if (this.state !== "spawn" && pl) {
         if (this.slamCd <= 0 && DD.dist(this.x, this.y, pl.x, pl.y) < 150) {
           this.slamT = 0.85;
+          this.slamAnimAt = game.time; // rising edge -> 3D telegraph + jump-chop
           this.slamCd = enraged ? 3.2 : 5.0;
           return;
         }

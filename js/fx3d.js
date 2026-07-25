@@ -68,6 +68,18 @@ export class FX3D {
     this.arcs = [];      // active { mesh, t, life, angle, arc, r }
     this.arcPool = [];   // reusable meshes
 
+    // Attack telegraphs (boss slam): a flat danger ring at the AoE radius + a
+    // fill disc that closes to full over the windup, so the player reads where
+    // + when. Two pooled meshes per telegraph.
+    this.telegraphRingGeo = new THREE.RingGeometry(0.86, 1.0, 44);
+    this.telegraphDiscGeo = new THREE.CircleGeometry(1, 40);
+    this.telegraphs = [];      // active { ring, disc, t, life, r }
+    this.telegraphPool = [];   // reusable { ring, disc }
+
+    // Boss aura: a single persistent additive glow sprite that follows the boss.
+    this.bossGlow = null;
+    this._bossGlowT = 0;
+
     // Torch flames: persistent emitters (world positions) that drip glow
     // particles into the shared Points pool — ambience with zero extra draw
     // calls. Set per room via setFlames().
@@ -113,6 +125,46 @@ export class FX3D {
     m.material.opacity = 1;
     m.visible = true;
     this.rings.push({ mesh: m, t: 0, life: 0.4 });
+  }
+
+  // Danger telegraph on the floor: an outline ring at `radius` (world units) plus
+  // a fill disc that grows 0 -> radius over `dur`, warning of an incoming AoE.
+  telegraph(wx, wy, wz, radius, dur, color) {
+    let t = this.telegraphPool.pop();
+    if (!t) {
+      const mk = (geo) => {
+        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+        }));
+        m.rotation.x = -Math.PI / 2; // lie flat on the floor
+        this.scene.add(m);
+        return m;
+      };
+      t = { ring: mk(this.telegraphRingGeo), disc: mk(this.telegraphDiscGeo) };
+    }
+    const col = color || "#ff3b3b";
+    t.ring.material.color.set(col); t.disc.material.color.set(col);
+    for (const m of [t.ring, t.disc]) {
+      m.position.set(wx, (wy || 0) + 0.12, wz);
+      m.visible = true;
+    }
+    t.ring.scale.setScalar(radius);
+    this.telegraphs.push({ ...t, t: 0, life: dur || 0.85, r: radius });
+  }
+
+  // Persistent additive glow sprite following the boss; pass null to clear it.
+  setBossGlow(pos, color) {
+    if (!pos) {
+      if (this.bossGlow) { this.bossGlow.visible = false; }
+      return;
+    }
+    if (!this.bossGlow) {
+      this.bossGlow = new THREE.Sprite(this.orbMat.clone());
+      this.scene.add(this.bossGlow);
+    }
+    this.bossGlow.material.color.set(color || "#ffc23a");
+    this.bossGlow.position.set(pos.x, pos.y == null ? 1.4 : pos.y, pos.z);
+    this.bossGlow.visible = true;
   }
 
   // Melee weapon trail: a flat additive arc segment at world (wx,wy,wz) that
@@ -215,6 +267,40 @@ export class FX3D {
       this.burst(a.mesh.position.x + Math.cos(lead) * a.r * 0.85, a.mesh.position.y,
                  a.mesh.position.z + Math.sin(lead) * a.r * 0.85,
                  { count: 1, colors: ["#fff8e0", "#ffe9a8"], speed: 8, life: 0.22 });
+    }
+
+    // attack telegraphs: fill disc closes to the danger radius over the windup,
+    // the outline ring pulses, and both brighten toward impact.
+    for (let i = this.telegraphs.length - 1; i >= 0; i--) {
+      const g = this.telegraphs[i];
+      g.t += dt;
+      const k = g.t / g.life;
+      if (k >= 1) {
+        g.ring.visible = false; g.disc.visible = false;
+        this.telegraphPool.push({ ring: g.ring, disc: g.disc });
+        this.telegraphs.splice(i, 1);
+        continue;
+      }
+      const pulse = 0.7 + 0.3 * Math.sin(g.t * 22);
+      g.ring.material.opacity = (0.7 + 0.3 * k) * pulse;    // bright danger boundary
+      g.disc.scale.setScalar(g.r);                          // full danger zone, shown from the start
+      g.disc.material.opacity = (0.14 + 0.55 * k * k) * pulse; // subtle warning -> intense at impact
+    }
+
+    // boss aura: gentle pulse + slow gold embers rising off the king
+    if (this.bossGlow && this.bossGlow.visible) {
+      this._bossGlowT += dt;
+      const s = 3.6 + 0.5 * Math.sin(this._bossGlowT * 3);
+      this.bossGlow.scale.setScalar(s);
+      this.bossGlow.material.opacity = 0.8 + 0.2 * Math.sin(this._bossGlowT * 3);
+      // steady rise of gold embers off the king
+      this._auraAcc = (this._auraAcc || 0) + dt;
+      if (this._auraAcc >= 0.05) {
+        this._auraAcc = 0;
+        const p = this.bossGlow.position;
+        this.burst(p.x + (Math.random() - 0.5) * 1.6, 0.3, p.z + (Math.random() - 0.5) * 1.6,
+          { count: 1, colors: ["#ffd14a", "#ffb347", "#fff0b0"], speed: 3, life: 0.7, gravity: -45 });
+      }
     }
   }
 }
