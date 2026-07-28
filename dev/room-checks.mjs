@@ -149,18 +149,35 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
       theme: d.theme, roomType: d.roomType, isFloor: true, rooms: d.rooms, floorDoors: d.floorDoors,
       floorWalls: d.floorWalls, stairs: d.floorStairs });
     const hasStairsProp = plan.props.some((pr) => pr.piece === "stairs_wide" && st && pr.gx === st.x && pr.gy === st.y);
+    const pre = {
+      rooms: rooms.length, doors: DD.room.floorDoors.length, walls: DD.room.floorWalls.length,
+      edges: DD.room.edges.length, stairsRoomId: DD.room.stairsRoomId, stairs: JSON.stringify(st),
+      enemiesFrozen: DD.game.skeletons.length > 0 && DD.game.skeletons.every((s) => s.frozen),
+      enemiesTagged: DD.game.skeletons.every((s) => s.roomId != null),
+      boss: DD.game.skeletons.some((s) => s instanceof DD.Boss),
+      doorsStartOpen: !DD.room.floorDoors.some((dr) => DD.room.doorClosed(dr)),
+      gates: DD.render3d.floorGates ? DD.render3d.floorGates.length : 0,
+    };
+    // co-op: the guest reconstructs the floor from getData() via setData() — must
+    // round-trip the whole layout + rebuild collision (done last; mutates DD.room).
+    const data = DD.room.getData();
+    DD.room.isFloor = false; DD.room.rooms = null;
+    DD.room.setData(data);
+    const coopRoundTrip = !!DD.room.isFloor && DD.room.rooms.length === pre.rooms &&
+      DD.room.floorDoors.length === pre.doors && DD.room.floorWalls.length === pre.walls &&
+      DD.room.edges.length === pre.edges && DD.room.stairsRoomId === pre.stairsRoomId &&
+      JSON.stringify(DD.room.floorStairs) === pre.stairs &&
+      (DD.room._doorBars || []).length > 0 && (DD.room._edgeWalls || []).length > 0 &&
+      typeof DD.room.doorClosed(DD.room.floorDoors[0]) === "boolean" &&
+      DD.room.onStairs((DD.room.floorStairs.x + 0.5) * DD.TILE, (DD.room.floorStairs.y + 0.5) * DD.TILE) === true;
     return {
       calls: info.calls, triangles: info.triangles,
       roomCount: rooms.length,
       reachesAll: seen.size === rooms.length,
-      reachesStairs: seen.has(DD.room.stairsRoomId),
-      enemiesFrozen: DD.game.skeletons.length > 0 && DD.game.skeletons.every((s) => s.frozen),
-      enemiesTagged: DD.game.skeletons.every((s) => s.roomId != null),
-      boss: DD.game.skeletons.some((s) => s instanceof DD.Boss),
-      doors: DD.room.floorDoors.length,
-      gates: DD.render3d.floorGates ? DD.render3d.floorGates.length : 0,
-      doorsStartOpen: !DD.room.floorDoors.some((d) => DD.room.doorClosed(d)),
-      bossArea, combatArea, stInBoss, hasStairsProp,
+      reachesStairs: seen.has(pre.stairsRoomId),
+      enemiesFrozen: pre.enemiesFrozen, enemiesTagged: pre.enemiesTagged, boss: pre.boss,
+      doors: pre.doors, gates: pre.gates, doorsStartOpen: pre.doorsStartOpen,
+      bossArea, combatArea, stInBoss, hasStairsProp, coopRoundTrip,
     };
   });
   check(`floor: room graph reaches every room`, r.reachesAll, `${r.roomCount} rooms`);
@@ -171,6 +188,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   check(`floor: boss chamber present`, r.boss);
   check(`floor: boss chamber bigger than a combat room`, r.bossArea > r.combatArea, `boss=${r.bossArea} combat=${r.combatArea}`);
   check(`floor: staircase sits in the boss chamber`, r.stInBoss && r.hasStairsProp);
+  check(`floor: co-op guest reconstructs the floor (getData -> setData)`, r.coopRoundTrip);
   // a whole floor is many rooms + cloned gate frames, so it runs more draw
   // calls than a single room; per-room visibility culling lands in Phase 5.
   const FLOOR_CALL_BUDGET = 240;

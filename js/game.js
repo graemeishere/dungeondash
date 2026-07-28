@@ -361,6 +361,7 @@
     DD.particles.clear();
     spawnFloorEntities(floor);
     for (const p of game.players) { p.x = floor.entry.x; p.y = floor.entry.y; }
+    sendRoomToGuest(); // co-op: hand the whole floor to the guest (also on descent)
   }
 
   // Combat rooms lock on entry; these types gate. Others (treasure/side rooms)
@@ -2165,7 +2166,8 @@
     game.kills = 0;
     game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
     game.time = 0;
-    loadRoom(0);
+    game.floorMode = !classicRun; // co-op runs connected floors by default too
+    if (game.floorMode) loadFloor(); else loadRoom(0);
     lobbyEl.classList.add("hidden");
     setMenuMode(null, "");
     freshGameState();
