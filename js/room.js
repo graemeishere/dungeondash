@@ -379,6 +379,7 @@
         // floorDoors (shared-wall openings) drive the gate meshes + gating.
         isFloor: this.isFloor ? 1 : 0,
         stairsRoomId: this.isFloor ? this.stairsRoomId : null,
+        edges: this.isFloor ? this.edges : null,
         floorDoors: this.isFloor ? this.floorDoors : null,
         floorWalls: this.isFloor ? this.floorWalls : null,
         floorStairs: this.isFloor ? this.floorStairs : null,
@@ -402,6 +403,25 @@
       this.isLobby = !!d.isLobby;
       this.isTown = !!d.isTown;
       this.exit = d.exit || "door";
+      // co-op guest: reconstruct a connected floor from the host's serialized
+      // getData() (mirrors setFloor, but the layout arrives over the wire rather
+      // than from generateFloor). Per-room lock/clear/seen then track the host
+      // via the snapshot; the 3D layer + minimap read straight off these.
+      if (d.isFloor) {
+        this.isFloor = true;
+        this.rooms = (d.rooms || []).map((r) => ({
+          ...r, locked: !!r.locked, cleared: !!r.cleared, seen: !!r.seen,
+        }));
+        this.edges = d.edges || [];
+        this.floorDoors = d.floorDoors || [];
+        this.floorWalls = d.floorWalls || [];
+        this.floorStairs = d.floorStairs || null;
+        this.stairsRoomId = d.stairsRoomId;
+        this._buildDoorBarriers();
+        this._buildEdgeWalls();
+      } else {
+        this.isFloor = false;
+      }
       this.prerender();
     },
 

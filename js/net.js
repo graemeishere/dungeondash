@@ -177,6 +177,10 @@
         floor: game.floor, ri: game.roomIndex, rt: game.roomType, rc: game.roomCleared,
         door: DD.room.doorOpen,
         sq: game.spawnQueue.length,
+        // connected-floor gating: per-room locked|cleared|seen bits + stairs ready
+        rr: (DD.room.isFloor && DD.room.rooms)
+          ? DD.room.rooms.map((r) => (r.locked ? 1 : 0) | (r.cleared ? 2 : 0) | (r.seen ? 4 : 0)) : null,
+        sr: game.stairsReady ? 1 : 0,
         pl: game.players.map((p) => ({
           c: p.classKey, x: r1(p.x), y: r1(p.y), hp: p.hp, mhp: p.maxHp,
           aim: r2(p.aim), fl: p.flip ? 1 : 0, mv: p.moving ? 1 : 0, an: r2(p.animT % 100),
@@ -211,6 +215,15 @@
       game.floor = s.floor; game.roomIndex = s.ri; game.roomType = s.rt; game.roomCleared = s.rc;
       DD.room.doorOpen = s.door;
       game.spawnQueue = new Array(s.sq).fill({});
+      // connected-floor gating from the host: drives the guest's door locks,
+      // minimap reveal, and stairs. Rooms are in the same order as the floor msg.
+      if (s.rr && DD.room.isFloor && DD.room.rooms) {
+        for (let i = 0; i < s.rr.length && i < DD.room.rooms.length; i++) {
+          const b = s.rr[i], rm = DD.room.rooms[i];
+          rm.locked = !!(b & 1); rm.cleared = !!(b & 2); rm.seen = !!(b & 4);
+        }
+      }
+      game.stairsReady = !!s.sr;
 
       game.players = s.pl.map((d) => {
         const o = Object.create(DD.Player.prototype);
@@ -233,6 +246,7 @@
         o.drawSize = d.ds; o.r = d.r; o.flash = d.fs; o.dead = false;
         o.bossName = d.bn || null; o.slamT = d.sl || 0;
         o.faction = d.fc || "skeleton"; o.grade = d.gr || "regular"; o.enraged = !!d.eg;
+        if (d.boss) o.modelScale = 1.7; // keep the King's larger 3D size on the guest
         return o;
       });
 
