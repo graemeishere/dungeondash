@@ -1824,6 +1824,10 @@
     { id: "finale",      name: "The Last Stand", fx: 0.74, fy: 0.74, kind: "finale", championOnly: true },
   ];
 
+  // Touch-friendly "back to hub" button on the world map (mobile has no Esc).
+  // Coordinates are in DD.WIDTH/HEIGHT space, matching drawMap + handleMapTap.
+  const MAP_HUB_BTN = { x: 12, y: 10, w: 104, h: 30 };
+
   // Draw a small pixel-art icon for each location (48×48 in world pixels).
   function drawMapIcon(ctx, loc, cx, cy, hovered) {
     const R = 28;
@@ -1939,6 +1943,21 @@
     }
 
     const mx = DD.input.mouse.x, my = DD.input.mouse.y;
+
+    // "back to hub" button (top-left) — the reliable path to Host/Join Co-op
+    const hb = MAP_HUB_BTN;
+    const hbHover = mx >= hb.x && mx <= hb.x + hb.w && my >= hb.y && my <= hb.y + hb.h;
+    ctx.fillStyle = hbHover ? "rgba(120,100,170,0.55)" : "rgba(30,24,46,0.85)";
+    ctx.strokeStyle = "rgba(180,160,220,0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(hb.x, hb.y, hb.w, hb.h, 6) : ctx.rect(hb.x, hb.y, hb.w, hb.h);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.font = `bold 13px ${font}`;
+    ctx.fillStyle = hbHover ? "#fff" : "#d8cfee";
+    ctx.fillText("‹ Hub", hb.x + hb.w / 2, hb.y + hb.h / 2 + 4);
 
     // draw locations
     for (const loc of MAP_LOCS) {
@@ -2336,6 +2355,14 @@
     const wx = (cx - DD.view.ox) / DD.view.scale;
     const wy = (cy - DD.view.oy) / DD.view.scale;
 
+    // "‹ Hub" button — always available so the map is never a dead end
+    const hb = MAP_HUB_BTN;
+    if (wx >= hb.x && wx <= hb.x + hb.w && wy >= hb.y && wy <= hb.y + hb.h) {
+      DD.audio.unlock();
+      if (game.hero) showHub(game.hero); else backToMenu();
+      return true;
+    }
+
     for (const loc of MAP_LOCS) {
       if (loc.championOnly && !(game.hero && game.hero.victory)) continue;
       const lx = loc.fx * DD.WIDTH, ly = loc.fy * DD.HEIGHT;
@@ -2449,7 +2476,10 @@
   if (_bootHero) {
     game.hero = _bootHero;
     game.classKey = _bootHero.classKey;
-    showMap();
+    // Land on the hub, not the world map: the hub is the home base with
+    // Host/Join Co-op, gear and Choose Dungeon. Booting to the map hid co-op
+    // behind the Esc key (desktop only), leaving mobile players with no way in.
+    showHub(_bootHero);
   } else {
     refreshContinueButton();
   }
