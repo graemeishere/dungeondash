@@ -2106,7 +2106,7 @@
       roomCodeEl.textContent = code;
       showLobby("Tell your friend this room code. Waiting for them to join...", { out: true });
     } catch (e) {
-      showLobby("Could not create a room: " + (e.message || e.type || e));
+      showLobby("Could not create a room: " + (e.message || e.type || e) + " — the free matchmaking server may be busy. Tap Host again.");
     }
   }
 
@@ -2142,7 +2142,10 @@
       DD.net.reset();
       const reason = e && e.type === "peer-unavailable" ? "No game found with that code." :
         (e && (e.message || e.type)) || "Connection failed.";
-      showLobby(reason + " Check the code and try again.", { input: true });
+      const hint = e && e.type === "peer-unavailable"
+        ? " Double-check the code, make sure the host is still on the lobby screen, and try again — the free matchmaking server is sometimes slow to sync."
+        : " Check the code and try again.";
+      showLobby(reason + hint, { input: true });
     }
   }
   document.getElementById("btn-accept").addEventListener("click", tryJoin);

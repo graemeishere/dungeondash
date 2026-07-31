@@ -14,6 +14,8 @@
   const CODE_LEN = 4;
   const ID_PREFIX = "dungeondash-";
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   function randomCode() {
     let c = "";
     for (let i = 0; i < CODE_LEN; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
@@ -43,7 +45,7 @@
 
   function wire(c) {
     conn = c;
-    c.on("open", () => {
+    const onOpen = () => {
       DD.net.connected = true;
       closeFired = false;
       // an abruptly closed tab never sends a clean close — watch the ICE state
@@ -56,11 +58,44 @@
         };
       }
       if (handlers.open) handlers.open();
-    });
+    };
+    // the guest wires a connection only after it has already opened (see join),
+    // so honour an already-open channel instead of waiting for an event that
+    // has already fired.
+    if (c.open) onOpen(); else c.on("open", onOpen);
     c.on("close", fireClose);
     c.on("error", fireClose);
     c.on("data", (data) => {
       try { if (handlers.message) handlers.message(data); } catch (err) { /* ignore malformed */ }
+    });
+  }
+
+  // One attempt to open a data channel to a host. Resolves with the OPEN
+  // connection (caller wires it) or rejects. On failure the half-open channel
+  // is closed and all temporary listeners are removed, so a retry starts clean
+  // and never trips the game's disconnect handling.
+  function attemptConnect(p, fullId, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const c = p.connect(fullId, { reliable: true, serialization: "json" });
+      const onOpen = () => settle(true);
+      const onErr = (e) => settle(false, e);
+      const timer = setTimeout(() => settle(false, new Error("Timed out reaching the host")), timeoutMs);
+      function settle(ok, err) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        c.off("open", onOpen);
+        c.off("error", onErr);
+        p.off("error", onErr);
+        if (ok) { resolve(c); return; }
+        try { c.close(); } catch (e2) { /* already gone */ }
+        reject(err);
+      }
+      c.on("open", onOpen);
+      c.on("error", onErr);
+      // 'peer-unavailable' is delivered on the peer, not the connection
+      p.on("error", onErr);
     });
   }
 
@@ -105,6 +140,13 @@
             if (conn && conn.open) { c.close(); return; } // room is full
             wire(c);
           });
+          // The public broker drops idle registrations; without this the room
+          // code silently goes dead and the guest gets "no game found". Re-
+          // register whenever we lose the broker (a no-op once a guest is on
+          // the direct P2P channel).
+          peer.on("disconnected", () => {
+            if (this.role === "host") { try { peer.reconnect(); } catch (e) { /* destroyed */ } }
+          });
           return code;
         } catch (e) {
           if (e && e.type === "unavailable-id") continue; // code collision, reroll
@@ -117,23 +159,36 @@
     },
 
     // Connects to a host's room code. Resolves once the data channel is open.
+    // A "peer-unavailable" can be transient on the public broker — the host may
+    // still be (re)registering, or two broker replicas briefly disagree — so we
+    // make ONE quick retry before giving up. (We don't retry harder: a genuinely
+    // wrong code is also peer-unavailable, and each attempt costs a few seconds,
+    // so more retries would just make a typo take painfully long to report.)
     async join(code) {
       this.role = "guest";
-      peer = await newPeer();
-      return new Promise((resolve, reject) => {
-        const c = peer.connect(ID_PREFIX + code.trim().toUpperCase(), {
-          reliable: true,
-          serialization: "json",
-        });
-        const timer = setTimeout(() => {
-          this.role = null;
-          reject(new Error("No game found with that code"));
-        }, 12000);
-        c.on("open", () => { clearTimeout(timer); resolve(); });
-        c.on("error", (e) => { clearTimeout(timer); this.role = null; reject(e); });
-        peer.on("error", (e) => { clearTimeout(timer); this.role = null; reject(e); });
-        wire(c);
-      });
+      const fullId = ID_PREFIX + code.trim().toUpperCase();
+      try {
+        peer = await newPeer();
+      } catch (e) {
+        this.role = null;
+        throw e;
+      }
+      const ATTEMPTS = 2;
+      let lastErr = null;
+      for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        try {
+          const c = await attemptConnect(peer, fullId, 9000);
+          wire(c); // c is already open — wire fires the open handler immediately
+          return;
+        } catch (e) {
+          lastErr = e;
+          const retriable = !e || !e.type || e.type === "peer-unavailable";
+          if (!retriable || attempt === ATTEMPTS - 1) break;
+          await sleep(1200);
+        }
+      }
+      this.role = null;
+      throw lastErr || new Error("No game found with that code");
     },
 
     reset() {
