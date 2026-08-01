@@ -35,7 +35,6 @@ window.DD = window.DD || {};
     elite:    [[18, 14], [22, 13], [16, 16], [24, 15]],
     trap:     [[12, 20], [26, 11], [11, 24], [30, 9]],   // gauntlet corridors
     treasure: [[12, 9], [14, 10], [10, 12]],             // intimate vaults
-    shop:     [[14, 10], [16, 9]],
     boss:     [[26, 16], [24, 18], [30, 14]],            // arenas
   };
   DD.roomSizeFor = (roomType) => {

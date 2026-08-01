@@ -271,10 +271,6 @@
         es: game.enemyShots.map((e) => ({ x: r1(e.x), y: r1(e.y), t: r2(e.t), style: e.style || "bone" })),
         pk: game.pickups.map((p) => ({ kind: p.kind, x: r1(p.x), y: r1(p.y), t: r2(p.t % 100) })),
         ch: game.chests.map((c) => ({ x: r1(c.x), y: r1(c.y), o: c.opened ? 1 : 0 })),
-        si: game.shopItems.map((i) => ({
-          kind: i.kind, x: r1(i.x), y: r1(i.y), price: i.price, label: i.label, sold: i.sold ? 1 : 0,
-        })),
-        sk: game.shopkeeper ? { x: r1(game.shopkeeper.x), y: r1(game.shopkeeper.y) } : 0,
       };
     },
 
@@ -337,10 +333,6 @@
       game.enemyShots = s.es.map((d) => Object.assign(Object.create(DD.EnemyShot.prototype), d, { dead: false }));
       game.pickups = s.pk.map((d) => Object.assign(Object.create(DD.Pickup.prototype), d, { dead: false }));
       game.chests = s.ch.map((d) => Object.assign(Object.create(DD.Chest.prototype), { x: d.x, y: d.y, opened: !!d.o, r: 12 }));
-      game.shopItems = s.si.map((d) => Object.assign(Object.create(DD.ShopItem.prototype), {
-        kind: d.kind, x: d.x, y: d.y, r: 14, price: d.price, label: d.label, sold: !!d.sold, upgrade: null,
-      }));
-      game.shopkeeper = s.sk ? DD.makeShopkeeper(s.sk.x, s.sk.y) : null;
     },
   };
 })(window.DD);

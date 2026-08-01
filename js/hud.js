@@ -48,7 +48,7 @@
       const narrow = SW < 720;
       const typeLabel = {
         combat: "Combat", treasure: "Treasure", boss: "BOSS",
-        trap: "Trap Gauntlet", elite: "Elite", shop: "Shop",
+        trap: "Trap Gauntlet", elite: "Elite",
       }[game.roomType];
       const floorName = game.floorCfg().name || `Floor ${game.floor + 1}`;
       let roomLabel;
@@ -140,9 +140,6 @@
           ctx.fillStyle = "#f2ecdd";
           const eLabel = game.floorCfg().enemyLabel || "Enemies";
           ctx.fillText(narrow ? `Foes: ${remaining}` : `${eLabel}: ${remaining}`, SW - 26, 31);
-        } else if (game.roomType === "shop") {
-          ctx.fillStyle = "#ffd95e";
-          ctx.fillText(narrow ? "Shop · Exit ▲" : "Spend your gold, then exit ▲", SW - 26, 31);
         } else if (game.roomType === "trap") {
           ctx.fillStyle = "#ff9234";
           ctx.fillText(narrow ? "Spikes! ▲" : "Mind the spikes! Exit ▲", SW - 26, 31);

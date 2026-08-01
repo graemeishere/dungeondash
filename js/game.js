@@ -39,8 +39,8 @@
 
   const SAVE_KEY = "dungeondash_save_v1";
 
-  // The dungeon: each floor ends with a boss, then a shop before the next
-  // floor. Clear the last boss to win the run.
+  // The dungeon: each floor ends with a boss. Clear the last boss to win the
+  // run; gold is spent at the Trader in town, not between floors.
   // DUNGEONS map — add new dungeons here without touching run logic.
   // Each dungeon: id, name, faction, enemyLabel, floors[], tiers[]
   // floors[] = room content per floor (kinds, eliteKinds, plan)
@@ -154,8 +154,6 @@
     enemyShots: [],
     pickups: [],
     chests: [],
-    shopItems: [],
-    shopkeeper: null,
     spawnQueue: [],   // [{x, y, delay, big, kind, faction}]
     dungeonId: "catacombs",
     tier: 0,
@@ -339,7 +337,7 @@
   // Generate + install the current floor, then spawn every room's entities at
   // once (dormant + roomId-tagged) so entering a room can wake just that room.
   function loadFloor() {
-    const plan = game.floorCfg().plan.filter((t) => t !== "shop");
+    const plan = game.floorCfg().plan;
     const floor = DD.generateFloor({ plan, boss: plan[plan.length - 1] === "boss" });
     DD.room.setFloor(floor);
     DD.updateView(canvas);
@@ -348,8 +346,6 @@
     game.enemyShots = [];
     game.pickups = [];
     game.chests = [];
-    game.shopItems = [];
-    game.shopkeeper = null;
     game.spawnQueue = [];
     game.shake = 0;
     game.endT = 0;
@@ -555,8 +551,6 @@
     game.enemyShots = [];
     game.pickups = [];
     game.chests = [];
-    game.shopItems = [];
-    game.shopkeeper = null;
     game.spawnQueue = [];
     game.shake = 0;
     game.endT = 0;
@@ -646,18 +640,6 @@
         hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
         faction: cfg.bossFaction || cfg.faction,
       }));
-    } else if (game.roomType === "shop") {
-      game.roomCleared = true;
-      DD.room.doorOpen = true;
-      const cy = DD.HEIGHT / 2;
-      const gap = Math.min(140, DD.WIDTH / 4);
-      const upgrade = DD.choice(DD.UPGRADES);
-      game.shopItems = [
-        new DD.ShopItem("heal", DD.WIDTH / 2 - gap, cy, 12, "Full Heal"),
-        new DD.ShopItem("maxhp", DD.WIDTH / 2, cy, 20, "+3 Max HP"),
-        new DD.ShopItem("upgrade", DD.WIDTH / 2 + gap, cy, 28, upgrade.name, upgrade),
-      ];
-      game.shopkeeper = DD.makeShopkeeper(DD.WIDTH / 2, cy - DD.TILE * 2);
     }
   }
 
@@ -948,8 +930,6 @@
     game.enemyShots = [];
     game.pickups = [];
     game.chests = [];
-    game.shopItems = [];
-    game.shopkeeper = null;
     game.spawnQueue = [];
     DD.particles.clear();
   }
@@ -1725,14 +1705,11 @@
     for (const pk of game.pickups) if (!pk.dead) pk.update(dt, game);
     game.pickups = game.pickups.filter((p) => !p.dead);
 
-    // chest + shop interaction
+    // chest interaction
     for (const p of game.players) {
       if (!p.alive()) continue;
       for (const ch of game.chests) {
         if (!ch.opened && DD.dist(ch.x, ch.y, p.x, p.y) < ch.r + p.r + 4) ch.open(game);
-      }
-      for (const it of game.shopItems) {
-        if (!it.sold && DD.dist(it.x, it.y, p.x, p.y) < it.r + p.r) it.tryBuy(game, p);
       }
     }
 

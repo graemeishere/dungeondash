@@ -1234,85 +1234,6 @@
     }
   }
 
-  // ---------------- Shop item ----------------
-
-  class ShopItem {
-    constructor(kind, x, y, price, label, upgrade) {
-      this.kind = kind; // 'heal' | 'maxhp' | 'upgrade'
-      this.x = x;
-      this.y = y;
-      this.r = 14;
-      this.price = price;
-      this.label = label;
-      this.upgrade = upgrade || null;
-      this.sold = false;
-    }
-
-    tryBuy(game, pl) {
-      if (this.sold || game.gold < this.price) return false;
-      game.gold -= this.price;
-      this.sold = true;
-      DD.audio.chest();
-      DD.particles.burst(this.x, this.y - 14, { count: 12, colors: ["#ffd14a", "#fff"], speed: 100, life: 0.5, gravity: -50 });
-      if (this.kind === "heal") {
-        pl.hp = pl.maxHp;
-        DD.particles.text(this.x, this.y - 30, "Healed!", "#6fce6f");
-      } else if (this.kind === "maxhp") {
-        pl.runBuffs.maxHp += 3;
-        pl.recompute();
-        pl.hp = Math.min(pl.maxHp, pl.hp + 3);
-        DD.particles.text(this.x, this.y - 30, "+3 Max HP", "#ff8c91");
-      } else if (this.kind === "upgrade" && this.upgrade) {
-        this.upgrade.apply(pl);
-        DD.particles.text(this.x, this.y - 30, this.upgrade.name + "!", "#ffd95e");
-      }
-      return true;
-    }
-
-    draw(ctx) {
-      const font = "'Trebuchet MS', Verdana, sans-serif";
-      // pedestal
-      ctx.fillStyle = "#2e2a40";
-      ctx.fillRect(this.x - 16, this.y - 8, 32, 14);
-      ctx.fillStyle = "#3e3857";
-      ctx.fillRect(this.x - 16, this.y - 8, 32, 4);
-      if (this.sold) {
-        ctx.fillStyle = "#7a7090";
-        ctx.font = `bold 11px ${font}`;
-        ctx.textAlign = "center";
-        ctx.fillText("SOLD", this.x, this.y + 2);
-        ctx.textAlign = "left";
-        return;
-      }
-      const bobY = Math.sin(performance.now() / 250 + this.x) * 2;
-      let icon = DD.sprites.scroll;
-      if (this.kind === "heal") icon = DD.sprites.heart;
-      if (this.kind === "maxhp") icon = DD.sprites.heart;
-      ctx.drawImage(icon, this.x - 10, this.y - 30 + bobY, 20, 20);
-      if (this.kind === "maxhp") {
-        ctx.fillStyle = "#fff";
-        ctx.font = `bold 12px ${font}`;
-        ctx.fillText("+", this.x + 7, this.y - 18 + bobY);
-      }
-      ctx.font = `bold 11px ${font}`;
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#d8cfee";
-      ctx.fillText(this.label, this.x, this.y + 18);
-      const canAfford = DD.game.gold >= this.price;
-      ctx.fillStyle = canAfford ? "#ffd14a" : "#e8484f";
-      ctx.fillText(`${this.price}g`, this.x, this.y + 31);
-      ctx.textAlign = "left";
-    }
-  }
-
-  DD.makeShopkeeper = (x, y) => ({
-    x, y,
-    draw(c) {
-      c.drawImage(DD.sprites.shopkeeper[Math.floor(performance.now() / 600) % 2],
-        this.x - 24, this.y - 38, 48, 48);
-    },
-  });
-
   DD.Player = Player;
   DD.Skeleton = Skeleton;
   DD.Boss = Boss;
@@ -1320,5 +1241,4 @@
   DD.Projectile = Projectile;
   DD.EnemyShot = EnemyShot;
   DD.Pickup = Pickup;
-  DD.ShopItem = ShopItem;
 })(window.DD);

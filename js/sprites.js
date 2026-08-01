@@ -812,10 +812,6 @@
       this.zombie = makeFrames((p, f) => drawUndead(p, f, "zombie"));
       this.warlock = makeFrames((p, f) => drawUndead(p, f, "warlock"));
       this.necromancer = makeFrames((p, f) => drawUndead(p, f, "necromancer"));
-      this.shopkeeper = makeFrames((p, f) => drawHero(p, {
-        hat: "hood", hatColor: "#6e4a23", accent: "#6e4a23",
-        body: "#8a6a3a", sleeve: "#6e4a23", belt: "#3c2c14", boot: "#3c2c14",
-      }, f));
       this.floorTiles = [0, 1, 2, 3].map(makeFloorTile);
       this.wallTile = makeWallTile();
       this.doorClosed = makeDoorTile(false);

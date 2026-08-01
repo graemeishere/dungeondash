@@ -249,8 +249,6 @@
       if (!key && pk.kind === "item" && pk.item) key = pk.item.icon;
       if (key && dr.hasItem(key)) asItem(pk, key); else billboards.push(captureEntity(pk));
     }
-    if (game.shopkeeper) billboards.push(captureEntity(game.shopkeeper));
-    for (const it of game.shopItems) billboards.push(captureEntity(it));
     // arrows -> 3D models (along velocity); mage bolts / magic -> glowing orbs
     // with a particle trail; anything else stays a billboard.
     const asProj = (e) => projs.push({ entity: e, key: "arrow", gx: e.x / DD.TILE, gy: e.y / DD.TILE, rotationY: Math.atan2(e.vx, e.vy) });

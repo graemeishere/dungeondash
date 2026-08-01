@@ -244,16 +244,6 @@ const VIGNETTES = {
       { piece: "bottle_C_green", dx: -0.28, dz: 0.12 },
     ],
   },
-  shopStall: {
-    anchors: ["shopfront"],
-    elements: [
-      { piece: "table_long_tablecloth", dx: 0, dz: 0, rot: 0 },
-      { piece: "shelf_large", dx: -2, dz: 0, rot: 0 },
-      { piece: "keg_decorated", dx: 2, dz: 0, rot: 0 },
-      { piece: "plate_stack", dx: 0.3, dz: 0, up: 0.25 },
-      { piece: "bottle_A_labeled_brown", dx: -0.35, dz: 0.05, up: 0.25 },
-    ],
-  },
 };
 
 // Characters and props both render at native KayKit size (1x), matching the
@@ -314,7 +304,7 @@ export function planRoomDecor(desc) {
   const doorXs = doorCells.map((c) => c.gx);
 
   // exclusion mask: cells decor must keep clear (door apron, entry band,
-  // spikes, lobby pads, shop row); aisle cells join after the aisle roll
+  // spikes, lobby pads); aisle cells join after the aisle roll
   const mask = new Set();
   for (const c of doorCells) { mask.add(idx(c.gx, c.gy)); mask.add(idx(c.gx, c.gy + 1)); }
   const ex0 = Math.floor(w / 2) - 2;
@@ -326,10 +316,6 @@ export function planRoomDecor(desc) {
       const px = Math.round(w * f);
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) mask.add(idx(px + dx, padY + dy));
     }
-  }
-  if (desc.roomType === "shop") {
-    const cy = Math.floor(h / 2);
-    for (let x = 1; x < w - 1; x++) { mask.add(idx(x, cy)); mask.add(idx(x, cy - 1)); mask.add(idx(x, cy - 2)); }
   }
 
   // floor mode has many per-room doors, not one top-center door, so the
@@ -740,9 +726,6 @@ export function planRoomDecor(desc) {
       const m = vigLeft > 0 ? mirrorOf(a) : null;
       if (m && rng() < 0.75) stampG(v, m);
     }
-  }
-  if (desc.roomType === "shop") {
-    stampVignette(VIGNETTES.shopStall, { gx: w / 2 - 0.5, gy: Math.floor(h / 2) - 3.2, rot: 0 }, props, flames);
   }
 
   // ---- pass 8: wall-top dressing -------------------------------------------
