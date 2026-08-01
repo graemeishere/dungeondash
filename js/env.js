@@ -42,9 +42,16 @@ function devFlag(name) {
 // on-screen tuning buttons and readout) are cosmetic and stay ungated.
 export const safeMode = devFlag("camtest") || devFlag("safe");
 
-// Boot shortcuts: ?dev=combat into a solo combat room, ?floors into a floor run.
+// ?dev=combat drops straight into a solo combat room past every menu.
 export const devBoot = devFlag("dev") ? params.get("dev") : null;
-export const floorsBoot = devFlag("floors");
+
+// ?floors boots a connected-floor run. Deliberately UNGATED, like ?classic:
+// the roadmap's decision log names only ?safe and ?dev, and unlike those two
+// this is not an exploit surface - it starts an ordinary tier-0 run that the
+// dungeon lobby reaches anyway, disabling nothing. It is shaped like a dev
+// flag and is worth a conscious decision, but that decision has not been made,
+// so this keeps today's behaviour rather than quietly changing it.
+export const floorsBoot = params.has("floors");
 
 // Dungeons descend into connected floors by default; ?classic forces the old
 // single-room-per-room run. Deliberately UNGATED: roadmap decision 4 retires

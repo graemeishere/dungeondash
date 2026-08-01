@@ -27,7 +27,11 @@ on:
 jobs:
   room-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # phase0-checks alone runs ~5.5 min in a dedicated sandbox; add a cold
+    # Playwright install and a shared runner's contention and 15 would be tight.
+    # A suite that intermittently times out gets ignored, which is the same
+    # failure mode as one that blocks deploys for expected changes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
