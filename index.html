@@ -109,6 +109,20 @@
       <p class="hint">Defend the town, or escape to the world map.</p>
     </div>
 
+    <!-- Shown when the browser drops the WebGL context: the 3D canvas is the
+         only gameplay-visible surface, so a lost context leaves a black
+         rectangle under a live HUD. The game pauses and asks for a reload. -->
+    <div id="webgl-lost" class="overlay hidden">
+      <h1 class="small" style="color:#ff5252">DISPLAY LOST</h1>
+      <p class="tagline">Your browser reset the 3D graphics context — this happens under memory
+        pressure, or after a tab sits in the background a long time. The game has been paused so
+        nothing happens off-screen. Reload to keep playing.</p>
+      <div class="buttons">
+        <button id="btn-webgl-reload">Reload</button>
+      </div>
+      <p class="hint">Your hero, gold and quest progress are saved.</p>
+    </div>
+
     <div id="stats-overlay" class="overlay hidden">
       <h1 class="small">THE BARKEEP</h1>
       <p id="so-title" class="tagline"></p>

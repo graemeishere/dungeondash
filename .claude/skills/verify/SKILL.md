@@ -58,8 +58,21 @@ determinism (same desc → same plan; guest `setData(getData())` round-trip).
   `s.state = "chase"` (dormant ones ignore damage) and call
   `s.damage(9999, s.x, s.y, DD.game)`.
 
+## Forcing WebGL context loss
+
+```js
+const gl = DD.render3d.renderer.getContext();
+const ext = gl.getExtension("WEBGL_lose_context");
+ext.loseContext();     // expect: #webgl-lost overlay, DD.game.time frozen, rAF still running
+ext.restoreContext();  // expect: a console warning only — the reload prompt stays up by design
+```
+
+`DD.render3d.contextLost` is the flag; `DD.game3d.contextLost()` is what the
+game reads. Recovery is deliberately a reload prompt, not an in-place rebuild.
+
 ## Gotchas
 
 - `/favicon.ico` 404 in the console is normal.
+- `console.error("WebGL context lost…")` is deliberate, not a failure.
 - Skeletons start dormant (skull piles); they wake on proximity or after 60s.
 - Each page load generates a fresh random room layout.

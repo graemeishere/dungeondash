@@ -108,9 +108,25 @@
     return rigClip(s, rig, { moving: s.state === "chase", spawn: s.state === "spawn" });
   }
 
+  // Lost-context prompt. Shown once, lazily, the first frame after the renderer
+  // flags the loss — the render path itself is already inert by then, so this is
+  // purely about telling the player why the world stopped.
+  let lostShown = false;
+  function showContextLostOverlay() {
+    if (lostShown) return;
+    lostShown = true;
+    const el = document.getElementById("webgl-lost");
+    if (!el) return;
+    document.querySelectorAll(".overlay").forEach((o) => o.classList.add("hidden"));
+    el.classList.remove("hidden");
+    const btn = document.getElementById("btn-webgl-reload");
+    if (btn) btn.addEventListener("click", () => location.reload());
+  }
+
   function drawCombat3D(dt) {
     const dr = DD.render3d;
     const game = DD.game;
+    if (dr.contextLost) { showContextLostOverlay(); return; }
     const menuish = MENU_3D[game.state];    // room is just a backdrop, no entities
     const peaceful = PEACE_3D[game.state];  // walkable hub: players + NPCs, no HUD
     // Rebuild the mesh when the room layout changes, or when late-loading
@@ -496,6 +512,10 @@
     active(state) {
       return DD.render3d && DD.render3d.proto && ROOM_3D_STATES[state];
     },
+    // "Is the 3D view usable at all" — game.js freezes the simulation on this
+    // rather than reaching into DD.render3d itself, keeping every 3D-readiness
+    // question answered in this file.
+    contextLost() { return !!(DD.render3d && DD.render3d.contextLost); },
     draw: drawCombat3D,
     // Keep the WebGL canvas matched to the overlay canvas (called from fitCanvas).
     resize(w, h) {

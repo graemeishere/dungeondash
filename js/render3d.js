@@ -63,6 +63,34 @@ function firstMesh(root) {
 export class DungeonRenderer {
   constructor(canvas) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+
+    // GPU context loss (mobile memory pressure, driver reset, long tab
+    // backgrounding) kills every GL resource this renderer holds. Without a
+    // listener the game keeps calling render() against a dead context, which
+    // throws from inside three.js and leaves the only gameplay-visible surface
+    // a black rectangle with a live HUD on top. Flag it here; render() bails on
+    // the flag, and game3d.js turns it into a visible, honest "reload" prompt.
+    //
+    // preventDefault() on loss is what keeps `webglcontextrestored` possible at
+    // all — without it the spec says the context is dead until a page reload.
+    // We do not attempt in-place recovery: the loader-issued textures, the
+    // character rigs/mixers, the particle system and the billboard canvases are
+    // four independently-cached pools that would each have to re-upload
+    // cleanly, and none of that is exercised today. A half-restored scene reads
+    // as a new bug; a reload prompt is the honest state.
+    this.contextLost = false;
+    canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      this.contextLost = true;
+      console.error("WebGL context lost — rendering paused, reload required");
+    }, false);
+    canvas.addEventListener("webglcontextrestored", () => {
+      // Deliberately does not clear contextLost: see above. A future phase that
+      // adds real recovery hooks in here (clear the flag, rebuild from
+      // _lastDesc, force needsUpdate on every cached texture).
+      console.warn("WebGL context restored — reload still required to rebuild the scene");
+    }, false);
+
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); // cap for mobile
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     // Filmic tone mapping + soft shadows: the two renderer-side steps toward
@@ -736,6 +764,23 @@ export class DungeonRenderer {
   }
 
   render() {
+    // Every gl.* call in this class funnels through renderer.render() below, so
+    // this one guard is the whole fix — buildRoom/setEntities/setItems and the
+    // animation mixers only touch scene-graph objects and are harmless no-ops
+    // against a dead context. Keeping the check singular means there is no
+    // second call site that can forget it.
+    if (this.contextLost) return null;
+    // The `webglcontextlost` event is delivered on a later turn of the event
+    // loop, so between the GPU actually dropping the context and our listener
+    // running there is a window of one or more frames where the flag is still
+    // false. Rendering in that window throws from deep inside three.js, and an
+    // exception in the rAF callback kills the loop for good — which is the
+    // "permanent" half of the soft-lock. Ask the context itself so the very
+    // first bad frame is caught.
+    if (this.renderer.getContext().isContextLost()) {
+      this.contextLost = true;
+      return null;
+    }
     const now = performance.now();
     const doorDt = Math.min(0.05, (now - (this._lastRenderT || now)) / 1000);
 

@@ -1640,6 +1640,13 @@
   // ---- update ----
 
   function update(dt) {
+    // WebGL context lost: the player can't see the world, so nothing in it may
+    // advance — timers, AI, spawns and damage all stop until they reload.
+    // Letting the fight run on behind a black screen would cost them HP for
+    // hits they had no way to see, let alone dodge. draw() keeps running so the
+    // reload prompt stays live.
+    if (DD.game3d && DD.game3d.contextLost()) return;
+
     // co-op guests don't simulate: they render host snapshots
     if (DD.net.role === "guest") {
       if (guestInGame) DD.particles.update(dt);
