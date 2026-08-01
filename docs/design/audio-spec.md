@@ -2,9 +2,12 @@
 
 Implementation-ready spec for Phase 4's audio work (see `docs/design/roadmap.md`
 Phase 4 and the coverage-matrix `audio` rows). Written against `audit-audio.md`'s
-findings and Decision 6 (vendored CC0 music/ambience, synthesized one-shot SFX via
+findings and Decision 6 (vendored music/ambience, synthesized one-shot SFX via
 the existing `tone()`/`noise()` helpers in `js/audio.js`) — that decision is taken
-as given, not re-argued here.
+as given, not re-argued here. Decision 6 originally specified CC0 to match this
+repo's existing art packs; the project owner has since relaxed the license
+requirement for audio specifically to "any no-cost license, attribution allowed" —
+see §3.1's policy note for what that changes (a `CREDITS.md` obligation) and why.
 
 This document specifies **what to build**. It does not implement it — `js/audio.js`,
 `js/entities.js`, `js/game.js` and `js/input.js` are untouched by this spec and
@@ -293,57 +296,92 @@ between music tracks on the `music` bus and between ambience beds on the
 `ambience` bus, not hard-cut — a ~1–2s linear crossfade is standard and avoids an
 audible pop given these are long sustained loops.
 
-### 3.1 Candidate CC0 sources
+### 3.1 Candidate sources (page-verified)
 
-Researched against the shopping list above. **Verification caveat first, because
-it matters more than the list:** this environment's outbound network policy blocks
-direct fetches to `opengameart.org`, `freesound.org`, `kenney.nl`, and `itch.io`
-(gateway returns 403 on all four — confirmed, not a guess), so every candidate
-below comes from search-result snippets only, not a page load that could confirm
-the exact license text on the specific file. That distinction is not pedantic:
-searching Alexandr Zhelanov's OpenGameArt catalogue for "dungeon/crypt/fantasy
-music" surfaces his tracks prominently (they're a strong stylistic fit), but his
-uploads are licensed **CC-BY 3.0/4.0, not CC0** — attribution-required, and a
-mismatch with Decision 6 and this repo's existing CC0-only asset packs. Pack-level
-collection pages can also mix licenses across individual files within the same
-pack. **Before vendoring anything below, open the specific file's page and confirm
-CC0 on that file**, the same diligence already visible in this repo's existing
-`*/License.txt` files (e.g. `Kenney Modular Dungeon Kit/License.txt`, which cites
-CC0 explicitly) — that's the bar every new vendored file should clear, and the one
-this research pass could not clear by itself.
+**License policy note — supersedes the CC0-only framing above.** Decision 6 and
+the original scoping for this spec called for CC0 specifically, matching this
+repo's existing vendored art packs (`Kenney Modular Dungeon Kit/License.txt` etc.,
+all CC0, no attribution required). The project owner has since relaxed that: any
+no-cost license is acceptable for audio, including attribution-required licenses
+like CC-BY, as long as nothing requires payment. Two consequences that follow from
+that relaxation and should ship alongside the audio files themselves:
 
-**Strongest starting point: stay inside the Kenney catalogue.** Three packs
-already vendored in this repo (`KayKit Dungeon Remastered`, `Kenney Modular
-Dungeon Kit`, and the `KayKit`/adventurer packs) are Kenney/KayKit CC0 releases
-with a consistent, already-trusted license file format. Kenney's own audio
-offerings (`kenney.nl/assets/rpg-audio`, `kenney.nl/assets/digital-audio`,
-`kenney.nl/assets/music-jingles`) are stated CC0 by the same publisher and
-convention, but they lean toward short jingles/stingers and SFX rather than
-90–150s loopable ambient beds — worth checking first for consistency, but likely
-insufficient alone for the music-track list below; expect to supplement from
-OpenGameArt's CC0-tagged pool.
+- **A `CREDITS.md` (or equivalent) is now required**, tracking every vendored
+  audio file's author, source URL, and license — the existing art packs never
+  needed this because they're uniformly CC0; audio will be mixed-license, so the
+  attribution obligations need one place to live before any CC-BY file ships.
+- Each attribution string below is the exact text to put in that file — don't
+  paraphrase it, some authors specify exact wording.
 
-| Slot | Candidate | Source | License as found | Verification status |
-|---|---|---|---|---|
-| Catacombs music | "CC0 Fantasy Music & Sounds" collection (has cave/dungeon-leaning tracks) | OpenGameArt, `opengameart.org/content/cc0-fantasy-music-sounds` | Stated CC0 in listing title/summary | **Unverified** — page fetch blocked, confirm per-track license before use |
-| Catacombs ambience | "Loopable Dungeon Ambience" — low-frequency wind + water drips, purpose-built loopable | OpenGameArt, `opengameart.org/content/loopable-dungeon-ambience` | Stated CC0 in listing | **Unverified** — same caveat |
-| Catacombs ambience (alt.) | "Water Dripping in Cave.wav" by Sclolex | Freesound, `freesound.org/people/Sclolex/sounds/177958/` | Search snippet describes public-domain-equivalent terms ("copy, modify, distribute... without needing permission") | **Unverified** — Freesound mixes CC0 and CC-BY per-uploader; confirm the exact license badge on the file page, not the paraphrase |
-| Goblin mines music | No confident CC0 candidate found | — | — | **Not found** — searches for "mining/goblin/cave dark music CC0" returned dungeon-generic results, nothing goblin/mining-specific and confirmed-CC0; needs a dedicated sourcing pass with page access |
-| Goblin mines ambience | No confident CC0 candidate found (pickaxe/clank-specific) | — | — | **Not found** — same gap; likely sourceable from Freesound's CC0-filtered search once page access exists, search terms "pickaxe metal clank echo cc0" |
-| Crypt music | "CC0 - Dark Music" collection — explicitly CC0-labelled, "dark, evil, creepy" | OpenGameArt, `opengameart.org/content/cc0-dark-music` | Stated CC0 in listing title | **Unverified** — confirm per-track |
-| Crypt ambience | "Dark Atmosphere -Dungeon -Loop" by ClementPanchout | Freesound, `freesound.org/people/ClementPanchout/sounds/572683/` | Not confirmed CC0 from snippet alone | **Unverified, lower confidence** — re-check license badge specifically |
-| Town music | "Town Theme RPG" — harps/recorders, RPG-typical | OpenGameArt, `opengameart.org/content/town-theme-rpg` | Search snippet states "CC0 Public Domain License" | **Unverified** — confirm on page |
-| Menu music | "RPG Title Screen Music Pack" (19 tracks, pick one) | OpenGameArt, `opengameart.org/content/rpg-title-screen-music-pack` | Not confirmed CC0 from snippet alone | **Unverified, check license per track** — pack may be mixed-license |
-| Menu music (alt.) | "Fantasy Game Music Tracks (CC0)" — 7 tracks, CC0 stated in listing title | itch.io, `kmontesdev.itch.io/7-fantasy-music-tracks` | Stated CC0 in listing title | **Unverified** — itch.io listings can bundle a non-CC0 "supporter" tier alongside a free CC0 tier; confirm which tier is actually CC0 |
-| General fallback pool | "Fantasy Music Mega Pack" (100+ tracks, stated CC0/Public Domain) by Blacis | itch.io, via `itch.io/game-assets/free/tag-cc0/tag-music` | Stated CC0/Public Domain in listing | **Unverified** — large pack, worth a dedicated pass to pull catacombs/crypt/goblin-mines-fitting tracks from it in one sourcing session |
+The table below was verified on the individual **file** page (not the pack/
+collection page) for OpenGameArt and Freesound — durations measured directly from
+the audio. itch.io could not be verified (Cloudflare bot-check blocked automated
+browsing there); if a itch.io pack is wanted later, it needs a human pass.
+Kenney's audio packs were checked and ruled out — `rpg-audio`, `digital-audio`,
+etc. are short SFX/foley libraries (footsteps, lasers, UI blips), not music or
+ambience beds, so nothing from Kenney fits this section (Kenney/KayKit remain the
+right source for the 3D art, just not for this).
 
-**Net assessment:** town, menu, catacombs, and crypt each have at least one
-plausible CC0-labelled candidate to start verification from; goblin mines has no
-candidate yet and needs a fresh, page-access-enabled search pass (Freesound and
-OpenGameArt both plausibly have mining/pickaxe-specific CC0 content, it just didn't
-surface from snippet-only search). Whoever does the sourcing pass should budget
-time for that gap and for the per-file license re-confirmation this pass could not
-complete.
+**Music**
+
+| # | Slot | Track | Source | License | Attribution required | Format / length |
+|---|---|---|---|---|---|---|
+| 1 | Catacombs | "Dark Ambient Loop 13" by Lucas Calvo (MundoSound) | OGA, `opengameart.org/content/dark-ambient-loop-13` | CC-BY 3.0 (dual-listed OGA-BY 3.0) | Yes — "Lucas Calvo - mundosound.com" | WAV 24-bit/48kHz, 115.2s |
+| 2 | Goblin mines | "Quirky Goblins (Looping)" by Eric Matyas | OGA, `opengameart.org/content/quirky-goblins-looping` | CC-BY 3.0 | Yes — `"Quirky Goblins" by Eric Matyas [www.soundimage.org](https://www.soundimage.org)` | OGG, 40.0s — **short of the 90–150s target, see flag below** |
+| 3 | Crypt | "Crypt" by Machine (file: "Dark Loop.mp3") | OGA, `opengameart.org/content/crypt` | CC-BY 3.0 | Yes — standard CC-BY (title/author/link), no custom text | MP3, 70.0s |
+| 4 | Town | "Town Theme RPG" by cynicmusic | OGA, `opengameart.org/content/town-theme-rpg` | **CC0** ("Now CC0 Public Domain License!") | No — optional shout-out to cynicmusic.com/pixelsphere.org | MP3, 97.5s — **short of the 120–180s dwell-time target, see flag below** |
+| 5 | Menu/title | "Tragic ambient main menu" by brandon75689 (submitted by HaelDB) | OGA, `opengameart.org/content/tragic-ambient-main-menu` | Dual-licensed OGA-BY 3.0 / **CC0** — take the CC0 option | No (CC0 option) | OGG, 100.0s — **tonal and length caveats, see flag below** |
+
+**Ambience**
+
+| # | Slot | Track | Source | License | Attribution required | Format / length |
+|---|---|---|---|---|---|---|
+| 6 | Catacombs | "A_Dungeon_Ambience_Loop.wav" by Grubzyy | Freesound, `freesound.org/people/Grubzyy/sounds/422720/` | CC0 | No | WAV, 28.9s |
+| 7 | Goblin mines | "Mining with Pick Axe in a group" by MiraclesHappen | Freesound, `freesound.org/people/MiraclesHappen/sounds/457585/` | CC0 | No | MP3, 25.0s — **clank layer only, incomplete, see flag below** |
+| 8 | Crypt | "Catacombs Chanting Loop" (file: `catacombs_in_game.ogg`) by beardalaxy | OGA, `opengameart.org/content/catacombs-chanting-loop` | CC0 ("credit appreciated but not necessary") | No | OGG, 37.3s — **has vocal chanting, listen before committing, see flag below** |
+
+**Freesound access note:** items 6 and 7 are visible/license-confirmable without
+an account, but downloading the actual file requires a free Freesound login.
+
+**Open flags to resolve before finalizing the sourcing list:**
+
+- **#2 Goblin mines music (40.0s vs. 90–150s target).** Best mood/name match found
+  ("goblins," "mischief," "quirky") but well short on length — either loop it more
+  than once per music-bus cycle (acceptable, the crossfade note in §3 already
+  assumes looped beds) or ask Eric Matyas (soundimage.org) directly for a longer
+  cut/alternative track.
+- **#4 Town (97.5s vs. 120–180s target).** Shortfall is smaller and CC0, so lowest
+  risk of the three length gaps — usable as-is with more frequent looping, or hold
+  out for a longer alternative (two Matthew Pablo tracks, "Pleasant Creek" and
+  "Snowland Town," looked like better instrumentation matches but are bundled in
+  multi-file zips that couldn't be unpacked to confirm individual track length —
+  worth a follow-up pass).
+- **#5 Menu (tonal mismatch + 100s vs. 45–90s target).** Composed for a sci-fi/
+  post-apocalyptic game, not fantasy — the mood still fits the spec's "between
+  town's warmth and the dungeon themes' dread" brief better than any fantasy-tagged
+  alternative found, but it's a stretch on genre, not just length. Listen before
+  committing; if it doesn't land, this slot needs another pass.
+- **#7 Goblin mines ambience is only partially solved.** The pick covers the
+  pickaxe/clank layer only — no single file combines clank + dripping + guttural
+  chatter as specced in §3. A dripping-water layer exists (OGA "Dripping Water" by
+  spookymodem, CC-BY 3.0) but is only 3.7s, so it would need looping under the
+  clank layer. No usable non-verbal goblin murmur/chatter texture was found at
+  all — the only goblin voice clips on Freesound/OGA are short one-off verbal
+  barks ("get away," "great goblin giving speech"), not ambient texture. This
+  layer may need to ship without the chatter component, or with the barks used
+  sparingly as one-shots rather than a bed.
+- **#8 Crypt ambience has actual chanting vocals**, not purely wordless texture as
+  specced in §3, and is titled "Catacombs" despite fitting the Crypt brief better
+  than anything literally tagged "crypt." Listen before committing to confirm the
+  vocal content works in-context (it may read as too specific/narrative for a
+  looping bed).
+
+**Net assessment:** all 8 slots now have a page-verified, no-cost candidate — a
+real improvement over the earlier CC0-only pass, which had no goblin-mines
+candidate at all. Five are CC0 outright (#4, #5, #6, #7, #8 — #5 by taking its
+CC0 dual-license option), three are CC-BY requiring the `CREDITS.md` entries above
+(#1, #2, #3). Three length/tone flags and one incomplete-layer flag remain open
+and need a listen-and-decide pass before these are finalized and downloaded.
 
 ---
 
