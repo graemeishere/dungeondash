@@ -12,7 +12,8 @@
 // body runs, every import has finished evaluating.
 
 import { rt } from "./runtime.js?v=__BUILD__";
-import { params } from "./env.js?v=__BUILD__";
+import { devFlagsAllowed, safeMode } from "./env.js?v=__BUILD__";
+import { params, devBoot, floorsBoot } from "./env.js?v=__BUILD__";
 import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=__BUILD__";
 import { sprites } from "./sprites.js?v=__BUILD__";
 import { audio } from "./audio.js?v=__BUILD__";
@@ -185,7 +186,7 @@ if (_bootHero) {
 
 // Dev shortcut for verifying the 3D path: ?dev=combat jumps straight into a
 // solo combat room (skips menus). Not wired to any UI.
-if (params.get("dev") === "combat") {
+if (devBoot === "combat") {
   document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
   const cls = params.get("class"); // ?class=mage|ranger|rogue|warrior
   // ?dungeon=crypt (warlocks/necromancers) | goblinMines (shamans) | catacombs
@@ -194,7 +195,7 @@ if (params.get("dev") === "combat") {
 }
 
 // ?floors boots a connected-floor run with per-room combat gating + descent.
-if (params.has("floors")) {
+if (floorsBoot) {
   const cls = CLASSES[params.get("class")] ? params.get("class") : "warrior";
   const dng = DUNGEONS[params.get("dungeon")] ? params.get("dungeon") : "catacombs";
   const boot = () => {
@@ -232,6 +233,8 @@ window.DD = {
   game, room, net, particles, game3d, input, sprites, profile, TILE,
   Boss,   // room-checks does `instanceof DD.Boss`
   view,   // letterbox transform: world coords -> canvas px, for driving taps
+  // env.js's dev-flag gate, so a headless check can assert on it directly
+  __debug: { devFlagsAllowed, safeMode },
   get WIDTH() { return WIDTH; },
   get HEIGHT() { return HEIGHT; },
   get render3d() { return rt.render3d; },

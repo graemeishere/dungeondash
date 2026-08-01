@@ -43,9 +43,16 @@ HUD/map UI).
 
 ## Regression checks
 
-`node dev/room-checks.mjs` (run from a dir with playwright installed, server
-on :8123) asserts per-theme draw-call/triangle budgets and decor-planner
-determinism (same desc → same plan; guest `setData(getData())` round-trip).
+Both run from a dir with playwright installed, with the server on :8123, and
+both run in CI (`.github/workflows/room-checks.yml`, advisory-only for now):
+
+- `node dev/room-checks.mjs` — per-theme draw-call/triangle budgets and
+  decor-planner determinism (same desc → same plan; guest
+  `setData(getData())` round-trip), plus floor connectivity and gating.
+- `node dev/phase0-checks.mjs` — the "it still boots and plays" acceptance
+  suite: 4 classes × 3 dungeons, combat, a full floor through a boss and down
+  the stairs, town/lobby/map/hub/inventory, death and Play Again, raid,
+  finale, save and resume, WebGL context loss, and the dev-flag gate.
 
 ## Room navigation tricks
 

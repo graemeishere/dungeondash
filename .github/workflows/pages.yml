@@ -17,19 +17,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Stamp the cache-bust token: every JS reference carries ?v=__BUILD__, so
-      # replacing it with this commit's short SHA makes each deploy fetch fresh
-      # files (index.html holds the classic <script>/dynamic-import refs;
-      # render3d.js holds the one nested module import of decor3d.js).
+      # Stamp the cache-bust token. Every first-party import specifier carries
+      # ?v=__BUILD__, so replacing it with this commit's short SHA makes each
+      # deploy fetch fresh files. Static import specifiers are string literals -
+      # there is no runtime way to inject a version into them - so the token has
+      # to be baked into every file that imports another, which is now most of
+      # js/. The non-recursive js/*.js glob is deliberate: it covers every
+      # first-party module without needing to list them, and does not descend
+      # into js/lib/, whose pinned vendor files stay cacheable across deploys.
       - name: Stamp cache-bust version
         run: |
           V="${GITHUB_SHA::8}"
-          sed -i "s/__BUILD__/$V/g" index.html js/render3d.js
+          sed -i "s/__BUILD__/$V/g" index.html js/*.js
+      # A missed file would silently serve stale JS forever, so fail loudly
+      # rather than deploy a half-stamped build.
+      - name: Verify no unstamped references remain
+        run: |
+          if grep -rn "__BUILD__" index.html js/ ; then
+            echo "::error::__BUILD__ survived the sed - a file or import site was missed"
+            exit 1
+          fi
       # Publishes the repo as-is to the gh-pages branch; the first push
       # auto-enables GitHub Pages on public repos without needing the
       # Pages API (which the workflow token may not be allowed to call).
+      #
+      # exclude_assets keeps ~100 MB of vendored source formats out of the
+      # deploy. The renderer only ever loads .glb/.gltf, so the .fbx/.obj
+      # exports, the sample scenes and the loose texture folders are dead
+      # weight on every page load. Patterns are joined onto the publish root by
+      # actions-gh-pages before globbing, so a bare name would only match at the
+      # top level - hence the explicit **/ prefixes.
+      #
+      # Two directories are deliberately NOT excluded:
+      #   - "KayKit Skeletons/texture" (singular) holds the shared
+      #     skeleton_texture.png atlas the skeleton GLBs use.
+      #   - "Kenney Modular Dungeon Kit/Models/GLB format/Textures" is the one
+      #     Textures folder that is actually referenced: those GLBs point at
+      #     Textures/colormap.png externally. The kit is dormant today
+      #     (ACTIVE_KIT is kaykit) but it is a supported switch, so it stays.
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
-          exclude_assets: ".github,docs,DungeonDash_DesignBrief.md"
+          exclude_assets: ".github,docs,dev,DungeonDash_DesignBrief.md,**/fbx,**/fbx(unity),**/obj,**/FBX format,**/OBJ format,**/Samples,**/samples,**/textures,KayKit Adventurers/Textures,KayKit Character Animations/Mannequin Character/Textures,Kenney Modular Dungeon Kit/Models/Textures"

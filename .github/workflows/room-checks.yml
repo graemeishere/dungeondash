@@ -1,0 +1,71 @@
+name: Room checks
+
+# dev/room-checks.mjs is a real regression suite - per-theme draw-call and
+# triangle budgets, decor-planner determinism, the co-op getData/setData
+# round-trip, floor connectivity and gating - that until now nothing ever ran.
+# It only executed if a developer happened to have Playwright installed and
+# remembered the command.
+#
+# Advisory, not deploy-blocking, for two reasons. It has never run outside a
+# developer machine, and the draw-call budgets are exactly the kind of assertion
+# that can read differently on a CI runner's software GL path. And roadmap
+# Phases 1-2 deliberately change what it measures: porting obstacle carving into
+# floor rooms moves prop counts, the decor-planner keying fix moves which pieces
+# render where. A brand-new suite blocking deploys through several phases of
+# expected change teaches people to bypass it.
+#
+# Graduate it to blocking once it has a stretch of green through a phase
+# boundary - Phase 1 is the natural checkpoint, since that is the phase whose
+# changes it is most sensitive to.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  room-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Playwright is installed into a scratch directory, not the repo: the
+      # project ships without a package.json on purpose (roadmap decision 2 -
+      # deploy stays a sed and a push) and this must not change that.
+      - name: Install Playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw"
+          cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Serve the site
+        run: |
+          python3 -m http.server 8123 --directory "$GITHUB_WORKSPACE" &
+          for i in $(seq 1 30); do
+            curl -sfo /dev/null http://localhost:8123/index.html && exit 0
+            sleep 1
+          done
+          echo "::error::server never came up on :8123"
+          exit 1
+
+      # NODE_PATH is ignored by ESM, so the script's own cwd-relative fallback
+      # (node_modules/playwright/index.mjs) is what resolves the import - hence
+      # running from the scratch install directory with an absolute script path.
+      - name: Run room checks
+        working-directory: ${{ runner.temp }}/pw
+        run: node "$GITHUB_WORKSPACE/dev/room-checks.mjs"
+
+      # The acceptance suite behind the Phase 0 refactor: boots every class in
+      # every dungeon, plays a full floor through a boss, walks every screen,
+      # and checks context-loss recovery and the production dev-flag gate.
+      - name: Run Phase 0 acceptance checks
+        working-directory: ${{ runner.temp }}/pw
+        run: node "$GITHUB_WORKSPACE/dev/phase0-checks.mjs"

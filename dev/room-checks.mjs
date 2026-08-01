@@ -9,12 +9,18 @@
 const pw = await import("playwright").catch(() =>
   import(new URL(`file://${process.cwd()}/node_modules/playwright/index.mjs`)));
 const { chromium } = pw;
+const { existsSync } = await import("node:fs");
 
-const CHROME = process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium";
+// This sandbox keeps a prebuilt chromium at /opt/pw-browsers; a stock CI runner
+// has whatever `playwright install` fetched, and passing a nonexistent
+// executablePath there fails the launch. Prefer the env var, then the sandbox
+// path if it actually exists, else let playwright resolve its own browser.
+const CHROME = process.env.CHROMIUM_PATH ||
+  (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : null);
 const BASE = process.env.BASE_URL || "http://localhost:8123";
 const CALL_BUDGET = 70, TRI_BUDGET = 400_000;
 
-const browser = await chromium.launch({ executablePath: CHROME });
+const browser = await chromium.launch(CHROME ? { executablePath: CHROME } : {});
 let failed = 0;
 const check = (name, ok, detail) => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  " + detail : ""}`);
