@@ -200,6 +200,7 @@
       this.connected = false;
       this.roomCode = null;
       closeFired = false;
+      guestEnemies.clear();
     },
   };
 
@@ -223,6 +224,14 @@
   const r1 = (v) => Math.round(v * 10) / 10;
   const r2 = (v) => Math.round(v * 100) / 100;
 
+  // Guest-side entity identity. The 3D character manager (char3d.js) keys models
+  // by entity OBJECT identity, so the guest must REUSE the same objects across
+  // snapshots — matching players by slot and enemies by a host-assigned id.
+  // Rebuilding them every frame (as this used to) destroyed and respawned every
+  // model ~15x/s, which froze all animation into a stuttering loop.
+  let nextEnemyId = 1;             // host: stable per-enemy id, assigned lazily
+  const guestEnemies = new Map();  // guest: id -> reconstructed skeleton
+
   DD.netSync = {
     snapshot(game) {
       return {
@@ -245,14 +254,19 @@
           arc: r2(p.stats.arc || 0), rng: r1(p.stats.range || 0),
           dsh: p.stats.dash ? 1 : 0, dcd: r1(p.dashCd),
         })),
-        en: game.skeletons.map((s) => ({
-          x: r1(s.x), y: r1(s.y), hp: s.hp, mhp: s.maxHp,
-          st: s.state, stt: r2(s.stateT), an: r2(s.animT % 100), fl: s.flip ? 1 : 0,
-          bg: s.big ? 1 : 0, el: s.elite ? 1 : 0, nm: s.name || 0, kd: s.kind,
-          ds: s.drawSize, r: s.r, fs: r2(Math.max(0, s.flash)),
-          boss: s instanceof DD.Boss ? 1 : 0, bn: s.bossName || 0, sl: s.slamT ? r2(s.slamT) : 0,
-          fc: s.faction || "skeleton", gr: s.grade || "regular", eg: s.enraged ? 1 : 0,
-        })),
+        en: game.skeletons.map((s) => {
+          if (s._nid == null) s._nid = nextEnemyId++;
+          return {
+            id: s._nid,
+            x: r1(s.x), y: r1(s.y), hp: s.hp, mhp: s.maxHp,
+            st: s.state, stt: r2(s.stateT), an: r2(s.animT % 100), fl: s.flip ? 1 : 0,
+            bg: s.big ? 1 : 0, el: s.elite ? 1 : 0, nm: s.name || 0, kd: s.kind,
+            ds: s.drawSize, r: s.r, fs: r2(Math.max(0, s.flash)),
+            boss: s instanceof DD.Boss ? 1 : 0, bn: s.bossName || 0, sl: s.slamT ? r2(s.slamT) : 0,
+            fc: s.faction || "skeleton", gr: s.grade || "regular", eg: s.enraged ? 1 : 0,
+            fz: s.frozen ? 1 : 0, // dormant floor enemies — HUD hides the boss bar for these
+          };
+        }),
         pr: game.projectiles.map((p) => ({ x: r1(p.x), y: r1(p.y), vx: r1(p.vx), vy: r1(p.vy), kind: p.kind })),
         es: game.enemyShots.map((e) => ({ x: r1(e.x), y: r1(e.y), t: r2(e.t), style: e.style || "bone" })),
         pk: game.pickups.map((p) => ({ kind: p.kind, x: r1(p.x), y: r1(p.y), t: r2(p.t % 100) })),
@@ -280,8 +294,12 @@
       }
       game.stairsReady = !!s.sr;
 
-      game.players = s.pl.map((d) => {
-        const o = Object.create(DD.Player.prototype);
+      // Reuse player objects by slot so their 3D models (and face-smoothing
+      // history) persist across snapshots instead of being respawned each frame.
+      const prevPlayers = game.players || [];
+      game.players = s.pl.map((d, i) => {
+        const o = (prevPlayers[i] && prevPlayers[i].classKey === d.c)
+          ? prevPlayers[i] : Object.create(DD.Player.prototype);
         o.classKey = d.c; o.cfg = DD.CLASSES[d.c];
         o.stats = { arc: d.arc, range: d.rng, dash: !!d.dsh };
         o.x = d.x; o.y = d.y; o.hp = d.hp; o.maxHp = d.mhp; o.r = 10;
@@ -293,17 +311,27 @@
         return o;
       });
 
+      // Reuse enemy objects by their host-assigned id (same reason as players).
+      const seenEnemies = new Set();
       game.skeletons = s.en.map((d) => {
-        const o = Object.create(d.boss ? DD.Boss.prototype : DD.Skeleton.prototype);
+        seenEnemies.add(d.id);
+        const proto = d.boss ? DD.Boss.prototype : DD.Skeleton.prototype;
+        let o = guestEnemies.get(d.id);
+        if (!o || Object.getPrototypeOf(o) !== proto) {
+          o = Object.create(proto);
+          guestEnemies.set(d.id, o);
+        }
         o.x = d.x; o.y = d.y; o.hp = d.hp; o.maxHp = d.mhp;
         o.state = d.st; o.stateT = d.stt; o.animT = d.an; o.flip = !!d.fl;
         o.big = !!d.bg; o.elite = !!d.el; o.name = d.nm || null; o.kind = d.kd;
         o.drawSize = d.ds; o.r = d.r; o.flash = d.fs; o.dead = false;
         o.bossName = d.bn || null; o.slamT = d.sl || 0;
         o.faction = d.fc || "skeleton"; o.grade = d.gr || "regular"; o.enraged = !!d.eg;
+        o.frozen = !!d.fz; // so the HUD hides the boss bar for a dormant boss
         if (d.boss) o.modelScale = 1.7; // keep the King's larger 3D size on the guest
         return o;
       });
+      for (const id of guestEnemies.keys()) if (!seenEnemies.has(id)) guestEnemies.delete(id);
 
       game.projectiles = s.pr.map((d) => Object.assign(Object.create(DD.Projectile.prototype), d, { dead: false }));
       game.enemyShots = s.es.map((d) => Object.assign(Object.create(DD.EnemyShot.prototype), d, { dead: false }));
