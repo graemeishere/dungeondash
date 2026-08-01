@@ -1,4 +1,4 @@
-import { WIDTH, HEIGHT, angleTo, dist } from "./util.js?v=__BUILD__";
+import { WIDTH, HEIGHT, angleTo, dist, view } from "./util.js?v=__BUILD__";
 import { audio } from "./audio.js?v=__BUILD__";
 import { rt } from "./runtime.js?v=__BUILD__";
 
