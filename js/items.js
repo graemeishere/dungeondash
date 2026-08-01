@@ -1,163 +1,162 @@
-"use strict";
-(function (DD) {
-  DD.INV_CAP = 15;
+import { choice } from "./util.js?v=__BUILD__";
 
-  // Trader economy: buy prices the shop charges, sell values it pays (by rarity).
-  // Buy > sell so churning gear is a loss; gold is earned in runs, spent in town.
-  DD.SHOP_BUY  = { common: 25, rare: 70, epic: 150 };
-  DD.SHOP_SELL = { common: 10, rare: 30, epic: 60 };
-  DD.buyPrice  = (item) => DD.SHOP_BUY[item.rarity]  || 25;
-  DD.sellPrice = (item) => DD.SHOP_SELL[item.rarity] || 10;
+export const INV_CAP = 15;
 
-  // A fresh shop stock of n random items (re-rolled each town visit).
-  DD.rollShopStock = function (n = 5, floor = 0) {
-    const stock = [];
-    for (let i = 0; i < n; i++) stock.push(DD.rollItem({ floor }));
-    return stock;
-  };
+// Trader economy: buy prices the shop charges, sell values it pays (by rarity).
+// Buy > sell so churning gear is a loss; gold is earned in runs, spent in town.
+export const SHOP_BUY  = { common: 25, rare: 70, epic: 150 };
+export const SHOP_SELL = { common: 10, rare: 30, epic: 60 };
+export const buyPrice  = (item) => SHOP_BUY[item.rarity]  || 25;
+export const sellPrice = (item) => SHOP_SELL[item.rarity] || 10;
 
-  DD.ITEM_RARITY = {
-    common: { color: "#b0a8cc", weight: 60, scale: 1.0, label: "Common" },
-    rare:   { color: "#4a9bff", weight: 28, scale: 1.6, label: "Rare"   },
-    epic:   { color: "#c87dff", weight: 12, scale: 2.5, label: "Epic"   },
-  };
+// A fresh shop stock of n random items (re-rolled each town visit).
+export function rollShopStock(n = 5, floor = 0) {
+  const stock = [];
+  for (let i = 0; i < n; i++) stock.push(rollItem({ floor }));
+  return stock;
+};
 
-  const ITEM_BASES = [
-    // Weapons — improve damage / attack stats
-    { name: "Iron Sword",    slot: "weapon",  icon: "sword", mods: { dmg: 1.5 } },
-    { name: "Keen Blade",    slot: "weapon",  icon: "sword", mods: { dmg: 1.0, cooldown: -0.04 } },
-    { name: "Heavy Maul",    slot: "weapon",  icon: "sword", mods: { dmg: 3.0 } },
-    { name: "Magic Focus",   slot: "weapon",  icon: "sword", mods: { dmg: 1.5, projSpeed: 28 } },
-    // Armor — improve survivability
-    { name: "Leather Vest",  slot: "armor",   icon: "armor", mods: { hp: 2 } },
-    { name: "Chain Mail",    slot: "armor",   icon: "armor", mods: { hp: 4 } },
-    { name: "Swift Leather", slot: "armor",   icon: "armor", mods: { hp: 1, speed: 14 } },
-    { name: "Arcane Robe",   slot: "armor",   icon: "armor", mods: { hp: 2, projSpeed: 22 } },
-    // Trinkets — utility / hybrid bonuses
-    { name: "Swift Ring",    slot: "trinket", icon: "ring",  mods: { speed: 20 } },
-    { name: "Vampire Fang",  slot: "trinket", icon: "ring",  mods: { killHeal: 0.3 } },
-    { name: "Power Gem",     slot: "trinket", icon: "ring",  mods: { dmg: 1.5 } },
-    { name: "Vigor Amulet",  slot: "trinket", icon: "ring",  mods: { hp: 2, speed: 7 } },
-    // Skeleton faction loot
-    { name: "Bone Axe",      slot: "weapon",  icon: "axe",   faction: "skeleton", mods: { dmg: 2.0, arc: 0.3 } },
-    { name: "Cursed Shield", slot: "armor",   icon: "armor", faction: "skeleton", mods: { hp: 3, speed: -12 } },
-    { name: "Skull Ring",    slot: "trinket", icon: "ring",  faction: "skeleton", mods: { killHeal: 0.2, dmg: 1.0 } },
-    // Goblin faction loot
-    { name: "Shiv",          slot: "weapon",  icon: "sword", faction: "goblin",   mods: { dmg: 1.0, cooldown: -0.06 } },
-    { name: "Rat-Hide Vest", slot: "armor",   icon: "armor", faction: "goblin",   mods: { hp: 2, speed: 18 } },
-    { name: "Shiny Trinket", slot: "trinket", icon: "ring",  faction: "goblin",   mods: { speed: 24, dmg: 0.5 } },
-    // Undead faction loot
-    { name: "Soul Blade",    slot: "weapon",  icon: "sword", faction: "undead",   mods: { dmg: 2.5, killHeal: 0.15 } },
-    { name: "Shadow Shroud", slot: "armor",   icon: "armor", faction: "undead",   mods: { hp: 3, projSpeed: 30 } },
-    { name: "Phylactery",    slot: "trinket", icon: "ring",  faction: "undead",   mods: { hp: 2, killHeal: 0.25 } },
-  ];
+export const ITEM_RARITY = {
+  common: { color: "#b0a8cc", weight: 60, scale: 1.0, label: "Common" },
+  rare:   { color: "#4a9bff", weight: 28, scale: 1.6, label: "Rare"   },
+  epic:   { color: "#c87dff", weight: 12, scale: 2.5, label: "Epic"   },
+};
 
-  // Labels used in the inventory tooltip
-  const STAT_LABELS = {
-    dmg: "Damage", speed: "Speed", hp: "Max HP", cooldown: "Cooldown",
-    projSpeed: "Proj Speed", range: "Range", arc: "Arc",
-    splash: "Splash", pierce: "Pierce", killHeal: "Lifesteal",
-  };
+const ITEM_BASES = [
+  // Weapons — improve damage / attack stats
+  { name: "Iron Sword",    slot: "weapon",  icon: "sword", mods: { dmg: 1.5 } },
+  { name: "Keen Blade",    slot: "weapon",  icon: "sword", mods: { dmg: 1.0, cooldown: -0.04 } },
+  { name: "Heavy Maul",    slot: "weapon",  icon: "sword", mods: { dmg: 3.0 } },
+  { name: "Magic Focus",   slot: "weapon",  icon: "sword", mods: { dmg: 1.5, projSpeed: 28 } },
+  // Armor — improve survivability
+  { name: "Leather Vest",  slot: "armor",   icon: "armor", mods: { hp: 2 } },
+  { name: "Chain Mail",    slot: "armor",   icon: "armor", mods: { hp: 4 } },
+  { name: "Swift Leather", slot: "armor",   icon: "armor", mods: { hp: 1, speed: 14 } },
+  { name: "Arcane Robe",   slot: "armor",   icon: "armor", mods: { hp: 2, projSpeed: 22 } },
+  // Trinkets — utility / hybrid bonuses
+  { name: "Swift Ring",    slot: "trinket", icon: "ring",  mods: { speed: 20 } },
+  { name: "Vampire Fang",  slot: "trinket", icon: "ring",  mods: { killHeal: 0.3 } },
+  { name: "Power Gem",     slot: "trinket", icon: "ring",  mods: { dmg: 1.5 } },
+  { name: "Vigor Amulet",  slot: "trinket", icon: "ring",  mods: { hp: 2, speed: 7 } },
+  // Skeleton faction loot
+  { name: "Bone Axe",      slot: "weapon",  icon: "axe",   faction: "skeleton", mods: { dmg: 2.0, arc: 0.3 } },
+  { name: "Cursed Shield", slot: "armor",   icon: "armor", faction: "skeleton", mods: { hp: 3, speed: -12 } },
+  { name: "Skull Ring",    slot: "trinket", icon: "ring",  faction: "skeleton", mods: { killHeal: 0.2, dmg: 1.0 } },
+  // Goblin faction loot
+  { name: "Shiv",          slot: "weapon",  icon: "sword", faction: "goblin",   mods: { dmg: 1.0, cooldown: -0.06 } },
+  { name: "Rat-Hide Vest", slot: "armor",   icon: "armor", faction: "goblin",   mods: { hp: 2, speed: 18 } },
+  { name: "Shiny Trinket", slot: "trinket", icon: "ring",  faction: "goblin",   mods: { speed: 24, dmg: 0.5 } },
+  // Undead faction loot
+  { name: "Soul Blade",    slot: "weapon",  icon: "sword", faction: "undead",   mods: { dmg: 2.5, killHeal: 0.15 } },
+  { name: "Shadow Shroud", slot: "armor",   icon: "armor", faction: "undead",   mods: { hp: 3, projSpeed: 30 } },
+  { name: "Phylactery",    slot: "trinket", icon: "ring",  faction: "undead",   mods: { hp: 2, killHeal: 0.25 } },
+];
 
-  // Stats where a higher value is better (cooldown is inverted)
-  const HIGHER_IS_BETTER = new Set([
-    "dmg", "speed", "hp", "projSpeed", "range", "arc", "splash", "pierce", "killHeal",
-  ]);
+// Labels used in the inventory tooltip
+const STAT_LABELS = {
+  dmg: "Damage", speed: "Speed", hp: "Max HP", cooldown: "Cooldown",
+  projSpeed: "Proj Speed", range: "Range", arc: "Arc",
+  splash: "Splash", pierce: "Pierce", killHeal: "Lifesteal",
+};
 
-  // Generate a random item for the given floor (0-based) and optional min rarity.
-  // When faction is provided, 70% of drops come from matching-faction bases, 30% from universal ones.
-  DD.rollItem = function ({ floor = 0, minRarity, faction } = {}) {
-    // Choose rarity
-    const entries = Object.entries(DD.ITEM_RARITY);
-    const pool = minRarity
-      ? entries.slice(entries.findIndex(([r]) => r === minRarity))
-      : entries;
-    const total = pool.reduce((s, [, r]) => s + r.weight, 0);
-    let roll = Math.random() * total;
-    let rarity = pool[0][0];
-    for (const [r, def] of pool) {
-      roll -= def.weight;
-      if (roll <= 0) { rarity = r; break; }
-    }
+// Stats where a higher value is better (cooldown is inverted)
+const HIGHER_IS_BETTER = new Set([
+  "dmg", "speed", "hp", "projSpeed", "range", "arc", "splash", "pierce", "killHeal",
+]);
 
-    // Build the item base pool, weighting toward the dungeon faction
-    let base;
-    if (faction) {
-      const factionBases = ITEM_BASES.filter((b) => b.faction === faction);
-      const universalBases = ITEM_BASES.filter((b) => !b.faction);
-      if (factionBases.length > 0 && Math.random() < 0.7) {
-        base = DD.choice(factionBases);
-      } else {
-        base = DD.choice(universalBases);
-      }
+// Generate a random item for the given floor (0-based) and optional min rarity.
+// When faction is provided, 70% of drops come from matching-faction bases, 30% from universal ones.
+export function rollItem({ floor = 0, minRarity, faction } = {}) {
+  // Choose rarity
+  const entries = Object.entries(ITEM_RARITY);
+  const pool = minRarity
+    ? entries.slice(entries.findIndex(([r]) => r === minRarity))
+    : entries;
+  const total = pool.reduce((s, [, r]) => s + r.weight, 0);
+  let roll = Math.random() * total;
+  let rarity = pool[0][0];
+  for (const [r, def] of pool) {
+    roll -= def.weight;
+    if (roll <= 0) { rarity = r; break; }
+  }
+
+  // Build the item base pool, weighting toward the dungeon faction
+  let base;
+  if (faction) {
+    const factionBases = ITEM_BASES.filter((b) => b.faction === faction);
+    const universalBases = ITEM_BASES.filter((b) => !b.faction);
+    if (factionBases.length > 0 && Math.random() < 0.7) {
+      base = choice(factionBases);
     } else {
-      base = DD.choice(ITEM_BASES.filter((b) => !b.faction));
+      base = choice(universalBases);
     }
-    const scale = DD.ITEM_RARITY[rarity].scale;
-    const mods = {};
-    for (const [k, v] of Object.entries(base.mods)) {
-      mods[k] = Math.round(v * scale * 100) / 100;
+  } else {
+    base = choice(ITEM_BASES.filter((b) => !b.faction));
+  }
+  const scale = ITEM_RARITY[rarity].scale;
+  const mods = {};
+  for (const [k, v] of Object.entries(base.mods)) {
+    mods[k] = Math.round(v * scale * 100) / 100;
+  }
+
+  return {
+    id: base.slot[0] + Date.now().toString(36) + Math.floor(Math.random() * 9999),
+    name: base.name,
+    slot: base.slot,
+    rarity,
+    icon: base.icon,
+    levelReq: 1,
+    mods,
+  };
+};
+
+// Equip an item from inventory (or anywhere) onto the hero. Returns the
+// previously equipped item in that slot (now moved to inventory), or null.
+export function equip(hero, item) {
+  const idx = hero.inventory.findIndex((i) => i.id === item.id);
+  if (idx >= 0) hero.inventory.splice(idx, 1);
+  const prev = hero.equipped[item.slot];
+  if (prev) hero.inventory.unshift(prev); // put old item back at front
+  hero.equipped[item.slot] = item;
+  return prev;
+};
+
+// Move the equipped item in a slot back into inventory.
+export function unequip(hero, slot) {
+  const item = hero.equipped[slot];
+  if (!item) return null;
+  hero.equipped[slot] = null;
+  hero.inventory.unshift(item);
+  return item;
+};
+
+// Returns [{key, text}] for tooltip display.
+export function itemStatLines(item) {
+  return Object.entries(item.mods || {}).map(([k, v]) => {
+    const label = STAT_LABELS[k] || k;
+    let text;
+    if (k === "killHeal") {
+      text = `+${Math.round(v * 100)}% ${label}`;
+    } else if (k === "cooldown") {
+      text = `${v.toFixed(2)}s ${label} (faster)`;
+    } else if (Math.abs(v) >= 1) {
+      text = `${v > 0 ? "+" : ""}${Math.round(v)} ${label}`;
+    } else {
+      text = `${v > 0 ? "+" : ""}${v.toFixed(1)} ${label}`;
     }
+    return { key: k, text };
+  });
+};
 
-    return {
-      id: base.slot[0] + Date.now().toString(36) + Math.floor(Math.random() * 9999),
-      name: base.name,
-      slot: base.slot,
-      rarity,
-      icon: base.icon,
-      levelReq: 1,
-      mods,
-    };
-  };
-
-  // Equip an item from inventory (or anywhere) onto the hero. Returns the
-  // previously equipped item in that slot (now moved to inventory), or null.
-  DD.equip = function (hero, item) {
-    const idx = hero.inventory.findIndex((i) => i.id === item.id);
-    if (idx >= 0) hero.inventory.splice(idx, 1);
-    const prev = hero.equipped[item.slot];
-    if (prev) hero.inventory.unshift(prev); // put old item back at front
-    hero.equipped[item.slot] = item;
-    return prev;
-  };
-
-  // Move the equipped item in a slot back into inventory.
-  DD.unequip = function (hero, slot) {
-    const item = hero.equipped[slot];
-    if (!item) return null;
-    hero.equipped[slot] = null;
-    hero.inventory.unshift(item);
-    return item;
-  };
-
-  // Returns [{key, text}] for tooltip display.
-  DD.itemStatLines = function (item) {
-    return Object.entries(item.mods || {}).map(([k, v]) => {
-      const label = STAT_LABELS[k] || k;
-      let text;
-      if (k === "killHeal") {
-        text = `+${Math.round(v * 100)}% ${label}`;
-      } else if (k === "cooldown") {
-        text = `${v.toFixed(2)}s ${label} (faster)`;
-      } else if (Math.abs(v) >= 1) {
-        text = `${v > 0 ? "+" : ""}${Math.round(v)} ${label}`;
-      } else {
-        text = `${v > 0 ? "+" : ""}${v.toFixed(1)} ${label}`;
-      }
-      return { key: k, text };
-    });
-  };
-
-  // Returns {key: delta} where positive delta means item a is better than b.
-  DD.compareItems = function (a, b) {
-    const diff = {};
-    const keys = new Set([...Object.keys(a.mods || {}), ...Object.keys(b.mods || {})]);
-    for (const k of keys) {
-      const va = (a.mods || {})[k] || 0;
-      const vb = (b.mods || {})[k] || 0;
-      const d = va - vb;
-      if (Math.abs(d) > 0.0001) diff[k] = HIGHER_IS_BETTER.has(k) ? d : -d;
-    }
-    return diff;
-  };
-})(window.DD = window.DD || {});
+// Returns {key: delta} where positive delta means item a is better than b.
+export function compareItems(a, b) {
+  const diff = {};
+  const keys = new Set([...Object.keys(a.mods || {}), ...Object.keys(b.mods || {})]);
+  for (const k of keys) {
+    const va = (a.mods || {})[k] || 0;
+    const vb = (b.mods || {})[k] || 0;
+    const d = va - vb;
+    if (Math.abs(d) > 0.0001) diff[k] = HIGHER_IS_BETTER.has(k) ? d : -d;
+  }
+  return diff;
+};

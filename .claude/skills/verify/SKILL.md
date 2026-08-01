@@ -43,9 +43,16 @@ HUD/map UI).
 
 ## Regression checks
 
-`node dev/room-checks.mjs` (run from a dir with playwright installed, server
-on :8123) asserts per-theme draw-call/triangle budgets and decor-planner
-determinism (same desc → same plan; guest `setData(getData())` round-trip).
+Both run from a dir with playwright installed, with the server on :8123, and
+both run in CI (`.github/workflows/room-checks.yml`, advisory-only for now):
+
+- `node dev/room-checks.mjs` — per-theme draw-call/triangle budgets and
+  decor-planner determinism (same desc → same plan; guest
+  `setData(getData())` round-trip), plus floor connectivity and gating.
+- `node dev/phase0-checks.mjs` — the "it still boots and plays" acceptance
+  suite: 4 classes × 3 dungeons, combat, a full floor through a boss and down
+  the stairs, town/lobby/map/hub/inventory, death and Play Again, raid,
+  finale, save and resume, WebGL context loss, and the dev-flag gate.
 
 ## Room navigation tricks
 
@@ -58,8 +65,21 @@ determinism (same desc → same plan; guest `setData(getData())` round-trip).
   `s.state = "chase"` (dormant ones ignore damage) and call
   `s.damage(9999, s.x, s.y, DD.game)`.
 
+## Forcing WebGL context loss
+
+```js
+const gl = DD.render3d.renderer.getContext();
+const ext = gl.getExtension("WEBGL_lose_context");
+ext.loseContext();     // expect: #webgl-lost overlay, DD.game.time frozen, rAF still running
+ext.restoreContext();  // expect: a console warning only — the reload prompt stays up by design
+```
+
+`DD.render3d.contextLost` is the flag; `DD.game3d.contextLost()` is what the
+game reads. Recovery is deliberately a reload prompt, not an in-place rebuild.
+
 ## Gotchas
 
 - `/favicon.ico` 404 in the console is normal.
+- `console.error("WebGL context lost…")` is deliberate, not a failure.
 - Skeletons start dormant (skull piles); they wake on proximity or after 60s.
 - Each page load generates a fresh random room layout.
