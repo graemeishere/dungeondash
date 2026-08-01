@@ -1,0 +1,432 @@
+"use strict";
+// The walkable town and dungeon-lobby rooms, the four NPCs and their menus, and
+// the raid / finale set-pieces that are built out of the town.
+
+import { audio } from "./audio.js?v=8addee6b";
+import { CLASSES } from "./entities.js?v=8addee6b";
+import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=8addee6b";
+import { particles } from "./particles.js?v=8addee6b";
+import { profile } from "./profile.js?v=8addee6b";
+import { room } from "./room.js?v=8addee6b";
+import { sprites } from "./sprites.js?v=8addee6b";
+import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=8addee6b";
+import { canvas, menuEl } from "./dom.js?v=8addee6b";
+import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=8addee6b";
+import { startRun, beginRun } from "./run.js?v=8addee6b";
+import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=8addee6b";
+import { sizeRoomToCanvas } from "./draw.js?v=8addee6b";
+
+// Themed entry room with three tier doorways. Walk through one to start a run.
+export function showDungeonLobby(dungeonId) {
+  if (!DUNGEONS[dungeonId]) return;
+  hideAllOverlays();
+  game.state = "lobby";
+  game.peaceful = true;
+  game.lobbyDungeonId = dungeonId;
+  game.lobbyDungeonName = DUNGEONS[dungeonId].name; // for the 3D overlay title
+  game.dungeonId = dungeonId;
+  game.time = 0;
+  game.nearbyNpc = null;
+  game.townNpcs = [];
+  sizeRoomToCanvas();
+  room.setTheme(dungeonId);
+  const lvl = (game.hero && game.hero.level) || 1;
+  const tierInfo = DUNGEONS[dungeonId].tiers.map((t, ti) => {
+    const req = TIER_REQ[ti] || 0;
+    return {
+      sub: t.levelHint, color: ["#9affb0", "#ffd95e", "#ff7a7a"][ti] || "#d8cfee",
+      locked: lvl < req, req, cleared: profile.hasClear(game.hero, dungeonId, ti),
+    };
+  });
+  room.generateLobby(tierInfo);
+  updateView(canvas);
+  spawnHeroInRoom();
+  game.padTi = -1;
+  game.padDwell = 0;
+}
+
+export function tierLocked(ti) {
+  return ((game.hero && game.hero.level) || 1) < (TIER_REQ[ti] || 0);
+}
+
+export function enterTierDoor(ti) {
+  if (tierLocked(ti)) {
+    townToast(`Reach level ${TIER_REQ[ti]} to enter Tier ${ti + 1}`, "#ff6b70");
+    return;
+  }
+  const classKey = (game.hero && game.hero.classKey) || game.classKey;
+  beginRun(classKey, game.lobbyDungeonId, ti);
+}
+
+export function spawnTownNpcs() {
+  const y = HEIGHT * 0.45;
+  const slots = [0.22, 0.41, 0.59, 0.78];
+  const defs = [
+    { id: "barkeep",    label: "Barkeep",     sprite: "npcBarkeep",    interact: openBarkeepMenu },
+    { id: "innkeeper",  label: "Innkeeper",   sprite: "npcInnkeeper",  interact: openInnkeeperMenu },
+    { id: "trader",     label: "Trader",      sprite: "npcTrader",     interact: openTraderMenu },
+    { id: "questgiver", label: "Quest Giver", sprite: "npcQuestGiver", interact: openQuestGiverMenu },
+  ];
+  return defs.map((d, i) => {
+    const npc = { ...d, x: WIDTH * slots[i], y, r: 14, bob: Math.random() * Math.PI * 2 };
+    // sprite shim so the 3D layer can stand the NPC up as a billboard
+    npc.draw = (c) => drawTownNpc(c, npc, game.time);
+    return npc;
+  });
+}
+
+// Walkable town. 25% of arrivals trigger a raid warning instead.
+export function showTownRoom(skipRaid) {
+  hideAllOverlays();
+  if (!skipRaid && Math.random() < 0.25) { showRaidWarning(); return; }
+  game.state = "town";
+  game.peaceful = true;
+  game.raidMode = false;
+  game.time = 0;
+  game.nearbyNpc = null;
+  sizeRoomToCanvas();
+  room.setTheme("town");
+  room.generateTown();
+  updateView(canvas);
+  spawnHeroInRoom();
+  game.townNpcs = spawnTownNpcs();
+  game.shopStock = rollShopStock(5); // fresh trader stock each town visit
+}
+
+// ---- town NPC interactions ----
+
+const statsOverlayEl = document.getElementById("stats-overlay");
+
+export function openBarkeepMenu() {
+  if (!game.hero) return;
+  game.state = "stats";
+  buildStatsOverlay(game.hero);
+  statsOverlayEl.classList.remove("hidden");
+}
+
+export function closeStatsOverlay() {
+  statsOverlayEl.classList.add("hidden");
+  if (game.hero) rebaseLocalPlayer();
+  game.state = "town";
+}
+
+export function openInnkeeperMenu() {
+  uiFlags.townSwitchClass = true;
+  game.state = "menu";
+  menuEl.classList.remove("hidden");
+  refreshContinueButton();
+  setMenuMode(null, "INNKEEPER — pick a new class. Your level, gold and gear are kept.");
+}
+
+const traderEl = document.getElementById("trader");
+
+export function openTraderMenu() {
+  if (!game.hero) return;
+  game.state = "trader";
+  buildTraderOverlay(game.hero);
+  traderEl.classList.remove("hidden");
+}
+
+export function closeTraderOverlay() {
+  traderEl.classList.add("hidden");
+  if (game.hero) rebaseLocalPlayer();
+  game.state = "town";
+}
+
+export function buildTraderOverlay(hero) {
+  document.getElementById("tr-gold").innerHTML =
+    `<span style="color:#ffd14a">${hero.gold || 0} gold</span>`;
+
+  // FOR SALE — buy into your bag
+  const shopEl = document.getElementById("tr-shop");
+  shopEl.innerHTML = "";
+  const stock = game.shopStock || [];
+  if (stock.length === 0) {
+    shopEl.innerHTML = `<p class="shop-empty">Sold out — come back after your next run.</p>`;
+  } else {
+    for (const item of stock) {
+      const price = buyPrice(item);
+      const bagFull = hero.inventory.length >= INV_CAP;
+      const tooPoor = (hero.gold || 0) < price;
+      const row = document.createElement("div");
+      row.className = `shop-row rarity-${item.rarity}`;
+      row.innerHTML =
+        `<img src="${sprites.items[item.icon].toDataURL()}">` +
+        `<span class="shop-name">${item.name}</span>` +
+        `<span class="shop-price">${price}g</span>`;
+      const btn = document.createElement("button");
+      btn.className = "shop-btn";
+      btn.textContent = "Buy";
+      btn.disabled = bagFull || tooPoor;
+      if (bagFull) btn.title = "Bag full";
+      else if (tooPoor) btn.title = "Not enough gold";
+      btn.onclick = () => {
+        if (hero.inventory.length >= INV_CAP || (hero.gold || 0) < price) return;
+        hero.gold -= price;
+        hero.inventory.push(item);
+        game.shopStock = game.shopStock.filter((s) => s !== item);
+        audio.coin();
+        profile.save();
+        buildTraderOverlay(hero);
+      };
+      row.appendChild(btn);
+      row.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
+      row.onmouseleave = hideInvTooltip;
+      shopEl.appendChild(row);
+    }
+  }
+
+  // YOUR BAG — sell for gold
+  const invEl = document.getElementById("tr-inv");
+  invEl.innerHTML = "";
+  if (hero.inventory.length === 0) {
+    invEl.innerHTML = `<p class="shop-empty">Your bag is empty.</p>`;
+  } else {
+    for (const item of hero.inventory) {
+      const value = sellPrice(item);
+      const row = document.createElement("div");
+      row.className = `shop-row rarity-${item.rarity}`;
+      row.innerHTML =
+        `<img src="${sprites.items[item.icon].toDataURL()}">` +
+        `<span class="shop-name">${item.name}</span>` +
+        `<span class="shop-price">${value}g</span>`;
+      const btn = document.createElement("button");
+      btn.className = "shop-btn sell";
+      btn.textContent = "Sell";
+      btn.onclick = () => {
+        const idx = hero.inventory.indexOf(item);
+        if (idx < 0) return;
+        hero.inventory.splice(idx, 1);
+        hero.gold = (hero.gold || 0) + value;
+        audio.coin();
+        profile.save();
+        buildTraderOverlay(hero);
+      };
+      row.appendChild(btn);
+      row.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
+      row.onmouseleave = hideInvTooltip;
+      invEl.appendChild(row);
+    }
+  }
+}
+
+const questGiverEl = document.getElementById("questgiver");
+
+export function openQuestGiverMenu() {
+  if (!game.hero) return;
+  game.state = "quests";
+  buildQuestGiverOverlay(game.hero);
+  questGiverEl.classList.remove("hidden");
+}
+
+export function closeQuestGiverOverlay() {
+  questGiverEl.classList.add("hidden");
+  game.state = "town";
+}
+
+function questRewardText(def) {
+  let t = `Reward: ${def.reward.gold || 0}g`;
+  if (def.reward.xp) t += ` · ${def.reward.xp} XP`;
+  return t;
+}
+
+// Progress bar HTML for kill-count quests; other goals are pass/fail.
+function questProgressHtml(def, q) {
+  const g = def.goal;
+  if (!g.kills) return "";
+  const cur = Math.min((q.progress && q.progress.kills) || 0, g.kills);
+  const pct = Math.round((cur / g.kills) * 100);
+  return `<div class="q-bar-bg"><div class="q-bar-fill" style="width:${pct}%"></div></div>` +
+    `<div class="q-desc">${cur} / ${g.kills}</div>`;
+}
+
+export function buildQuestGiverOverlay(hero) {
+  const P = profile;
+  const active = P.data.quests.active;
+  const completed = P.data.quests.completed;
+  document.getElementById("qg-sub").textContent =
+    `${active.length}/${P.ACTIVE_CAP} active  •  ${completed.length} completed`;
+
+  const activeEl = document.getElementById("qg-active");
+  activeEl.innerHTML = "";
+  if (active.length === 0) {
+    activeEl.innerHTML = `<p class="shop-empty">No active quests — accept one from the list.</p>`;
+  } else {
+    for (const q of active) {
+      const def = P.questDef(q.id);
+      if (!def) continue;
+      const card = document.createElement("div");
+      card.className = "quest-card";
+      card.innerHTML =
+        `<div class="q-title">${def.title}</div>` +
+        `<div class="q-desc">${def.desc}</div>` +
+        questProgressHtml(def, q) +
+        `<div class="q-reward">${questRewardText(def)}</div>`;
+      const actions = document.createElement("div");
+      actions.className = "q-actions";
+      const btn = document.createElement("button");
+      btn.className = "shop-btn danger";
+      const canAfford = (hero.gold || 0) >= P.ABANDON_COST;
+      btn.textContent = `Abandon (${P.ABANDON_COST}g)`;
+      btn.disabled = !canAfford;
+      if (!canAfford) btn.title = "Not enough gold";
+      btn.onclick = () => {
+        if (P.abandonQuest(q.id, hero)) buildQuestGiverOverlay(hero);
+      };
+      actions.appendChild(btn);
+      card.appendChild(actions);
+      activeEl.appendChild(card);
+    }
+  }
+
+  const availEl = document.getElementById("qg-avail");
+  availEl.innerHTML = "";
+  const avail = P.availableQuests();
+  if (avail.length === 0) {
+    availEl.innerHTML = `<p class="shop-empty">Nothing new right now — come back later.</p>`;
+  } else {
+    const full = active.length >= P.ACTIVE_CAP;
+    for (const def of avail) {
+      const card = document.createElement("div");
+      card.className = "quest-card";
+      card.innerHTML =
+        `<div class="q-title">${def.title}</div>` +
+        `<div class="q-desc">${def.desc}</div>` +
+        `<div class="q-reward">${questRewardText(def)}</div>`;
+      const actions = document.createElement("div");
+      actions.className = "q-actions";
+      const btn = document.createElement("button");
+      btn.className = "shop-btn";
+      btn.textContent = "Accept";
+      btn.disabled = full;
+      if (full) btn.title = `Max ${P.ACTIVE_CAP} active quests`;
+      btn.onclick = () => {
+        if (P.acceptQuest(def.id)) buildQuestGiverOverlay(hero);
+      };
+      actions.appendChild(btn);
+      card.appendChild(actions);
+      availEl.appendChild(card);
+    }
+  }
+}
+
+export function townToast(text, color) {
+  // centered on-screen so short placeholder messages never run off a narrow phone
+  particles.text(WIDTH / 2, HEIGHT * 0.66, text, color || "#ffd95e");
+}
+
+// Change the active hero's class while keeping all progression.
+export function switchClass(classKey) {
+  if (!CLASSES[classKey] || !game.hero) return;
+  game.hero.classKey = classKey;
+  game.classKey = classKey;
+  profile.save();
+  uiFlags.townSwitchClass = false;
+  menuEl.classList.add("hidden");
+  setMenuMode(null, "");
+  showTownRoom(true);
+}
+
+// ---- raid warning ----
+
+export function showRaidWarning() {
+  game.state = "raid-warn";
+  game.raidFaction = choice(["goblin", "skeleton", "undead"]);
+  const dungeonName = {
+    goblin: "Goblin Mines", skeleton: "Catacombs", undead: "The Crypt",
+  }[game.raidFaction];
+  document.getElementById("raid-text").textContent =
+    `Raiders from the ${dungeonName} are attacking the town!`;
+  document.getElementById("raid-warning").classList.remove("hidden");
+}
+
+function factionDungeon(faction) {
+  return { goblin: "goblinMines", skeleton: "catacombs", undead: "crypt" }[faction] || "catacombs";
+}
+
+// A short, town-themed mini-dungeon built from the raiding faction's enemies.
+// Registered as DUNGEONS.townRaid so all the DUNGEONS[game.dungeonId] lookups work.
+function buildRaidDungeon(faction) {
+  const src = DUNGEONS[factionDungeon(faction)];
+  const f0 = src.floors[0];
+  return {
+    id: "townRaid", name: "Town Under Siege", faction, theme: "town",
+    enemyLabel: src.enemyLabel,
+    floors: [{ name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds, plan: ["combat", "combat", "boss"] }],
+    tiers: src.tiers.map((t) => ({ ...t, bossName: "RAID CAPTAIN" })),
+  };
+}
+
+export function startRaid() {
+  document.getElementById("raid-warning").classList.add("hidden");
+  const classKey = (game.hero && game.hero.classKey) || game.classKey;
+  DUNGEONS.townRaid = buildRaidDungeon(game.raidFaction);
+  startRun(classKey, "townRaid", game.tier);
+  game.raidMode = true;
+}
+
+// The Champion-only capstone: a town-themed siege by every faction at once,
+// ending with a unique final boss. Tougher than any tier-3 run.
+function buildFinaleDungeon() {
+  return {
+    id: "finale", name: "The Last Stand", faction: "skeleton", bossFaction: "finale",
+    theme: "town", multiFaction: true, enemyLabel: "Raiders",
+    floors: [{
+      name: "Town Under Siege",
+      kinds: ["melee", "goblin", "zombie", "archer", "goblinArcher", "warlock", "goblinBerserker", "goblinBomber"],
+      eliteKinds: ["goblinBerserker", "warlock", "archer"],
+      plan: ["combat", "combat", "combat", "boss"],
+    }],
+    tiers: [{ tier: 0, levelHint: "30+", scale: 8.0, bossHp: 440, bossDmg: 10, bossName: "THE WORLD-EATER", summonKind: "goblinBerserker" }],
+  };
+}
+
+export function startFinale() {
+  const classKey = (game.hero && game.hero.classKey) || game.classKey;
+  DUNGEONS.finale = buildFinaleDungeon();
+  startRun(classKey, "finale", 0);
+}
+
+// ---- town / lobby rendering ----
+
+export function drawTownNpc(ctx, npc, time) {
+  const frames = sprites[npc.sprite] || sprites.npcBarkeep;
+  const d = 48;
+  const bobY = Math.sin(time * 2 + npc.bob) * 2;
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.beginPath();
+  ctx.ellipse(npc.x, npc.y + 5, npc.r + 2, (npc.r + 2) * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const frame = frames[Math.floor(time * 4) % frames.length];
+  ctx.drawImage(frame, Math.round(npc.x - d / 2), Math.round(npc.y - d + 10 + bobY), d, d);
+
+  const hot = game.nearbyNpc === npc;
+  const font = "'Trebuchet MS', Verdana, sans-serif";
+  ctx.textAlign = "center";
+  ctx.font = `bold 11px ${font}`;
+  const w = ctx.measureText(npc.label).width + 12;
+  ctx.fillStyle = "rgba(10,8,18,0.72)";
+  ctx.fillRect(npc.x - w / 2, npc.y - d - 6, w, 16);
+  ctx.fillStyle = hot ? "#ffd95e" : "#d8cfee";
+  ctx.fillText(npc.label, npc.x, npc.y - d + 6);
+  ctx.textAlign = "left";
+}
+
+
+// Tap an NPC in the town to talk to them (mobile has no E key).
+export function handleTownTap(clientX, clientY, targetEl) {
+  if (game.state !== "town") return false;
+  const rect = targetEl.getBoundingClientRect();
+  const cx = (clientX - rect.left) * (targetEl.width / rect.width);
+  const cy = (clientY - rect.top) * (targetEl.height / rect.height);
+  const wx = (cx - view.ox) / view.scale;
+  const wy = (cy - view.oy) / view.scale;
+  for (const npc of game.townNpcs) {
+    if (dist(wx, wy, npc.x, npc.y - 18) < 40) {
+      audio.unlock();
+      npc.interact();
+      return true;
+    }
+  }
+  return false;
+}

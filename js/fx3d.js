@@ -1,7 +1,7 @@
 "use strict";
 // 3D combat effects: a lightweight GPU particle system rendered as a single
 // THREE.Points draw call (additive glowing sprites). The existing 2D
-// DD.particles.burst calls are bridged into this when ?3d is active, so every
+// particles.burst calls are bridged into this when ?3d is active, so every
 // hit/death/dash effect becomes 3D with no re-wiring.
 //
 // ES module; the host importmap resolves "three".
@@ -185,7 +185,7 @@ export class FX3D {
     this.arcs.push({ mesh: m, t: 0, life: dur || 0.25, angle, arc, r: radius });
   }
 
-  // Spawn a burst at world (wx,wy,wz). opts mirror DD.particles.burst:
+  // Spawn a burst at world (wx,wy,wz). opts mirror particles.burst:
   // { count, colors[], speed, life, gravity }  (gravity>0 = fall, as in 2D).
   burst(wx, wy, wz, opts) {
     const count = opts.count || 8;

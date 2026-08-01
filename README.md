@@ -2,8 +2,8 @@
 
 A cartoon hack & slash roguelike for the web — desktop and mobile, solo or
 two-player co-op. Fight through three floors of combat rooms, trap gauntlets,
-elite hunts, and treasure vaults; spend gold at the shop between floors; and
-take down the Skeleton King, the Bone Emperor, and The Deathless.
+elite hunts, and treasure vaults; bank your gold and spend it at the Trader in
+town; and take down the Skeleton King, the Goblin Warlord and the Lich.
 
 See [DungeonDash_DesignBrief.md](DungeonDash_DesignBrief.md) for the full game design.
 
@@ -69,14 +69,16 @@ guest disconnects, the host continues solo seamlessly.
 - Animated KayKit heroes and skeletons, with GPU-particle combat effects
   (sparks, spell orbs, impact rings, weapon trails)
 - Three floors of escalating rooms: combat, treasure vaults, spike-trap
-  gauntlets, and named elite minibosses, each floor capped by its own boss
-  (Skeleton King → Bone Emperor → The Deathless) with AoE slams, summons,
+  gauntlets, and named elite minibosses, ending in the dungeon's boss
+  (Skeleton King, Goblin Warlord or the Lich) with AoE slams, summons,
   and enrage phases
 - Enemy variety: melee skeletons, tanky brutes, hooded archers that kite and
   shoot bones, and bombers that sprint in and explode
 - XP and level-ups: each level pauses the action with a choice of 3 random
   upgrades (damage, speed, max HP, attack speed, reach, lifesteal-on-kill)
-- A shop between floors: gold buys a full heal, +3 max HP, or a random upgrade
+- A town hub between runs: the Trader buys and sells gear, the Quest Giver
+  hands out contracts, the Barkeep shows your sheet and the Innkeeper swaps
+  your class
 - Run saves: the run checkpoints to localStorage after every floor boss (as
   the design brief specifies) and the menu offers Continue; death wipes it
 - Two-player WebRTC co-op with downed/revive (see above)
