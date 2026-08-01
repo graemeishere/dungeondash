@@ -1,7 +1,8 @@
 "use strict";
 // Run lifecycle: starting, generating, gating, advancing and ending a run.
-// Both generators live here - the connected-floor path (the default) and the
-// classic single-room path that raids and the finale still use.
+// The connected-floor path is the only traversal system (Phase 1 retired the
+// classic single-room generator/`?classic`; raids and the finale route
+// through here too now).
 
 import { audio } from "./audio.js?v=__BUILD__";
 import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=__BUILD__";
@@ -11,43 +12,12 @@ import { net } from "./net.js?v=__BUILD__";
 import { particles } from "./particles.js?v=__BUILD__";
 import { profile } from "./profile.js?v=__BUILD__";
 import { room } from "./room.js?v=__BUILD__";
-import { HEIGHT, ROOM_H, ROOM_W, TILE, WIDTH, choice, clamp, dist, rand, roomSizeFor, setRoomSize, updateView } from "./util.js?v=__BUILD__";
+import { TILE, choice, clamp, updateView } from "./util.js?v=__BUILD__";
 import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=__BUILD__";
-import { classicRun } from "./env.js?v=__BUILD__";
 import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=__BUILD__";
 import { sendRoomToGuest } from "./coop.js?v=__BUILD__";
 
-export const beginRun = (classKey, dungeonId, tier) =>
-  (classicRun ? startRun : startFloorRun)(classKey, dungeonId, tier);
-
-export function startRun(classKey, dungeonId = "catacombs", tier = 0) {
-  clearSave();
-  const hero = profile.getOrCreateHero(classKey);
-  game.hero = hero;
-  game.classKey = classKey;
-  game.dungeonId = dungeonId;
-  game.tier = tier;
-  game.floorMode = false;
-  game.peaceful = false;
-  game.raidMode = false;
-  game.townNpcs = [];
-  game.nearbyNpc = null;
-  room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
-  game.players = [new Player(classKey, 0, 0, input, hero)];
-  game.localIndex = 0;
-  input.setDashable(!!game.players[0].cfg.dash);
-  game.floor = 0;
-  game.xp = hero.xp || 0;
-  game.level = hero.level || 1;
-  game.gold = 0;
-  game.kills = 0;
-  game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
-  game.time = 0;
-  loadRoom(0);
-  freshGameState();
-}
-
-// Connected-floor run (Phase 3): explore a floor of small rooms joined by
+// Connected-floor run: explore a floor of small rooms joined by
 // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock
 // on clear; the boss chamber gates the descent to the next floor.
 export function startFloorRun(classKey, dungeonId = "catacombs", tier = 0) {
@@ -77,11 +47,16 @@ export function startFloorRun(classKey, dungeonId = "catacombs", tier = 0) {
   freshGameState();
 }
 
+// Every entry point into a run (menu, dungeon lobby, raid, finale) goes
+// through the floor generator now — there is exactly one traversal system.
+export const beginRun = startFloorRun;
+
 // Generate + install the current floor, then spawn every room's entities at
 // once (dormant + roomId-tagged) so entering a room can wake just that room.
 export function loadFloor() {
-  const plan = game.floorCfg().plan;
-  const floor = generateFloor({ plan, boss: plan[plan.length - 1] === "boss" });
+  const cfg = game.floorCfg();
+  const plan = cfg.plan;
+  const floor = generateFloor({ plan, boss: plan[plan.length - 1] === "boss", sideRooms: cfg.sideRooms });
   room.setFloor(floor);
   updateView(canvas);
   game.skeletons = [];
@@ -154,6 +129,25 @@ export function spawnFloorEntities(floor) {
       for (let i = 0; i < 3; i++) {
         const pos = room.randomFloorInRect(rm.rect);
         game.chests.push(new Chest(pos.x, pos.y));
+      }
+    } else if (rm.type === "trap") {
+      // gauntlet: a chest reward plus scattered coins, placed clear of the
+      // room's own spike cells so the payoff doesn't sit on a hazard tile
+      const spikeSet = new Set(room.spikes
+        .filter((s) => s.tx >= rm.rect.x && s.tx < rm.rect.x + rm.rect.w && s.ty >= rm.rect.y && s.ty < rm.rect.y + rm.rect.h)
+        .map((s) => s.tx + "," + s.ty));
+      const safePos = () => {
+        for (let i = 0; i < 20; i++) {
+          const p = room.randomFloorInRect(rm.rect);
+          if (!spikeSet.has(Math.floor(p.x / TILE) + "," + Math.floor(p.y / TILE))) return p;
+        }
+        return room.randomFloorInRect(rm.rect);
+      };
+      const cp = safePos();
+      game.chests.push(new Chest(cp.x, cp.y));
+      for (let i = 0; i < 3; i++) {
+        const pp = safePos();
+        game.pickups.push(new Pickup("coin", pp.x, pp.y));
       }
     }
   }
@@ -270,173 +264,15 @@ export function resumeRun(save) {
   game.kills = save.kills;
   game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
   game.time = save.time;
-  if (save.floorMode) { game.floorMode = true; loadFloor(); }
-  else { game.floorMode = false; loadRoom(game.plan().length - 1); }
+  game.floorMode = true;
+  loadFloor();
   freshGameState();
-}
-
-export function loadRoom(index) {
-  const cfg = game.floorCfg();
-  game.roomIndex = index;
-  game.roomType = cfg.plan[index];
-  game.roomCleared = false;
-  // each room draws a per-type shape (arenas big, vaults small, gauntlets
-  // long) — the 3D camera frames whatever size exists
-  const size = roomSizeFor(game.roomType);
-  setRoomSize(size.tw, size.th);
-  room.generate({ spikes: game.roomType === "trap" });
-  room.roomType = game.roomType; // rides along in getData for guest decor
-  // boss rooms that lead to another floor show a staircase behind the exit
-  const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
-  room.exit = (game.roomType === "boss" && game.floor < dungeon.floors.length - 1) ? "stairs" : "door";
-  updateView(canvas);
-  game.skeletons = [];
-  game.projectiles = [];
-  game.enemyShots = [];
-  game.pickups = [];
-  game.chests = [];
-  game.spawnQueue = [];
-  game.shake = 0;
-  game.endT = 0;
-  particles.clear();
-  sendRoomToGuest();
-
-  // everyone enters at the bottom, side by side
-  game.players.forEach((p, i) => {
-    p.x = WIDTH / 2 + (i - (game.players.length - 1) / 2) * 36;
-    p.y = HEIGHT - TILE * 2.5;
-  });
-
-  const pl = game.players[0];
-  const spawnDist = Math.min(170, WIDTH * 0.35);
-  const areaScale = Math.min(1, (ROOM_W * ROOM_H) / (30 * 18) + 0.25);
-
-  const faction = cfg.faction || "skeleton";
-  // multi-faction rooms (the finale) tag each enemy by its kind's own faction
-  const factionFor = (kind) => cfg.multiFaction ? (KIND_FACTION[kind] || faction) : faction;
-  if (game.roomType === "combat") {
-    const tier = cfg.plan.slice(0, index).filter((t) => t === "combat").length;
-    const count = Math.max(5, Math.round((6 + tier * 3 + game.floor * 2) * areaScale));
-    // Variety ramps one new enemy type per combat room (kinds are ordered
-    // easy->hard): 1st combat room = kinds[0] only, 2nd = +kinds[1], etc.
-    const allKinds = cfg.kinds || ["melee"];
-    const kinds = allKinds.slice(0, Math.min(allKinds.length, tier + 1));
-    // A handful start dormant on the floor (Skeletons_Inactive_Floor_Pose) and
-    // wake when a player approaches; the rest rise in via the staggered queue.
-    const inactiveCount = Math.min(5, Math.max(0, count - 2));
-    for (let i = 0; i < count; i++) {
-      const pos = room.randomFloorPos(pl.x, pl.y, spawnDist);
-      const kind = i > 1 && Math.random() < 0.4 ? choice(kinds) : kinds[0];
-      if (i < inactiveCount) {
-        game.skeletons.push(new Skeleton(pos.x, pos.y, {
-          kind, faction, inactive: true, scale: cfg.scale,
-          grade: rollGrade(game.floor, game.tier),
-        }));
-      } else {
-        game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 0.6 + (i - inactiveCount) * 0.4, big: false, kind, faction });
-      }
-    }
-    const bruteKind = kinds.find((k) => k !== "shade") || "melee";
-    for (let i = 0; i < tier + Math.max(0, game.floor - 1); i++) {
-      const pos = room.randomFloorPos(pl.x, pl.y, spawnDist);
-      game.spawnQueue.push({ x: pos.x, y: pos.y, delay: 1.4 + i * 0.8, big: true, kind: bruteKind, faction: factionFor(bruteKind) });
-    }
-  } else if (game.roomType === "elite") {
-    const eliteKinds = cfg.eliteKinds || cfg.kinds || ["melee"];
-    const eliteKind = choice(eliteKinds);
-    const eliteNames = ELITE_NAMES[factionFor(eliteKind)] || ELITE_NAMES.skeleton || ["ELITE"];
-    const pos = room.randomFloorPos(pl.x, pl.y, spawnDist);
-    game.spawnQueue.push({
-      x: pos.x, y: pos.y, delay: 0.8, big: true, kind: eliteKind, faction: factionFor(eliteKind),
-      elite: true, name: choice(eliteNames),
-    });
-    const minionKinds = (cfg.kinds || ["melee"]).filter((k) => k !== "shade");
-    for (let i = 0; i < 2; i++) {
-      const mp = room.randomFloorPos(pl.x, pl.y, spawnDist);
-      const mk = choice(minionKinds);
-      game.spawnQueue.push({
-        x: mp.x, y: mp.y, delay: 1.6 + i * 0.5, big: false, kind: mk, faction: factionFor(mk),
-      });
-    }
-  } else if (game.roomType === "treasure") {
-    const spots = [];
-    const spacing = Math.min(110, WIDTH * 0.25);
-    for (let i = 0; i < 3; i++) {
-      let pos;
-      let tries = 0;
-      do {
-        pos = room.randomFloorPos(pl.x, pl.y, spacing);
-        tries++;
-      } while (tries < 30 && spots.some((s) => dist(s.x, s.y, pos.x, pos.y) < spacing));
-      spots.push(pos);
-      game.chests.push(new Chest(pos.x, pos.y));
-    }
-  } else if (game.roomType === "trap") {
-    // gauntlet: door is open from the start; loot waits on the far side
-    game.roomCleared = true;
-    room.doorOpen = true;
-    game.chests.push(new Chest(WIDTH / 2, TILE * 2.6));
-    for (let i = 0; i < 5; i++) {
-      game.pickups.push(new Pickup("coin", rand(TILE * 2, WIDTH - TILE * 2), TILE * rand(1.8, 3.2)));
-    }
-  } else if (game.roomType === "boss") {
-    game.skeletons.push(new Boss(WIDTH / 2, HEIGHT / 2 - 60, {
-      hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
-      faction: cfg.bossFaction || cfg.faction,
-    }));
-  }
-}
-
-export function setRoomCleared() {
-  game.roomCleared = true;
-
-  // co-op: fallen players return at the room entrance with a sliver of HP
-  if (game.players.length > 1) {
-    for (const p of game.players) {
-      if (p.dead || p.downed || p.dying) {
-        p.dead = false;
-        p.downed = false;
-        p.dying = false;
-        p.hp = Math.max(1, Math.ceil(p.maxHp * 0.25));
-        p.x = WIDTH / 2;
-        p.y = HEIGHT - TILE * 2.5;
-        p.iframes = 1.5;
-      }
-    }
-  }
-
-  if (game.roomType === "boss") {
-    const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
-    if (game.floor >= dungeon.floors.length - 1) {
-      endRun(true);
-    } else {
-      writeSave();
-      room.doorOpen = true;
-      audio.door();
-      const nextFloor = dungeon.floors[game.floor + 1];
-      particles.text(WIDTH / 2, TILE * 2.2,
-        `Floor cleared! Onward to ${nextFloor ? nextFloor.name : "the depths"}...`, "#ffd95e");
-    }
-  } else {
-    room.doorOpen = true;
-    audio.door();
-    particles.text(WIDTH / 2, TILE * 2.2, "The door creaks open...", "#ffd95e");
-  }
 }
 
 export function startTransition() {
   game.state = "transition";
   game.transitionPhase = "out";
   game.transitionT = 0;
-}
-
-export function advanceRoom() {
-  if (game.roomIndex + 1 < game.plan().length) {
-    loadRoom(game.roomIndex + 1);
-  } else {
-    game.floor++;
-    loadRoom(0);
-  }
 }
 
 export function endRun(won) {

@@ -26,7 +26,7 @@ import { game3d } from "./game3d.js?v=__BUILD__";
 import { CLASSES, Boss } from "./entities.js?v=__BUILD__";
 import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=__BUILD__";
 import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=__BUILD__";
-import { startRun, startFloorRun, resumeRun } from "./run.js?v=__BUILD__";
+import { startFloorRun, resumeRun } from "./run.js?v=__BUILD__";
 import {
   backToMenu, buildClassCards, closeInventory, openInventory, playAgain,
   refreshContinueButton, setMenuMode, showHub,
@@ -185,13 +185,16 @@ if (_bootHero) {
 }
 
 // Dev shortcut for verifying the 3D path: ?dev=combat jumps straight into a
-// solo combat room (skips menus). Not wired to any UI.
+// run (skips menus). Not wired to any UI. Phase 1 retired the classic
+// single-room path this used to boot into; it now boots the same connected
+// floor a normal run would (equivalent to ?floors, kept as its own flag for
+// existing bookmarks/scripts).
 if (devBoot === "combat") {
   document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
   const cls = params.get("class"); // ?class=mage|ranger|rogue|warrior
   // ?dungeon=crypt (warlocks/necromancers) | goblinMines (shamans) | catacombs
   const dng = params.get("dungeon");
-  startRun(CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
+  startFloorRun(CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
 }
 
 // ?floors boots a connected-floor run with per-room combat gating + descent.

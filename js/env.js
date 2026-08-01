@@ -45,16 +45,10 @@ export const safeMode = devFlag("camtest") || devFlag("safe");
 // ?dev=combat drops straight into a solo combat room past every menu.
 export const devBoot = devFlag("dev") ? params.get("dev") : null;
 
-// ?floors boots a connected-floor run. Deliberately UNGATED, like ?classic:
-// the roadmap's decision log names only ?safe and ?dev, and unlike those two
-// this is not an exploit surface - it starts an ordinary tier-0 run that the
-// dungeon lobby reaches anyway, disabling nothing. It is shaped like a dev
-// flag and is worth a conscious decision, but that decision has not been made,
-// so this keeps today's behaviour rather than quietly changing it.
+// ?floors boots a connected-floor run — the only traversal system now that
+// Phase 1 retired the classic single-room path and ?classic. Deliberately
+// UNGATED: the roadmap's decision log names only ?safe and ?dev, and this is
+// not an exploit surface - it starts an ordinary tier-0 run that the dungeon
+// lobby reaches anyway, disabling nothing.
 export const floorsBoot = params.has("floors");
 
-// Dungeons descend into connected floors by default; ?classic forces the old
-// single-room-per-room run. Deliberately UNGATED: roadmap decision 4 retires
-// the classic path entirely in Phase 1, and gating it now would only change
-// which of the two paths a mid-refactor bug report is about.
-export const classicRun = params.has("classic");

@@ -18,7 +18,12 @@ const { existsSync } = await import("node:fs");
 const CHROME = process.env.CHROMIUM_PATH ||
   (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : null);
 const BASE = process.env.BASE_URL || "http://localhost:8123";
-const CALL_BUDGET = 70, TRI_BUDGET = 400_000;
+// Phase 1 routed `?dev=combat` through the connected-floor generator (the
+// classic single-room path it used to boot into is gone), so every check
+// below that boots via ?dev=combat is now measuring a whole floor's draw
+// calls, not one room's - compare against the floor budget the bottom
+// block already established, not a single-room one.
+const FLOOR_CALL_BUDGET = 240, TRI_BUDGET = 400_000;
 
 const browser = await chromium.launch(CHROME ? { executablePath: CHROME } : {});
 let failed = 0;
@@ -94,7 +99,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
     };
   });
 
-  check(`${dungeon}: draw calls ${r.calls} <= ${CALL_BUDGET}`, r.calls <= CALL_BUDGET);
+  check(`${dungeon}: draw calls ${r.calls} <= ${FLOOR_CALL_BUDGET}`, r.calls <= FLOOR_CALL_BUDGET);
   check(`${dungeon}: triangles ${r.triangles} <= ${TRI_BUDGET}`, r.triangles <= TRI_BUDGET);
   check(`${dungeon}: planner deterministic`, r.deterministic);
   check(`${dungeon}: guest setData round-trip identical`, r.guestSame);
@@ -117,7 +122,7 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
     return { calls: info.calls, shadows: DD.render3d.shadows, mapOn: DD.render3d.renderer.shadowMap.enabled };
   });
   check(`noshadow: shadows disabled`, !r.shadows && !r.mapOn);
-  check(`noshadow: draw calls ${r.calls} <= ${CALL_BUDGET}`, r.calls <= CALL_BUDGET);
+  check(`noshadow: draw calls ${r.calls} <= ${FLOOR_CALL_BUDGET}`, r.calls <= FLOOR_CALL_BUDGET);
   await page.close();
 }
 
@@ -197,7 +202,6 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
   check(`floor: co-op guest reconstructs the floor (getData -> setData)`, r.coopRoundTrip);
   // a whole floor is many rooms + cloned gate frames, so it runs more draw
   // calls than a single room; per-room visibility culling lands in Phase 5.
-  const FLOOR_CALL_BUDGET = 240;
   check(`floor: draw calls ${r.calls} <= ${FLOOR_CALL_BUDGET}`, r.calls <= FLOOR_CALL_BUDGET);
   check(`floor: triangles ${r.triangles} <= ${TRI_BUDGET}`, r.triangles <= TRI_BUDGET);
   check(`floor: no page errors`, errors.length === 0, errors.join(" | "));

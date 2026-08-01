@@ -8,11 +8,12 @@ import { input } from "./input.js?v=__BUILD__";
 import { net, netSync } from "./net.js?v=__BUILD__";
 import { particles } from "./particles.js?v=__BUILD__";
 import { room } from "./room.js?v=__BUILD__";
+import { generateFloor } from "./floor.js?v=__BUILD__";
 import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView, view } from "./util.js?v=__BUILD__";
 import { canvas, ctx, resultEl } from "./dom.js?v=__BUILD__";
 import { safeMode } from "./env.js?v=__BUILD__";
 import { game, uiFlags } from "./state.js?v=__BUILD__";
-import { advanceFloor, advanceRoom, endRun, reachStairs, setRoomCleared, showResult, startTransition, updateFloorGating } from "./run.js?v=__BUILD__";
+import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=__BUILD__";
 import { openInventory, openLevelUp, showHub } from "./overlays.js?v=__BUILD__";
 import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=__BUILD__";
 import { showMap, drawMap } from "./worldmap.js?v=__BUILD__";
@@ -60,7 +61,7 @@ export function update(dt) {
     game.transitionT += dt * 2.6;
     if (game.transitionT >= 1) {
       if (game.transitionPhase === "out") {
-        if (game.floorMode) advanceFloor(); else advanceRoom();
+        advanceFloor();
         game.transitionPhase = "in";
         game.transitionT = 0;
       } else {
@@ -136,38 +137,22 @@ export function update(dt) {
       return;
     }
 
-    // floor mode: per-room combat gating (lock on entry, unlock on clear,
-    // reveal the stairs when the boss chamber falls)
-    if (room.isFloor) updateFloorGating();
+    // per-room combat gating (lock on entry, unlock on clear, reveal the
+    // stairs when the boss chamber falls)
+    updateFloorGating();
 
     // walk onto the revealed stairs -> descend (or win on the last floor).
     // reachStairs() branches to advanceFloor()/endRun(true) itself.
-    if (room.isFloor && game.stairsReady && !game._stairsTaken &&
+    if (game.stairsReady && !game._stairsTaken &&
         game.players.some((p) => p.alive() && room.onStairs(p.x, p.y))) {
       reachStairs();
       return;
-    }
-
-    // room-clear conditions (single-room mode; floors gate per-room)
-    if (!room.isFloor && !game.roomCleared) {
-      if (game.roomType === "treasure") {
-        if (game.chests.every((c) => c.opened)) setRoomCleared();
-      } else if (game.skeletons.every((s) => s.dying) && game.spawnQueue.length === 0) {
-        // dying skeletons are gameplay-dead (fading corpses) — don't block clear
-        setRoomCleared();
-      }
     }
 
     // pending level-ups pause the action
     if (game.pendingLevelUps > 0) {
       openLevelUp();
       return;
-    }
-
-    // walk through the open door -> next room (single-room mode)
-    if (!room.isFloor && game.roomCleared && room.doorOpen &&
-        game.players.some((p) => p.alive() && room.inDoorway(p.x, p.y - p.r))) {
-      startTransition();
     }
   } else if (game.state === "won" || game.state === "lost") {
     if (game.endT > 0) {
@@ -215,11 +200,12 @@ export function updatePeaceful(dt) {
 // ---- draw ----
 
 export function draw(dt) {
-  // menu/hub show a generated dungeon as their 3D backdrop
+  // menu/hub show a generated dungeon as their 3D backdrop. Phase 1 retired
+  // the classic single-room generator this used to call — a small connected
+  // floor stands in fine, since it's just eye candy behind the menu.
   if ((game.state === "menu" || game.state === "hub") && !room.prerendered) {
-    sizeRoomToCanvas();
     room.setTheme("catacombs"); // neutral backdrop, not the last dungeon's theme
-    room.generate();
+    room.setFloor(generateFloor({ plan: ["combat", "boss"], boss: true }));
     updateView(canvas);
     room.prerendered = true;
   }

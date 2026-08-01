@@ -16,8 +16,7 @@ import { room } from "./room.js?v=__BUILD__";
 import { updateView } from "./util.js?v=__BUILD__";
 import { canvas } from "./dom.js?v=__BUILD__";
 import { game, uiFlags, clearSave } from "./state.js?v=__BUILD__";
-import { classicRun } from "./env.js?v=__BUILD__";
-import { loadFloor, loadRoom, showResult } from "./run.js?v=__BUILD__";
+import { loadFloor, showResult } from "./run.js?v=__BUILD__";
 import { freshGameState } from "./state.js?v=__BUILD__";
 import { showLobby, setMenuMode, buildUpgradeCards, backToMenu, guestUpgradePicked, guestLeftLevelUp, lobbyEl, lobbyStatus, lobbyIn, roomCodeEl, codeIn } from "./overlays.js?v=__BUILD__";
 import { levelupEl, menuEl, resultEl, hubEl, upgradeCardsEl } from "./dom.js?v=__BUILD__";
@@ -91,8 +90,8 @@ export function startCoopRun(guestClassKey) {
   game.kills = 0;
   game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
   game.time = 0;
-  game.floorMode = !classicRun; // co-op runs connected floors by default too
-  if (game.floorMode) loadFloor(); else loadRoom(0);
+  game.floorMode = true; // co-op runs the connected-floor path too
+  loadFloor();
   lobbyEl.classList.add("hidden");
   setMenuMode(null, "");
   freshGameState();

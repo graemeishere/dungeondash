@@ -9,7 +9,6 @@ import { CLASSES } from "./entities.js?v=__BUILD__";
 import { profile } from "./profile.js?v=__BUILD__";
 import { dist } from "./util.js?v=__BUILD__";
 import { menuEl, resultEl, levelupEl, hubEl } from "./dom.js?v=__BUILD__";
-import { classicRun } from "./env.js?v=__BUILD__";
 
 const SAVE_KEY = "dungeondash_save_v1";
 
@@ -224,14 +223,14 @@ export function clearSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
 }
 
-// A save is only resumable if it matches the current run mode. An old
-// single-room save (floorMode falsey) would resume as a big room now that
-// connected floors are the default — so a mismatched save is stale: discard it
-// and offer no Continue rather than dropping the player into the wrong layout.
+// A save is only resumable if it matches the current run mode. Phase 1
+// retired the classic single-room path, so a save from before that (or one
+// otherwise missing floorMode) would resume as the wrong layout — discard it
+// and offer no Continue rather than dropping the player into a broken room.
 export function usableSave() {
   const s = readSave();
   if (!s || !CLASSES[s.classKey]) return null;
-  if (!!s.floorMode !== !classicRun) { clearSave(); return null; }
+  if (!s.floorMode) { clearSave(); return null; }
   return s;
 }
 
