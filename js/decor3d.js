@@ -20,7 +20,8 @@ const FLOOR = 0, WALL = 1, DOOR = 2, OBSTACLE = 3;
 
 export const PIECE_DIR = "KayKit Dungeon Remastered/Assets/gltf/";
 
-// mulberry32 — identical to DD.makeRng but importable without window.DD.
+// mulberry32 — identical to util.js's makeRng; kept local so the decor
+// planner stays importable on its own (dev/room-checks.mjs imports it directly).
 export function makeRng(seed) {
   let a = seed >>> 0;
   return () => {

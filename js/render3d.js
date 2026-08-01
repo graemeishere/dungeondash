@@ -15,6 +15,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "./lib/three/GLTFLoader.js";
 import { planRoomDecor, PIECE_DIR } from "./decor3d.js?v=__BUILD__";
+import { TILE } from "./util.js?v=__BUILD__";
 
 const FLOOR = 0, WALL = 1, DOOR = 2;
 
@@ -613,7 +614,6 @@ export class DungeonRenderer {
   // the pixel, intersected with the ground plane — replaces the old linear
   // letterbox map so mouse aim is correct under the moving follow camera.
   screenToGround(px, py) {
-    const TILE = (window.DD && window.DD.TILE) || 32;
     const ndcX = (px / this._w) * 2 - 1;
     const ndcY = -((py / this._h) * 2 - 1);
     const v = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(this.camera);

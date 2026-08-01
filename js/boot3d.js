@@ -7,10 +7,11 @@
 // Loaded after js/boot.js, matching the old ordering (game code first, then the
 // 3D layer attaching itself to it).
 import { DungeonRenderer } from "./render3d.js?v=__BUILD__";
+import { rt } from "./runtime.js?v=__BUILD__";
 
 const c3 = document.getElementById("game3d");
 const dr = new DungeonRenderer(c3);
-window.DD.render3d = dr;
+rt.render3d = dr;
 // boot.js ran its first fitCanvas() before this renderer existed, so size it now
 // (otherwise the view is squashed until the first window resize).
 dr.resize(c3.width || window.innerWidth, c3.height || window.innerHeight);
@@ -24,10 +25,10 @@ dr.resize(c3.width || window.innerWidth, c3.height || window.innerHeight);
   const m = await import("./char3d.js?v=__BUILD__");
   const mgr = new m.CharacterManager(dr.scene, new m.CharacterFactory());
   // expose the swappable mappings to the game
-  window.DD.char3d = { classModelKey: m.classModelKey, enemyModelKey: m.enemyModelKey, RIG: m.RIG };
+  rt.char3d = { classModelKey: m.classModelKey, enemyModelKey: m.enemyModelKey, RIG: m.RIG };
   // Set charMgr immediately and load models in the background, so each character
   // pops in as its model arrives instead of waiting for all.
-  window.DD.charMgr = mgr;
+  rt.charMgr = mgr;
   await mgr.preloadAll();
   console.log("char3d: ready");
 })().catch((e) => console.error("3D character preload failed:", e));
@@ -38,5 +39,5 @@ dr.loadProjectiles().catch((e) => console.error("3D projectiles load failed:", e
 // 3D combat effects (particles); bridged from the particle system
 try {
   const fx = await import("./fx3d.js?v=__BUILD__");
-  window.DD.fx3d = new fx.FX3D(dr.scene);
+  rt.fx3d = new fx.FX3D(dr.scene);
 } catch (e) { console.error("3D fx load failed:", e); }

@@ -294,6 +294,7 @@
     DD.room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
     game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
     game.localIndex = 0;
+    DD.input.setDashable(!!game.players[0].cfg.dash);
     game.floor = 0;
     game.xp = hero.xp || 0;
     game.level = hero.level || 1;
@@ -323,6 +324,7 @@
     DD.room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
     game.players = [new DD.Player(classKey, 0, 0, DD.input, hero)];
     game.localIndex = 0;
+    DD.input.setDashable(!!game.players[0].cfg.dash);
     game.floor = 0;
     game.xp = hero.xp || 0;
     game.level = hero.level || 1;
@@ -515,6 +517,7 @@
     pl.killHeal = save.killHeal !== undefined ? save.killHeal : pl.killHeal;
     game.players = [pl];
     game.localIndex = 0;
+    DD.input.setDashable(!!pl.cfg.dash);
     game.dungeonId = save.dungeonId || "catacombs";
     game.tier = save.tier || 0;
     game.peaceful = false;
@@ -925,6 +928,7 @@
     const pl = new DD.Player(classKey, DD.WIDTH / 2, DD.HEIGHT - DD.TILE * 2.5, DD.input, hero);
     game.players = [pl];
     game.localIndex = 0;
+    DD.input.setDashable(!!pl.cfg.dash);
     game.skeletons = [];
     game.projectiles = [];
     game.enemyShots = [];
@@ -2014,7 +2018,7 @@
 
     // js/game3d.js renders the scene + HUD overlay for every in-world state.
     if (DD.game3d && DD.game3d.active(game.state)) {
-      DD.game3d.draw(dt);
+      DD.game3d.draw(game, dt);
       return;
     }
 
@@ -2163,6 +2167,7 @@
       new DD.Player(guestClassKey, 0, 0, new DD.RemoteInput()),
     ];
     game.localIndex = 0;
+    DD.input.setDashable(!!game.players[0].cfg.dash);
     game.dungeonId = game.dungeonId || "catacombs";
     game.tier = game.tier || 0;
     game.floor = 0;

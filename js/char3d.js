@@ -73,7 +73,7 @@ export const RIG = {
     attacks: ["Ranged_Magic_Shoot"],
   },
   // boss (Skeleton King): the heavy warrior model wielding the axe two-handed.
-  // game3d maps any DD.Boss to this rig; its slam plays Melee_2H_Attack_Chop.
+  // game3d maps any Boss to this rig; its slam plays Melee_2H_Attack_Chop.
   "enemy:boss": {
     model: SKEL + "Skeleton_Warrior.glb", scale: 1.0, weapon: SKGEAR + "Skeleton_Axe.gltf", hand: "r",
     idle: "Melee_2H_Idle", run: "Running_A", spawn: "Spawn_Ground", death: "Skeletons_Death", attackSpeed: 1,
