@@ -154,6 +154,11 @@ net.onMessage((m) => {
     game.roomIndex = m.ri;
     game.roomType = m.rt;
     game.localIndex = 1;
+    // The guest's avatar is rebuilt from host snapshots rather than
+    // constructed here, so none of the other setDashable call sites fire on
+    // this side. Without this the guest's on-screen dash button stops
+    // hit-testing on touch. The picked class is the authority.
+    input.setDashable(!!(CLASSES[guestClass] && CLASSES[guestClass].dash));
     uiFlags.guestInGame = true;
     particles.clear();
     lobbyEl.classList.add("hidden");
