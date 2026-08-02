@@ -1,6 +1,6 @@
-import { WIDTH, HEIGHT, angleTo, dist, view } from "./util.js?v=ff8ca445";
-import { audio } from "./audio.js?v=ff8ca445";
-import { rt } from "./runtime.js?v=ff8ca445";
+import { WIDTH, HEIGHT, angleTo, dist, view } from "./util.js?v=0511a6b1";
+import { audio } from "./audio.js?v=0511a6b1";
+import { rt } from "./runtime.js?v=0511a6b1";
 
 const keys = {};
 // x/y are the world-ground point under the cursor (for aim); sx/sy are the

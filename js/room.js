@@ -1,5 +1,5 @@
-import { TILE, WIDTH, HEIGHT, ROOM_W, ROOM_H, dist, randi, setRoomSize } from "./util.js?v=ff8ca445";
-import { sprites } from "./sprites.js?v=ff8ca445";
+import { TILE, WIDTH, HEIGHT, ROOM_W, ROOM_H, dist, randi, setRoomSize } from "./util.js?v=0511a6b1";
+import { sprites } from "./sprites.js?v=0511a6b1";
 
 // OBSTACLE cells are solid like walls but render as props (pillars, crates,
 // barrels) instead of wall blocks.

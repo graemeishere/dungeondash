@@ -5,13 +5,13 @@
 // js/render3d.js; the character rigs/clips in js/char3d.js. game.js calls
 // game3d.active()/draw()/resize() and stays 3D-agnostic otherwise.
 
-import { TILE, clamp } from "./util.js?v=ff8ca445";
-import { rt } from "./runtime.js?v=ff8ca445";
-import { room } from "./room.js?v=ff8ca445";
-import { input } from "./input.js?v=ff8ca445";
-import { particles } from "./particles.js?v=ff8ca445";
-import { hud } from "./hud.js?v=ff8ca445";
-import { Boss } from "./entities.js?v=ff8ca445";
+import { TILE, clamp } from "./util.js?v=0511a6b1";
+import { rt } from "./runtime.js?v=0511a6b1";
+import { room } from "./room.js?v=0511a6b1";
+import { input } from "./input.js?v=0511a6b1";
+import { particles } from "./particles.js?v=0511a6b1";
+import { hud } from "./hud.js?v=0511a6b1";
+import { Boss } from "./entities.js?v=0511a6b1";
 
 // Loaded before game.js, so parse the URL ourselves.
 const params = new URLSearchParams(location.search);

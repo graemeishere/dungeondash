@@ -4,18 +4,18 @@
 // classic single-room generator/`?classic`; raids and the finale route
 // through here too now).
 
-import { audio } from "./audio.js?v=ff8ca445";
-import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=ff8ca445";
-import { generateFloor } from "./floor.js?v=ff8ca445";
-import { input } from "./input.js?v=ff8ca445";
-import { net } from "./net.js?v=ff8ca445";
-import { particles } from "./particles.js?v=ff8ca445";
-import { profile } from "./profile.js?v=ff8ca445";
-import { room } from "./room.js?v=ff8ca445";
-import { TILE, choice, clamp, updateView } from "./util.js?v=ff8ca445";
-import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=ff8ca445";
-import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=ff8ca445";
-import { sendRoomToGuest } from "./coop.js?v=ff8ca445";
+import { audio } from "./audio.js?v=0511a6b1";
+import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=0511a6b1";
+import { generateFloor } from "./floor.js?v=0511a6b1";
+import { input } from "./input.js?v=0511a6b1";
+import { net } from "./net.js?v=0511a6b1";
+import { particles } from "./particles.js?v=0511a6b1";
+import { profile } from "./profile.js?v=0511a6b1";
+import { room } from "./room.js?v=0511a6b1";
+import { TILE, choice, clamp, updateView } from "./util.js?v=0511a6b1";
+import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=0511a6b1";
+import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=0511a6b1";
+import { sendRoomToGuest } from "./coop.js?v=0511a6b1";
 
 // Connected-floor run: explore a floor of small rooms joined by
 // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock
@@ -123,7 +123,7 @@ export function spawnFloorEntities(floor) {
       const cx = (rm.rect.x + rm.rect.w / 2) * TILE, cy = (rm.rect.y + rm.rect.h / 2) * TILE;
       game.skeletons.push(new Boss(cx, cy, {
         hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
-        faction: cfg.bossFaction || cfg.faction, frozen: true, roomId: rm.id,
+        faction: cfg.bossFaction || cfg.faction, frozen: true, roomId: rm.id, scale: cfg.scale,
       }));
     } else if (rm.type === "treasure") {
       for (let i = 0; i < 3; i++) {
@@ -148,6 +148,19 @@ export function spawnFloorEntities(floor) {
       for (let i = 0; i < 3; i++) {
         const pp = safePos();
         game.pickups.push(new Pickup("coin", pp.x, pp.y));
+      }
+    } else if (rm.type === "shrine") {
+      const pos = room.randomFloorInRect(rm.rect);
+      game.chests.push(new Chest(pos.x, pos.y, { shrine: true }));
+    } else if (rm.type === "storage") {
+      for (let i = 0; i < 8; i++) {
+        const pp = room.randomFloorInRect(rm.rect);
+        game.pickups.push(new Pickup("coin", pp.x, pp.y));
+      }
+    } else if (rm.type === "dining") {
+      for (let i = 0; i < 4; i++) {
+        const pp = room.randomFloorInRect(rm.rect);
+        game.pickups.push(new Pickup("heart", pp.x, pp.y));
       }
     }
   }
@@ -184,6 +197,12 @@ export function updateFloorGating() {
       if (a === rm.id) { const n = room.roomById(b); if (n) n.seen = true; }
       else if (b === rm.id) { const n = room.roomById(a); if (n) n.seen = true; }
     }
+    // Side rooms' small XP trickle pays out on first visit, not at floor
+    // load - matches every other reward in the game (chest-open, pickup
+    // collect) in requiring the player to actually walk the detour.
+    if (rm.type === "storage") game.addXP(6);
+    else if (rm.type === "dining") game.addXP(4);
+    else if (rm.type === "shrine") game.addXP(4);
   }
   // Only lock once the player is clear of the doorway (a tile inside), so the
   // closing door never catches them mid-threshold.

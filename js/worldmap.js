@@ -2,15 +2,15 @@
 // The world map screen: the only state still drawn purely in 2D screen space.
 // Routing it through the 3D renderer is Phase 3 work, not this phase.
 
-import { audio } from "./audio.js?v=ff8ca445";
-import { input } from "./input.js?v=ff8ca445";
-import { profile } from "./profile.js?v=ff8ca445";
-import { HEIGHT, WIDTH, dist, updateView, view } from "./util.js?v=ff8ca445";
-import { canvas } from "./dom.js?v=ff8ca445";
-import { game, DUNGEONS } from "./state.js?v=ff8ca445";
-import { hideAllOverlays, showHub, backToMenu } from "./overlays.js?v=ff8ca445";
-import { showTownRoom, showDungeonLobby, startFinale } from "./town.js?v=ff8ca445";
-import { sizeRoomToCanvas } from "./draw.js?v=ff8ca445";
+import { audio } from "./audio.js?v=0511a6b1";
+import { input } from "./input.js?v=0511a6b1";
+import { profile } from "./profile.js?v=0511a6b1";
+import { HEIGHT, WIDTH, dist, updateView, view } from "./util.js?v=0511a6b1";
+import { canvas } from "./dom.js?v=0511a6b1";
+import { game, DUNGEONS } from "./state.js?v=0511a6b1";
+import { hideAllOverlays, showHub, backToMenu } from "./overlays.js?v=0511a6b1";
+import { showTownRoom, showDungeonLobby, startFinale } from "./town.js?v=0511a6b1";
+import { sizeRoomToCanvas } from "./draw.js?v=0511a6b1";
 
 export function showMap() {
   hideAllOverlays();

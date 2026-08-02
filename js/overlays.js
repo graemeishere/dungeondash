@@ -2,23 +2,23 @@
 // Every DOM overlay: the hero hub, the barkeep sheet, the level-up picker, the
 // inventory, the class-select cards and the co-op lobby panel.
 
-import { audio } from "./audio.js?v=ff8ca445";
-import { CLASSES, Player, UPGRADES } from "./entities.js?v=ff8ca445";
-import { input } from "./input.js?v=ff8ca445";
-import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=ff8ca445";
-import { net } from "./net.js?v=ff8ca445";
-import { particles } from "./particles.js?v=ff8ca445";
-import { profile } from "./profile.js?v=ff8ca445";
-import { room } from "./room.js?v=ff8ca445";
-import { sprites } from "./sprites.js?v=ff8ca445";
-import { ATTRS, deriveStats } from "./stats.js?v=ff8ca445";
-import { HEIGHT, TILE, WIDTH } from "./util.js?v=ff8ca445";
-import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=ff8ca445";
-import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=ff8ca445";
-import { beginRun, resumeRun } from "./run.js?v=ff8ca445";
-import { showMap } from "./worldmap.js?v=ff8ca445";
-import { showTownRoom, switchClass } from "./town.js?v=ff8ca445";
-import { hostWithClass, joinWithClass } from "./coop.js?v=ff8ca445";
+import { audio } from "./audio.js?v=0511a6b1";
+import { CLASSES, Player, UPGRADES } from "./entities.js?v=0511a6b1";
+import { input } from "./input.js?v=0511a6b1";
+import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=0511a6b1";
+import { net } from "./net.js?v=0511a6b1";
+import { particles } from "./particles.js?v=0511a6b1";
+import { profile } from "./profile.js?v=0511a6b1";
+import { room } from "./room.js?v=0511a6b1";
+import { sprites } from "./sprites.js?v=0511a6b1";
+import { ATTRS, deriveStats } from "./stats.js?v=0511a6b1";
+import { HEIGHT, TILE, WIDTH } from "./util.js?v=0511a6b1";
+import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=0511a6b1";
+import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=0511a6b1";
+import { beginRun, resumeRun } from "./run.js?v=0511a6b1";
+import { showMap } from "./worldmap.js?v=0511a6b1";
+import { showTownRoom, switchClass } from "./town.js?v=0511a6b1";
+import { hostWithClass, joinWithClass } from "./coop.js?v=0511a6b1";
 
 export function refreshContinueButton() {
   const save = usableSave();
@@ -343,7 +343,8 @@ export function buildUpgradeCards(picks, onPick) {
 export function openLevelUp() {
   game.state = "levelup";
   audio.levelup();
-  const pool = [...UPGRADES];
+  const pl = game.players[0];
+  const pool = UPGRADES.filter((u) => !u.classKey || u.classKey === pl.classKey);
   const picks = [];
   for (let i = 0; i < 3 && pool.length; i++) {
     picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);

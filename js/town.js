@@ -2,19 +2,19 @@
 // The walkable town and dungeon-lobby rooms, the four NPCs and their menus, and
 // the raid / finale set-pieces that are built out of the town.
 
-import { audio } from "./audio.js?v=ff8ca445";
-import { CLASSES } from "./entities.js?v=ff8ca445";
-import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=ff8ca445";
-import { particles } from "./particles.js?v=ff8ca445";
-import { profile } from "./profile.js?v=ff8ca445";
-import { room } from "./room.js?v=ff8ca445";
-import { sprites } from "./sprites.js?v=ff8ca445";
-import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=ff8ca445";
-import { canvas, menuEl } from "./dom.js?v=ff8ca445";
-import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=ff8ca445";
-import { startFloorRun, beginRun } from "./run.js?v=ff8ca445";
-import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=ff8ca445";
-import { sizeRoomToCanvas } from "./draw.js?v=ff8ca445";
+import { audio } from "./audio.js?v=0511a6b1";
+import { CLASSES } from "./entities.js?v=0511a6b1";
+import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=0511a6b1";
+import { particles } from "./particles.js?v=0511a6b1";
+import { profile } from "./profile.js?v=0511a6b1";
+import { room } from "./room.js?v=0511a6b1";
+import { sprites } from "./sprites.js?v=0511a6b1";
+import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=0511a6b1";
+import { canvas, menuEl } from "./dom.js?v=0511a6b1";
+import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=0511a6b1";
+import { startFloorRun, beginRun } from "./run.js?v=0511a6b1";
+import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=0511a6b1";
+import { sizeRoomToCanvas } from "./draw.js?v=0511a6b1";
 
 // Themed entry room with three tier doorways. Walk through one to start a run.
 export function showDungeonLobby(dungeonId) {
@@ -349,13 +349,22 @@ function factionDungeon(faction) {
 function buildRaidDungeon(faction) {
   const src = DUNGEONS[factionDungeon(faction)];
   const f0 = src.floors[0];
+  const topFloor = src.floors[src.floors.length - 1];
   return {
     id: "townRaid", name: "Town Under Siege", faction, theme: "town",
     enemyLabel: src.enemyLabel,
     // no side rooms: a raid is a tight gauntlet straight to the boss, not an
-    // exploratory floor with shrine/storage/dining/treasure detours
-    floors: [{ name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds, plan: ["combat", "combat", "boss"], sideRooms: false }],
-    tiers: src.tiers.map((t) => ({ ...t, bossName: "RAID CAPTAIN" })),
+    // exploratory floor with shrine/storage/dining/treasure detours.
+    // bossDmg borrows the source dungeon's top-floor (anchor) value, same as
+    // bossHp already does via dungeonFloorCfg's single-floor ratio=1 case -
+    // a raid boss should hit as hard as that tier's real final boss, not the
+    // weaker floor-0 one, even though the raid reuses floor-0's enemy kinds.
+    floors: [{
+      name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds,
+      plan: ["combat", "combat", "boss"], sideRooms: false,
+      bossDmg: topFloor.bossDmg, bossName: "RAID CAPTAIN",
+    }],
+    tiers: src.tiers,
   };
 }
 
