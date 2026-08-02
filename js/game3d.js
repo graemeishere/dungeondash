@@ -292,6 +292,7 @@ function drawCombat3D(game, dt) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (menuish) return; // DOM overlays provide the menu/hub UI
   drawDamageNumbers3D(dr);
+  if (game.state === "play") drawEnemyGradeBadges3D(dr, game);
   if (game.state === "lobby") drawTierPads3D(dr, game);
   if (peaceful) drawPeacefulOverlay(dr, game);
   if (game.state === "play" || game.state === "transition") hud.draw(ctx, game);
@@ -415,6 +416,30 @@ function drawDamageNumbers3D(dr) {
     ctx.fillText(t.str, sp.x, y);
   }
   ctx.globalAlpha = 1;
+  ctx.textAlign = "left";
+}
+
+// Grade badge: a shape+colour glyph above veteran/elite enemies, visible
+// before they've taken any damage (decision 5 — grade is a HUD signal, not
+// a model-space tint). Boss is excluded: it already has its own top-of-
+// screen HP bar and name.
+function drawEnemyGradeBadges3D(dr, game) {
+  const font = "'Trebuchet MS', Verdana, sans-serif";
+  ctx.textAlign = "center";
+  for (const s of game.skeletons) {
+    if (!s || s.dead || s.dying) continue;
+    if (s instanceof Boss) continue;
+    if (s.grade !== "veteran" && s.grade !== "elite") continue;
+    const sp = dr.projectToScreen(s.x / TILE, s.y / TILE, 2.3);
+    if (sp.depth > 1) continue; // behind the camera
+    const glyph = s.grade === "elite" ? "★" : "▲";
+    const color = s.grade === "elite" ? "#ffd95e" : "#a06ce8";
+    ctx.font = `bold 14px ${font}`;
+    ctx.fillStyle = "#1a1626";
+    ctx.fillText(glyph, sp.x + 1, sp.y + 1); // dark outline for legibility over any floor theme
+    ctx.fillStyle = color;
+    ctx.fillText(glyph, sp.x, sp.y);
+  }
   ctx.textAlign = "left";
 }
 

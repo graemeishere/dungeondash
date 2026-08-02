@@ -42,6 +42,41 @@ import { fitCanvas, onResize, startLoop } from "./draw.js?v=__BUILD__";
 
 document.getElementById("btn-inv-close").addEventListener("click", closeInventory);
 
+// ---- onboarding (one-time, shown on a player's first-ever class pick) ----
+
+document.getElementById("ob-line1").textContent =
+  "Fight through dungeon rooms, grab loot, and reach the stairs.";
+document.getElementById("ob-line2").textContent =
+  "Back in Town, spend gold with the Barkeep, Trader, and Quest Giver.";
+document.getElementById("ob-line3").textContent =
+  "The World Map is home base — pick a dungeon, or head back to Town.";
+document.getElementById("ob-line4").textContent =
+  "Town isn't always safe — raids happen. Fight back, or flee to the map.";
+
+document.getElementById("btn-onboarding-done").addEventListener("click", () => {
+  profile.setOnboarded();
+  document.getElementById("onboarding").classList.add("hidden");
+  showMap();
+});
+
+// ---- settings (volume) ----
+
+function openSettings() {
+  document.getElementById("settings-volume").value = Math.round((profile.data.settings.volume ?? 1) * 100);
+  document.getElementById("settings").classList.remove("hidden");
+}
+document.getElementById("btn-menu-settings").addEventListener("click", openSettings);
+document.getElementById("btn-hub-settings").addEventListener("click", openSettings);
+document.getElementById("btn-settings-close").addEventListener("click", () => {
+  document.getElementById("settings").classList.add("hidden");
+});
+document.getElementById("settings-volume").addEventListener("input", (e) => {
+  const v = Number(e.target.value) / 100;
+  audio.setMasterVolume(v);
+  profile.data.settings.volume = v;
+  profile.save();
+});
+
 
 document.getElementById("btn-host").addEventListener("click", () => {
   audio.unlock();
@@ -172,6 +207,7 @@ sprites.init();
 fitCanvas();
 input.init(canvas);
 buildClassCards();
+audio.setMasterVolume(profile.data.settings.volume ?? 1);
 const _bootHero = profile.getActiveHero();
 if (_bootHero) {
   game.hero = _bootHero;

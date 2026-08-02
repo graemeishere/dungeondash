@@ -259,26 +259,39 @@ export const hud = {
     ctx.lineWidth = 1;
     ctx.strokeRect(bx + 0.5, by + 0.5, boxW - 1, boxH - 1);
 
-    // corridors between discovered connected rooms
+    // corridors between discovered connected rooms; dashed for a spur off
+    // the critical path so a detour reads as optional at a glance
     ctx.strokeStyle = "rgba(150,140,175,0.55)";
     ctx.lineWidth = 1;
     for (const [a, b] of (room.edges || [])) {
       const ra = room.roomById(a), rb = room.roomById(b);
       if (!ra || !rb || !ra.seen || !rb.seen) continue;
+      ctx.setLineDash((ra.side || rb.side) ? [2, 2] : []);
       ctx.beginPath();
       ctx.moveTo(sx(ra.rect.x + ra.rect.w / 2), sy(ra.rect.y + ra.rect.h / 2));
       ctx.lineTo(sx(rb.rect.x + rb.rect.w / 2), sy(rb.rect.y + rb.rect.h / 2));
       ctx.stroke();
     }
+    ctx.setLineDash([]);
 
     const pl = game.localPlayer;
     const curId = pl ? (room.roomAt(pl.x, pl.y) || {}).id : null;
-    const COLOR = { boss: "#e8484f", treasure: "#ffd14a", elite: "#e88a3a", shrine: "#8ad0ff" };
+    const COLOR = { boss: "#e8484f", treasure: "#ffd14a", elite: "#e88a3a", shrine: "#8ad0ff", storage: "#c98a4a", dining: "#e0668a" };
     for (const r of rooms) {
       const x = sx(r.rect.x), y = sy(r.rect.y), w = r.rect.w * s, h = r.rect.h * s;
       ctx.fillStyle = r.id === room.stairsRoomId ? "#e8484f"
         : (COLOR[r.type] || (r.cleared ? "#5a5470" : "#8b83a6"));
       ctx.fillRect(x, y, Math.max(2, w), Math.max(2, h));
+      // side rooms (detours off the critical path) get a dashed outline —
+      // distinguishes them from mainline rooms independent of room type/colour
+      if (r.side) {
+        ctx.save();
+        ctx.setLineDash([2, 2]);
+        ctx.strokeStyle = "rgba(255,255,255,0.55)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 0.5, y - 0.5, Math.max(2, w) + 1, Math.max(2, h) + 1);
+        ctx.restore();
+      }
       if (r.locked) {
         ctx.strokeStyle = "#ff5252"; ctx.lineWidth = 1.5;
         ctx.strokeRect(x - 0.5, y - 0.5, Math.max(2, w) + 1, Math.max(2, h) + 1);

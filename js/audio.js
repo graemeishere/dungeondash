@@ -1,6 +1,11 @@
 // All sound effects are synthesized with the Web Audio API — no audio files.
 
 let ctx = null;
+// Provisional linear volume scalar for the Settings volume slider. This is
+// deliberately not the real master-bus/limiter architecture (Phase 4 audio
+// work); it just gives the slider something real to control until that
+// lands and replaces it with a proper shared GainNode.
+let masterVolume = 1;
 
 function ensure() {
   if (!ctx) {
@@ -22,7 +27,7 @@ function tone({ freq = 440, end = null, type = "square", dur = 0.1, vol = 0.15, 
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t0);
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, end === null ? freq : end), t0 + dur);
-    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.setValueAtTime(vol * masterVolume, t0);
     gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     osc.connect(gain).connect(ac.destination);
     osc.start(t0);
@@ -41,7 +46,7 @@ function noise({ dur = 0.15, vol = 0.12, delay = 0 }) {
     const src = ac.createBufferSource();
     src.buffer = buf;
     const gain = ac.createGain();
-    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.setValueAtTime(vol * masterVolume, t0);
     gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     const filter = ac.createBiquadFilter();
     filter.type = "lowpass";
@@ -53,6 +58,8 @@ function noise({ dur = 0.15, vol = 0.12, delay = 0 }) {
 
 export const audio = {
   unlock() { ensure(); },
+  setMasterVolume(v) { masterVolume = Math.max(0, Math.min(1, v)); },
+  getMasterVolume() { return masterVolume; },
   swing()  { tone({ freq: 240, end: 90, type: "sawtooth", dur: 0.09, vol: 0.08 }); },
   shoot()  { tone({ freq: 640, end: 220, type: "square", dur: 0.1, vol: 0.07 }); },
   bolt()   { tone({ freq: 320, end: 760, type: "triangle", dur: 0.12, vol: 0.1 }); },

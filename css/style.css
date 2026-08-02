@@ -60,6 +60,15 @@ body {
 
 .overlay.hidden { display: none; }
 
+/* Content-heavy overlays can exceed the viewport height at ordinary window
+   sizes, not just on phones. Top-align unconditionally: centered flex
+   content taller than the viewport clips at the top and can't be scrolled
+   to, so this is correct at every size, not just a fixed breakpoint, and a
+   no-op when content already fits. */
+#stats-overlay, #trader, #questgiver, #hub {
+  justify-content: flex-start;
+}
+
 .overlay h1 {
   font-size: clamp(28px, 6vw, 52px);
   letter-spacing: 6px;
@@ -385,7 +394,7 @@ body {
 
 .hub-attr-name { color: #bdb3d6; min-width: 64px; }
 .hub-attr-val  { color: #ffd95e; font-weight: bold; min-width: 20px; text-align: center; }
-.hub-attr-desc { color: #6b5e96; font-size: 10px; flex: 1; }
+.hub-attr-desc { color: #9b90b8; font-size: 10px; flex: 1; }
 
 .hub-attr-btn {
   width: 22px;
@@ -484,9 +493,6 @@ body {
 .q-actions { margin-top: 6px; }
 
 @media (max-width: 720px) {
-  /* top-align so the title + stats are reachable: centered flex content taller
-     than the viewport clips at the top and can't be scrolled to */
-  #stats-overlay { justify-content: flex-start; }
   #so-body {
     flex-direction: column;
     flex-wrap: nowrap;
@@ -496,11 +502,9 @@ body {
   #so-inv-grid { grid-template-columns: repeat(auto-fill, 48px); justify-content: center; }
   #stats-overlay .inv-slot, #stats-overlay .inv-item { width: 48px; height: 48px; }
 
-  #trader { justify-content: flex-start; }
   #tr-body { flex-direction: column; flex-wrap: nowrap; width: 94vw; }
   #tr-col-buy, #tr-col-sell { width: 100%; min-width: 0; }
 
-  #questgiver { justify-content: flex-start; }
   #qg-body { flex-direction: column; flex-wrap: nowrap; width: 94vw; }
   #qg-col-active, #qg-col-avail { width: 100%; min-width: 0; }
 }
@@ -517,7 +521,7 @@ body {
 }
 .hub-quest-title { font-size: 13px; font-weight: bold; color: #ffd95e; margin-bottom: 2px; }
 .hub-quest-desc  { font-size: 11px; color: #9b90b8; margin-bottom: 4px; }
-.hub-quest-reward { font-size: 10px; color: #6b5e96; margin-top: 3px; }
+.hub-quest-reward { font-size: 10px; color: #9b90b8; margin-top: 3px; }
 
 .hub-quest-bar-bg {
   height: 5px;

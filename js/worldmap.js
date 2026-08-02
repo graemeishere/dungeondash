@@ -1,16 +1,16 @@
 "use strict";
-// The world map screen: the only state still drawn purely in 2D screen space.
-// Routing it through the 3D renderer is Phase 3 work, not this phase.
+// The world map screen: the only peaceful state still drawn purely in 2D
+// screen space rather than through the 3D renderer. It draws directly against
+// the real canvas pixel size (see drawMap below) so it fills the viewport at
+// any aspect ratio instead of letterboxing to a fixed room shape.
 
 import { audio } from "./audio.js?v=__BUILD__";
 import { input } from "./input.js?v=__BUILD__";
 import { profile } from "./profile.js?v=__BUILD__";
-import { HEIGHT, WIDTH, dist, updateView, view } from "./util.js?v=__BUILD__";
-import { canvas } from "./dom.js?v=__BUILD__";
+import { dist } from "./util.js?v=__BUILD__";
 import { game, DUNGEONS } from "./state.js?v=__BUILD__";
 import { hideAllOverlays, showHub, backToMenu } from "./overlays.js?v=__BUILD__";
 import { showTownRoom, showDungeonLobby, startFinale } from "./town.js?v=__BUILD__";
-import { sizeRoomToCanvas } from "./draw.js?v=__BUILD__";
 
 export function showMap() {
   hideAllOverlays();
@@ -19,8 +19,6 @@ export function showMap() {
   game.peaceful = false;
   game.townNpcs = [];
   game.nearbyNpc = null;
-  sizeRoomToCanvas();
-  updateView(canvas);
 }
 
 // ---- world map ----
@@ -34,7 +32,7 @@ export const MAP_LOCS = [
 ];
 
 // Touch-friendly "back to hub" button on the world map (mobile has no Esc).
-// Coordinates are in WIDTH/HEIGHT space, matching drawMap + handleMapTap.
+// Coordinates are absolute canvas pixels, matching drawMap + handleMapTap.
 export const MAP_HUB_BTN = { x: 12, y: 10, w: 104, h: 30 };
 
 // Draw a small pixel-art icon for each location (48×48 in world pixels).
@@ -111,7 +109,7 @@ function drawMapIcon(ctx, loc, cx, cy, hovered) {
 }
 
 export function drawMap(ctx) {
-  const W = WIDTH, H = HEIGHT;
+  const W = ctx.canvas.width, H = ctx.canvas.height;
   // stone floor background
   ctx.fillStyle = "#1e1a2e";
   ctx.fillRect(0, 0, W, H);
@@ -207,8 +205,8 @@ export function handleMapTap(clientX, clientY, targetEl) {
   const rect = targetEl.getBoundingClientRect();
   const cx = (clientX - rect.left) * (targetEl.width / rect.width);
   const cy = (clientY - rect.top) * (targetEl.height / rect.height);
-  const wx = (cx - view.ox) / view.scale;
-  const wy = (cy - view.oy) / view.scale;
+  const wx = cx;
+  const wy = cy;
 
   // "‹ Hub" button — always available so the map is never a dead end
   const hb = MAP_HUB_BTN;
@@ -220,7 +218,7 @@ export function handleMapTap(clientX, clientY, targetEl) {
 
   for (const loc of MAP_LOCS) {
     if (loc.championOnly && !(game.hero && game.hero.victory)) continue;
-    const lx = loc.fx * WIDTH, ly = loc.fy * HEIGHT;
+    const lx = loc.fx * targetEl.width, ly = loc.fy * targetEl.height;
     if (dist(wx, wy, lx, ly) < 52) {
       audio.unlock();
       if (loc.kind === "town") showTownRoom();

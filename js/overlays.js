@@ -121,7 +121,7 @@ export function buildHub(hero) {
   if (questsEl) {
     const active = profile.data.quests.active;
     if (active.length === 0) {
-      questsEl.innerHTML = `<div class="hub-quest-row" style="color:#6b5e96">No active quests — visit the Quest Giver in town.</div>`;
+      questsEl.innerHTML = `<div class="hub-quest-row" style="color:#9b90b8">No active quests — visit the Quest Giver in town.</div>`;
     } else {
       questsEl.innerHTML = active.slice(0, 3).map((q) => {
         const def = profile.questDefs.find((d) => d.id === q.id);
@@ -166,14 +166,19 @@ export function showHub(hero) {
 }
 
 // Called when player picks a class from the class-select screen.
-// Creates/switches the hero profile then goes to the world map.
+// Creates/switches the hero profile then goes to the world map (or, on a
+// player's very first-ever class pick, the one-time onboarding screen first).
 export function selectClass(classKey) {
   uiFlags.townSwitchClass = false;
   const hero = profile.getOrCreateHero(classKey);
   game.hero = hero;
   game.classKey = classKey;
   menuEl.classList.add("hidden");
-  showMap();
+  if (!profile.data.onboarded) {
+    document.getElementById("onboarding").classList.remove("hidden");
+  } else {
+    showMap();
+  }
 }
 
 // Spawn the local hero at the bottom-center of the current room.

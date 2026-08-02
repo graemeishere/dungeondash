@@ -32,6 +32,8 @@ const profileData = {
   meta: { shards: 0 },
   quests: { active: [], completed: [] },
   unlocks: {},
+  onboarded: false,
+  settings: { volume: 1 },
 };
 
 function save() {
@@ -64,6 +66,8 @@ function load() {
       profileData.activeHeroId = raw.activeHeroId;
       profileData.meta = raw.meta || { shards: 0 };
       profileData.unlocks = raw.unlocks || {};
+      profileData.onboarded = !!raw.onboarded;
+      profileData.settings = raw.settings || { volume: 1 };
       const q = raw.quests || {};
       // v2 auto-assigned every quest to "active"; quests are now NPC-accepted,
       // so on upgrade keep completed but clear the auto-assigned active list.
@@ -207,6 +211,11 @@ function hasClear(hero, dungeonId, tier) {
   return !!(hero && hero.clears && hero.clears[`${dungeonId}:${tier}`]);
 }
 
+function setOnboarded() {
+  profileData.onboarded = true;
+  save();
+}
+
 export const profile = {
   load,
   save,
@@ -224,6 +233,7 @@ export const profile = {
   progressQuests,
   markClear,
   hasClear,
+  setOnboarded,
   ABANDON_COST,
   ACTIVE_CAP,
 };

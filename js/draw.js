@@ -9,7 +9,7 @@ import { net, netSync } from "./net.js?v=__BUILD__";
 import { particles } from "./particles.js?v=__BUILD__";
 import { room } from "./room.js?v=__BUILD__";
 import { generateFloor } from "./floor.js?v=__BUILD__";
-import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView, view } from "./util.js?v=__BUILD__";
+import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView } from "./util.js?v=__BUILD__";
 import { canvas, ctx, resultEl } from "./dom.js?v=__BUILD__";
 import { safeMode } from "./env.js?v=__BUILD__";
 import { game, uiFlags } from "./state.js?v=__BUILD__";
@@ -223,11 +223,7 @@ export function draw(dt) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   if (game.state === "map") {
-    ctx.save();
-    ctx.translate(view.ox, view.oy);
-    ctx.scale(view.scale, view.scale);
     drawMap(ctx);
-    ctx.restore();
   }
 }
 
@@ -241,11 +237,6 @@ export function onResize() {
   // their layout and letterbox until the next room loads
   if (game.state === "menu" || game.state === "hub") {
     room.prerendered = false;
-  } else if (game.state === "map") {
-    // the map is redrawn each frame from WIDTH/HEIGHT — resync them so it
-    // reflows to the new aspect instead of letterboxing the old shape
-    sizeRoomToCanvas();
-    updateView(canvas);
   } else if (game.state === "town") {
     showTownRoom(true);
   } else if (game.state === "lobby") {

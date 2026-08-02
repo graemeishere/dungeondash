@@ -234,12 +234,17 @@ async function screens(browser) {
     const menuState = await page.evaluate(() => DD.game.state);
     check("boot: lands on menu or hub", menuState === "menu" || menuState === "hub", menuState);
 
-    // pick a class from the menu -> world map
+    // pick a class from the menu -> one-time onboarding (fresh profile) -> world map
     await page.evaluate(() => {
       document.querySelectorAll("#class-cards .class-card")[0].click();
     });
     await page.waitForTimeout(400);
-    check("menu: class card -> world map", (await page.evaluate(() => DD.game.state)) === "map");
+    const onboardingVisible = await page.evaluate(() =>
+      !document.getElementById("onboarding").classList.contains("hidden"));
+    check("menu: class card -> onboarding (first-ever pick)", onboardingVisible);
+    await page.evaluate(() => { document.getElementById("btn-onboarding-done").click(); });
+    await page.waitForTimeout(400);
+    check("onboarding: dismiss -> world map", (await page.evaluate(() => DD.game.state)) === "map");
 
     // world map draws and its hub button works
     const mapOk = await page.evaluate(() => {
@@ -261,8 +266,7 @@ async function screens(browser) {
           // click the town location on the map
           const c = document.getElementById("game");
           const r = c.getBoundingClientRect();
-          const wx = 0.50 * DD.WIDTH, wy = 0.46 * DD.HEIGHT;
-          const cx = wx * DD.view.scale + DD.view.ox, cy = wy * DD.view.scale + DD.view.oy;
+          const cx = 0.50 * c.width, cy = 0.46 * c.height; // map now draws at real canvas pixel size, not a letterboxed abstract space
           c.dispatchEvent(new MouseEvent("click", {
             clientX: r.left + cx * (r.width / c.width), clientY: r.top + cy * (r.height / c.height), bubbles: true,
           }));
@@ -305,8 +309,7 @@ async function screens(browser) {
       DD.game.state = "map";
       const c = document.getElementById("game");
       const r = c.getBoundingClientRect();
-      const wx = 0.22 * DD.WIDTH, wy = 0.27 * DD.HEIGHT; // catacombs
-      const cx = wx * DD.view.scale + DD.view.ox, cy = wy * DD.view.scale + DD.view.oy;
+      const cx = 0.22 * c.width, cy = 0.27 * c.height; // catacombs; map draws at real canvas pixel size
       c.dispatchEvent(new MouseEvent("click", {
         clientX: r.left + cx * (r.width / c.width), clientY: r.top + cy * (r.height / c.height), bubbles: true,
       }));
@@ -484,8 +487,7 @@ async function deepFlows(browser) {
       DD.game.state = "map";
       const c = document.getElementById("game");
       const r = c.getBoundingClientRect();
-      const wx = 0.74 * DD.WIDTH, wy = 0.74 * DD.HEIGHT;
-      const cx = wx * DD.view.scale + DD.view.ox, cy = wy * DD.view.scale + DD.view.oy;
+      const cx = 0.74 * c.width, cy = 0.74 * c.height; // map draws at real canvas pixel size
       c.dispatchEvent(new MouseEvent("click", {
         clientX: r.left + cx * (r.width / c.width), clientY: r.top + cy * (r.height / c.height), bubbles: true,
       }));
