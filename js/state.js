@@ -36,18 +36,25 @@ export const DUNGEONS = {
     floors: [
       { name: "Upper Catacombs",
         kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["zombie"],
-        plan: ["combat", "combat", "combat", "combat", "boss"] },
+        plan: ["combat", "combat", "combat", "combat", "boss"],
+        bossDmg: [1, 3, 5], bossName: "SKELETON SENTRY" },
       { name: "Deep Catacombs",
         kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["archer", "warlock"],
-        plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
+        plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"],
+        bossDmg: [2, 3, 6], bossName: "SKELETON GENERAL" },
       { name: "Catacombs Core",
         kinds: ["melee", "archer", "zombie", "warlock"], eliteKinds: ["zombie", "warlock"],
-        plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
+        plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"],
+        bossDmg: [2, 4, 7], bossName: "SKELETON KING" },
     ],
+    // bossHp stays keyed by tier (below) and is the *floor-2* value at that
+    // tier - floors 0/1 scale it down via BOSS_HP_RATIO in dungeonFloorCfg(),
+    // so each floor's boss is distinct and escalating instead of the same
+    // fight 3 times. bossDmg moved to floors[] above (decision 13).
     tiers: [
-      { tier: 0, levelHint: "1-10",  scale: 1.0, bossHp: 70,  bossDmg: 2, bossName: "SKELETON KING",  summonKind: "melee"  },
-      { tier: 1, levelHint: "11-20", scale: 3.0, bossHp: 160, bossDmg: 4, bossName: "SKELETON KING",  summonKind: "archer" },
-      { tier: 2, levelHint: "21-30", scale: 6.0, bossHp: 280, bossDmg: 7, bossName: "SKELETON KING",  summonKind: "zombie" },
+      { tier: 0, levelHint: "1-10",  scale: 1.0, bossHp: 70,  bossName: "SKELETON KING",  summonKind: "melee"  },
+      { tier: 1, levelHint: "11-20", scale: 2.8, bossHp: 160, bossName: "SKELETON KING",  summonKind: "archer" },
+      { tier: 2, levelHint: "21-30", scale: 5.3, bossHp: 280, bossName: "SKELETON KING",  summonKind: "zombie" },
     ],
   },
   goblinMines: {
@@ -55,18 +62,21 @@ export const DUNGEONS = {
     floors: [
       { name: "Mine Entrance",
         kinds: ["goblin", "goblinArcher"], eliteKinds: ["goblin"],
-        plan: ["combat", "combat", "treasure", "combat", "boss"] },
+        plan: ["combat", "combat", "treasure", "combat", "boss"],
+        bossDmg: [1, 3, 6], bossName: "GOBLIN OVERSEER" },
       { name: "Deep Mines",
         kinds: ["goblin", "goblinArcher", "goblinBomber", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblinArcher", "goblinShaman"],
-        plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
+        plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"],
+        bossDmg: [2, 4, 7], bossName: "GOBLIN CHIEFTAIN" },
       { name: "Warlord's Den",
         kinds: ["goblin", "goblinArcher", "goblinBomber", "goblinBerserker", "goblinShaman"], eliteKinds: ["goblin", "goblinBerserker", "goblinShaman"],
-        plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
+        plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"],
+        bossDmg: [2, 5, 8], bossName: "GOBLIN WARLORD" },
     ],
     tiers: [
-      { tier: 0, levelHint: "1-10",  scale: 1.1, bossHp: 80,  bossDmg: 2, bossName: "GOBLIN WARLORD", summonKind: "goblin"          },
-      { tier: 1, levelHint: "11-20", scale: 3.3, bossHp: 175, bossDmg: 5, bossName: "GOBLIN WARLORD", summonKind: "goblinBerserker"  },
-      { tier: 2, levelHint: "21-30", scale: 6.5, bossHp: 300, bossDmg: 8, bossName: "GOBLIN WARLORD", summonKind: "goblinShaman"     },
+      { tier: 0, levelHint: "1-10",  scale: 1.1, bossHp: 80,  bossName: "GOBLIN WARLORD", summonKind: "goblin"          },
+      { tier: 1, levelHint: "11-20", scale: 3.1, bossHp: 175, bossName: "GOBLIN WARLORD", summonKind: "goblinBerserker"  },
+      { tier: 2, levelHint: "21-30", scale: 5.8, bossHp: 300, bossName: "GOBLIN WARLORD", summonKind: "goblinShaman"     },
     ],
   },
   crypt: {
@@ -74,28 +84,47 @@ export const DUNGEONS = {
     floors: [
       { name: "Outer Crypt",
         kinds: ["zombie", "warlock"], eliteKinds: ["zombie"],
-        plan: ["combat", "combat", "treasure", "combat", "boss"] },
+        plan: ["combat", "combat", "treasure", "combat", "boss"],
+        bossDmg: [1, 3, 6], bossName: "CRYPT WARDEN" },
       { name: "Inner Crypt",
         kinds: ["zombie", "warlock", "necromancer"], eliteKinds: ["warlock", "necromancer"],
-        plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"] },
+        plan: ["combat", "trap", "combat", "elite", "treasure", "combat", "boss"],
+        bossDmg: [2, 4, 7], bossName: "DEATHLESS HERALD" },
       { name: "Lich's Sanctum",
         kinds: ["zombie", "warlock", "necromancer"], eliteKinds: ["zombie", "warlock"],
-        plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"] },
+        plan: ["combat", "elite", "trap", "combat", "treasure", "combat", "boss"],
+        bossDmg: [3, 5, 9], bossName: "THE LICH" },
     ],
     tiers: [
-      { tier: 0, levelHint: "1-10",  scale: 1.2, bossHp: 90,  bossDmg: 3, bossName: "THE LICH", summonKind: "zombie"      },
-      { tier: 1, levelHint: "11-20", scale: 3.6, bossHp: 190, bossDmg: 5, bossName: "THE LICH", summonKind: "warlock"     },
-      { tier: 2, levelHint: "21-30", scale: 7.0, bossHp: 320, bossDmg: 9, bossName: "THE LICH", summonKind: "necromancer" },
+      { tier: 0, levelHint: "1-10",  scale: 1.2, bossHp: 90,  bossName: "THE LICH", summonKind: "zombie"      },
+      { tier: 1, levelHint: "11-20", scale: 3.4, bossHp: 190, bossName: "THE LICH", summonKind: "warlock"     },
+      { tier: 2, levelHint: "21-30", scale: 6.3, bossHp: 320, bossName: "THE LICH", summonKind: "necromancer" },
     ],
   },
 };
+
+// Boss HP escalates per floor within a tier (decision 13): floor 0 is the
+// weakest fight at a given tier, floor 2 is the tier's full, already-tuned
+// value (ratio 1.0 - nothing that was already balanced moves). Per-dungeon
+// override via `d.bossHpRatios` if a dungeon ever needs a different shape.
+const BOSS_HP_RATIO = [0.6, 0.8, 1.0];
 
 // Merge the active floor's content + tier's stats into one flat config object.
 // All run logic reads game.floorCfg() — adding new dungeons requires only a DUNGEONS entry.
 export function dungeonFloorCfg() {
   const d = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
-  const flr = d.floors[Math.min(game.floor, d.floors.length - 1)];
-  const tier = d.tiers[Math.min(game.tier, d.tiers.length - 1)];
+  const floorIdx = Math.min(game.floor, d.floors.length - 1);
+  const tierIdx = Math.min(game.tier, d.tiers.length - 1);
+  const flr = d.floors[floorIdx];
+  const tier = d.tiers[tierIdx];
+  // Single-floor synthetic dungeons (town raid, the Champion finale) keep
+  // their tier's boss at full strength - they're one climactic fight, not
+  // "floor 0 of 3", so the per-floor ratio only applies to the 3-floor core
+  // dungeons the ratio was designed for.
+  const ratio = d.floors.length > 1 ? (d.bossHpRatios || BOSS_HP_RATIO)[floorIdx] : 1;
+  const bossDmg = Array.isArray(flr.bossDmg) && flr.bossDmg[tierIdx] !== undefined
+    ? flr.bossDmg[tierIdx]
+    : tier.bossDmg;
   return {
     ...flr,
     ...tier,
@@ -104,7 +133,9 @@ export function dungeonFloorCfg() {
     id: d.id,
     multiFaction: !!d.multiFaction,
     bossFaction: d.bossFaction || null,
-    boss: tier.bossName, // alias used by Boss constructor
+    bossHp: Math.round(tier.bossHp * ratio),
+    bossDmg,
+    boss: flr.bossName || tier.bossName, // alias used by Boss constructor
   };
 }
 

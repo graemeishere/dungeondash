@@ -124,7 +124,7 @@ export function update(dt) {
   for (const p of game.players) {
     if (!p.alive()) continue;
     for (const ch of game.chests) {
-      if (!ch.opened && dist(ch.x, ch.y, p.x, p.y) < ch.r + p.r + 4) ch.open(game);
+      if (!ch.opened && dist(ch.x, ch.y, p.x, p.y) < ch.r + p.r + 4) ch.open(game, p);
     }
   }
 

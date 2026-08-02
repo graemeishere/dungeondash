@@ -349,13 +349,22 @@ function factionDungeon(faction) {
 function buildRaidDungeon(faction) {
   const src = DUNGEONS[factionDungeon(faction)];
   const f0 = src.floors[0];
+  const topFloor = src.floors[src.floors.length - 1];
   return {
     id: "townRaid", name: "Town Under Siege", faction, theme: "town",
     enemyLabel: src.enemyLabel,
     // no side rooms: a raid is a tight gauntlet straight to the boss, not an
-    // exploratory floor with shrine/storage/dining/treasure detours
-    floors: [{ name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds, plan: ["combat", "combat", "boss"], sideRooms: false }],
-    tiers: src.tiers.map((t) => ({ ...t, bossName: "RAID CAPTAIN" })),
+    // exploratory floor with shrine/storage/dining/treasure detours.
+    // bossDmg borrows the source dungeon's top-floor (anchor) value, same as
+    // bossHp already does via dungeonFloorCfg's single-floor ratio=1 case -
+    // a raid boss should hit as hard as that tier's real final boss, not the
+    // weaker floor-0 one, even though the raid reuses floor-0's enemy kinds.
+    floors: [{
+      name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds,
+      plan: ["combat", "combat", "boss"], sideRooms: false,
+      bossDmg: topFloor.bossDmg, bossName: "RAID CAPTAIN",
+    }],
+    tiers: src.tiers,
   };
 }
 

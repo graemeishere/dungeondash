@@ -29,9 +29,9 @@ export const CLASSES = {
   },
   rogue: {
     name: "Rogue", color: "#3d7a4f",
-    hp: 8, speed: 225, attack: "melee", range: 34, arc: 1.5, dmg: 2, cooldown: 0.51, swingLock: 0.35, dash: true,
+    hp: 8, speed: 225, attack: "melee", range: 34, arc: 1.5, dmg: 2, cooldown: 0.42, swingLock: 0.35, dash: true,
     desc: "Lightning-fast stabs. Shift to dash.",
-    stats: "HP 8 • Fastest • Dash",
+    stats: "HP 8 • Fastest • Dash • Post-dash opener crit",
   },
   mage: {
     name: "Mage", color: "#8657d8",
@@ -51,8 +51,8 @@ export const CLASSES = {
 // temporary run power never leaks onto the persistent hero profile.
 export const UPGRADES = [
   {
-    id: "dmg", name: "Sharpened Edge", desc: "+30% damage",
-    apply: (pl) => { pl.runBuffs.dmg *= 1.3; pl.recompute(); },
+    id: "dmg", name: "Sharpened Edge", desc: "+25% damage",
+    apply: (pl) => { pl.runBuffs.dmg *= 1.25; pl.recompute(); },
   },
   {
     id: "speed", name: "Swift Boots", desc: "+15% move speed",
@@ -79,6 +79,30 @@ export const UPGRADES = [
   {
     id: "siphon", name: "Soul Siphon", desc: "30% chance to heal 1 HP on kill",
     apply: (pl) => { pl.runBuffs.killHeal += 0.3; pl.recompute(); },
+  },
+  {
+    id: "crit", name: "Lucky Strikes", desc: "+15% chance to deal double damage",
+    apply: (pl) => { pl.runBuffs.critChance = Math.min(0.9, (pl.runBuffs.critChance || 0) + 0.15); pl.recompute(); },
+  },
+  {
+    id: "evade", name: "Evasive Reflexes", desc: "+0.15s invulnerability after being hit",
+    apply: (pl) => { pl.runBuffs.iframeBonus = (pl.runBuffs.iframeBonus || 0) + 0.15; pl.recompute(); },
+  },
+  {
+    id: "warriorArmor", name: "Shield Wall", classKey: "warrior", desc: "Take 1 less damage from every hit (min 1)",
+    apply: (pl) => { pl.runBuffs.armor = (pl.runBuffs.armor || 0) + 1; pl.recompute(); },
+  },
+  {
+    id: "rogueOpener", name: "Extended Reflexes", classKey: "rogue", desc: "+0.3s to the post-dash strike window",
+    apply: (pl) => { pl.runBuffs.dashCritWindowBonus = (pl.runBuffs.dashCritWindowBonus || 0) + 0.3; pl.recompute(); },
+  },
+  {
+    id: "mageOverload", name: "Volatile Bolts", classKey: "mage", desc: "+50% splash radius",
+    apply: (pl) => { pl.runBuffs.splash *= 1.5; pl.recompute(); },
+  },
+  {
+    id: "rangerBroadhead", name: "Broadhead Arrows", classKey: "ranger", desc: "+2 pierce",
+    apply: (pl) => { pl.runBuffs.pierce += 2; pl.recompute(); },
   },
 ];
 
@@ -112,7 +136,12 @@ export class Player {
     this.classKey = classKey;
     this.cfg = c;
     this.baseStats = hero ? deriveStats(hero) : { ...c };
-    this.runBuffs = { dmg: 1, speed: 1, cd: 1, range: 1, arc: 1, splash: 1, projSpeed: 1, pierce: 0, maxHp: 0, killHeal: 0 };
+    this.runBuffs = {
+      dmg: 1, speed: 1, cd: 1, range: 1, arc: 1, splash: 1, projSpeed: 1, pierce: 0, maxHp: 0, killHeal: 0,
+      critChance: 0, iframeBonus: 0, armor: 0, dashCritWindowBonus: 0,
+    };
+    this._dmgAcc = 0;    // fractional damage carry, so investment below +1 whole point still averages out
+    this.dashCritT = 0;  // post-dash opener-crit window (Rogue's post-dash mechanic)
     this.recompute();
     this.input = inputProvider || input;
     this.x = x;
@@ -150,12 +179,32 @@ export class Player {
     if (b.pierce    !== undefined) this.stats.pierce    = b.pierce    + r.pierce;
     this.maxHp    = Math.floor(b.hp) + r.maxHp;
     this.killHeal = (b.killHeal || 0) + r.killHeal;
+    this.stats.critChance = r.critChance || 0;
+    this.iframeBonus = r.iframeBonus || 0;
+    this.armor = r.armor || 0;
+    this.dashCritWindowBonus = r.dashCritWindowBonus || 0;
   }
 
   alive() { return !this.dead && !this.downed && !this.dying; }
 
+  // Fractional-carry accumulator instead of a flat round(): a raw stat of 3.5
+  // deals 3,4,3,4,... (averaging exactly 3.5) rather than rounding every hit
+  // to 4 and creating a dead zone where the next +0.5 of investment does
+  // nothing until it crosses the next whole number. `dealt` is clamped to
+  // >=1 before it's ever used to update the accumulator, so it can't drift
+  // into debt - no class/upgrade combination currently drives stats.dmg
+  // anywhere near 0.
   effDmg() {
-    return Math.max(1, Math.round(this.stats.dmg));
+    const raw = this.stats.dmg;
+    this._dmgAcc += raw;
+    let dealt = Math.floor(this._dmgAcc);
+    if (dealt < 1) dealt = 1;
+    this._dmgAcc = Math.max(0, this._dmgAcc - dealt);
+    let crit = false;
+    if (this.dashCritT > 0) { crit = true; this.dashCritT = 0; }
+    else if (this.stats.critChance && Math.random() < this.stats.critChance) crit = true;
+    if (crit) dealt *= 2;
+    return dealt;
   }
 
   onKill() {
@@ -218,6 +267,7 @@ export class Player {
     this.iframes -= dt;
     this.swingT -= dt;
     this.dashCd -= dt;
+    if (this.dashCritT > 0) this.dashCritT -= dt;
     if (this.lockT > 0) this.lockT -= dt;
 
     this.aim = input.aimAngle(this);
@@ -240,6 +290,12 @@ export class Player {
       this.dashT -= dt;
       room.moveEntity(this, this.dashDir.x * 620 * dt, this.dashDir.y * 620 * dt);
       particles.burst(this.x, this.y, { count: 2, colors: ["#bfe8c8", "#ffffff"], speed: 20, life: 0.3, size: 4 });
+      // opener window: the strike that lands right after a dash ends is a
+      // guaranteed crit - converts the mobility play into a damage payoff
+      // instead of just repositioning (Rogue's post-dash identity).
+      if (this.dashT <= 0 && this.stats.dash) {
+        this.dashCritT = 0.6 + (this.dashCritWindowBonus || 0);
+      }
     } else if (!rooted) {
       room.moveEntity(this, dx * this.stats.speed * dt, dy * this.stats.speed * dt);
     }
@@ -288,12 +344,13 @@ export class Player {
 
   damage(n, fromX, fromY, game) {
     if (this.iframes > 0 || this.dead || this.dying || this.downed) return;
-    this.hp -= n;
-    this.iframes = 0.9;
+    const dealt = Math.max(1, n - (this.armor || 0));
+    this.hp -= dealt;
+    this.iframes = 0.9 + (this.iframeBonus || 0);
     audio.hurt();
     game.shake = Math.max(game.shake, 6);
     particles.burst(this.x, this.y - 14, { count: 10, colors: ["#e8484f", "#a32630"], speed: 110, life: 0.4 });
-    particles.text(this.x, this.y - 40, `-${n}`, "#ff6b70");
+    particles.text(this.x, this.y - 40, `-${dealt}`, "#ff6b70");
     const a = angleTo(fromX, fromY, this.x, this.y);
     room.moveEntity(this, Math.cos(a) * 14, Math.sin(a) * 14);
     if (this.hp <= 0) {
@@ -577,6 +634,7 @@ export class Skeleton {
     this.elite = !!opts.elite;
     this.name = opts.name || null;
     const scale = opts.scale || 1;
+    this.scale = scale; // remembered so Boss summons (see Boss.update) can pass it on
     this.r = this.big ? 14 : 10;
     this.drawSize = this.big ? 68 : SPRITE_DRAW;
 
@@ -611,7 +669,7 @@ export class Skeleton {
       rand(52, 78));
     this.speed = baseSpeed * (1 + 0.06 * (scale - 1));
     this.dmg = opts.dmg ?? (this.big ? 2 : 1) + (scale >= 1.9 ? 1 : 0);
-    this.xpValue = opts.xpValue ?? (
+    const baseXpValue = opts.xpValue ?? (
       this.elite ? 25 : this.big ? 12 :
       this.kind === "shade"           ? 4 :
       this.kind === "melee"           ? 5 :
@@ -623,12 +681,20 @@ export class Skeleton {
       this.kind === "zombie"          ? 6 :
       this.kind === "warlock"         ? 8 :
       this.kind === "necromancer"     ? 14 : 7);
-    this.coinDrop = opts.coinDrop ?? (
+    // xpValue/coinDrop scale with tier just like hp already does - otherwise
+    // a tougher enemy pays exactly the same as a Tier-1 one, and progressing
+    // is never worth more than farming the tier you've already outlevelled.
+    this.xpValue = Math.max(1, Math.round(baseXpValue * scale));
+    const baseCoinDrop = opts.coinDrop ?? (
       this.elite ? [6, 10] : this.big ? [2, 4] :
       this.kind === "shade"        ? [0, 2] :
       this.kind === "goblin"       ? [1, 2] :
       this.kind === "goblinShaman" ? [3, 5] :
       this.kind === "necromancer"  ? [4, 7] : [1, 3]);
+    this.coinDrop = [
+      Math.max(0, Math.round(baseCoinDrop[0] * scale)),
+      Math.max(1, Math.round(baseCoinDrop[1] * scale)),
+    ];
 
     // grade: "regular" | "veteran" | "elite" (enemy difficulty tier, orthogonal to elite room)
     this.grade = opts.grade || "regular";
@@ -1010,18 +1076,30 @@ export class Skeleton {
 
 // ---------------- Boss ----------------
 
+// Tier-0 baseline reward, scaled the same way Skeleton scales its own
+// xpValue/coinDrop - without this a Tier-2 boss with 4x the HP paid exactly
+// what a Tier-0 boss did.
+const BOSS_BASE_XP = 40;
+const BOSS_BASE_COIN = [12, 18];
+
 export class Boss extends Skeleton {
   constructor(x, y, opts = {}) {
+    const scale = opts.scale || 1;
+    const xpValue = opts.xpValue ?? Math.round(BOSS_BASE_XP * scale);
+    const coinDrop = opts.coinDrop ?? [
+      Math.round(BOSS_BASE_COIN[0] * scale),
+      Math.round(BOSS_BASE_COIN[1] * scale),
+    ];
     super(x, y, {
       big: true,
       faction: opts.faction,
       hp: opts.hp ?? 70,
       speed: 55,
       dmg: opts.dmg ?? 2,
-      xpValue: 40,
-      coinDrop: [12, 18],
+      xpValue, coinDrop,
       roomId: opts.roomId, frozen: opts.frozen,
     });
+    this.scale = scale; // real battle scale, for boss-summoned adds below (super() didn't forward it, to avoid double-scaling the reward figures above)
     this.bossName = opts.name || "SKELETON KING";
     this.label = this.bossName;
     this.summonKind = opts.summonKind || "melee";
@@ -1062,7 +1140,7 @@ export class Boss extends Skeleton {
         particles.burst(this.x, this.y, { count: 30, colors: ["#e9e6da", "#8b80a8", "#fff"], speed: 220, life: 0.5 });
         for (const p of game.players) {
           if (p.alive() && dist(this.x, this.y, p.x, p.y) < 105) {
-            p.damage(2, this.x, this.y, game);
+            p.damage(this.dmg, this.x, this.y, game);
           }
         }
         this.state = "recover";
@@ -1087,6 +1165,7 @@ export class Boss extends Skeleton {
           game.skeletons.push(new Skeleton(pos.x, pos.y, {
             kind,
             faction: KIND_FACTION[kind] || fallback,
+            scale: this.scale,
           }));
           audio.spawn();
         }
@@ -1122,18 +1201,33 @@ export class Boss extends Skeleton {
 // ---------------- Chest ----------------
 
 export class Chest {
-  constructor(x, y) {
+  constructor(x, y, opts = {}) {
     this.x = x;
     this.y = y;
     this.r = 12;
     this.opened = false;
+    this.shrine = !!opts.shrine;
   }
 
-  open(game) {
+  open(game, player) {
     if (this.opened) return;
     this.opened = true;
     audio.chest();
     particles.burst(this.x, this.y - 14, { count: 14, colors: ["#ffd14a", "#fff3b8"], speed: 120, life: 0.5, gravity: -40 });
+    if (this.shrine) {
+      // shrine reward: one random permanent-for-the-run buff, smaller in
+      // magnitude than the matching level-up UPGRADES pick since this is a
+      // free bonus on top of that system, not a replacement for it.
+      const pl = player || game.localPlayer;
+      const SHRINE_BUFFS = [
+        () => { pl.runBuffs.dmg *= 1.15; pl.recompute(); },
+        () => { pl.runBuffs.speed *= 1.10; pl.recompute(); },
+        () => { pl.runBuffs.maxHp += 4; pl.recompute(); pl.hp = Math.min(pl.maxHp, pl.hp + 4); },
+        () => { pl.runBuffs.cd *= 0.9; pl.recompute(); },
+      ];
+      SHRINE_BUFFS[Math.floor(Math.random() * SHRINE_BUFFS.length)]();
+      return;
+    }
     const coins = randi(4, 7);
     for (let i = 0; i < coins; i++) {
       game.pickups.push(new Pickup("coin", this.x + rand(-10, 10), this.y + rand(-6, 10)));

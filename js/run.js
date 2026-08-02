@@ -123,7 +123,7 @@ export function spawnFloorEntities(floor) {
       const cx = (rm.rect.x + rm.rect.w / 2) * TILE, cy = (rm.rect.y + rm.rect.h / 2) * TILE;
       game.skeletons.push(new Boss(cx, cy, {
         hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
-        faction: cfg.bossFaction || cfg.faction, frozen: true, roomId: rm.id,
+        faction: cfg.bossFaction || cfg.faction, frozen: true, roomId: rm.id, scale: cfg.scale,
       }));
     } else if (rm.type === "treasure") {
       for (let i = 0; i < 3; i++) {
@@ -148,6 +148,19 @@ export function spawnFloorEntities(floor) {
       for (let i = 0; i < 3; i++) {
         const pp = safePos();
         game.pickups.push(new Pickup("coin", pp.x, pp.y));
+      }
+    } else if (rm.type === "shrine") {
+      const pos = room.randomFloorInRect(rm.rect);
+      game.chests.push(new Chest(pos.x, pos.y, { shrine: true }));
+    } else if (rm.type === "storage") {
+      for (let i = 0; i < 8; i++) {
+        const pp = room.randomFloorInRect(rm.rect);
+        game.pickups.push(new Pickup("coin", pp.x, pp.y));
+      }
+    } else if (rm.type === "dining") {
+      for (let i = 0; i < 4; i++) {
+        const pp = room.randomFloorInRect(rm.rect);
+        game.pickups.push(new Pickup("heart", pp.x, pp.y));
       }
     }
   }
@@ -184,6 +197,12 @@ export function updateFloorGating() {
       if (a === rm.id) { const n = room.roomById(b); if (n) n.seen = true; }
       else if (b === rm.id) { const n = room.roomById(a); if (n) n.seen = true; }
     }
+    // Side rooms' small XP trickle pays out on first visit, not at floor
+    // load - matches every other reward in the game (chest-open, pickup
+    // collect) in requiring the player to actually walk the detour.
+    if (rm.type === "storage") game.addXP(6);
+    else if (rm.type === "dining") game.addXP(4);
+    else if (rm.type === "shrine") game.addXP(4);
   }
   // Only lock once the player is clear of the doorway (a tile inside), so the
   // closing door never catches them mid-threshold.

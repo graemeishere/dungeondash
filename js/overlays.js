@@ -343,7 +343,8 @@ export function buildUpgradeCards(picks, onPick) {
 export function openLevelUp() {
   game.state = "levelup";
   audio.levelup();
-  const pool = [...UPGRADES];
+  const pl = game.players[0];
+  const pool = UPGRADES.filter((u) => !u.classKey || u.classKey === pl.classKey);
   const picks = [];
   for (let i = 0; i < 3 && pool.length; i++) {
     picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
