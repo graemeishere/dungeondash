@@ -25,28 +25,11 @@ export function setRoomSize(tw, th) {
   HEIGHT = TILE * th;
 }
 
-// Fixed landscape room (used for menus/town/lobby backdrops). Dungeon rooms
-// draw a per-type shape from ROOM_SHAPES instead — the 3D camera frames
-// whatever exists, so rooms are no longer screen-bound.
+// Fixed landscape room, used for the menu/town/lobby backdrops (the actual
+// dungeon-floor shape comes from js/floor.js's macro grid instead — the 3D
+// camera frames whatever exists, so rooms are no longer screen-bound).
 export const FIXED_ROOM = { tw: 22, th: 13 };
 export const roomSizeForCanvas = () => ({ tw: FIXED_ROOM.tw, th: FIXED_ROOM.th });
-
-// Room-size variety per room type: each room picks one of its type's shapes
-// so runs stop feeling like the same box redressed. Sizes are tiles (w,h);
-// the door sits top-center and players enter bottom-center, so height is the
-// run direction. Kept host-rolled: w/h sync to co-op guests via room data.
-const ROOM_SHAPES = {
-  combat:   [[22, 13], [26, 12], [16, 16], [15, 11], [24, 16], [13, 18], [28, 10]],
-  elite:    [[18, 14], [22, 13], [16, 16], [24, 15]],
-  trap:     [[12, 20], [26, 11], [11, 24], [30, 9]],   // gauntlet corridors
-  treasure: [[12, 9], [14, 10], [10, 12]],             // intimate vaults
-  boss:     [[26, 16], [24, 18], [30, 14]],            // arenas
-};
-export function roomSizeFor(roomType) {
-  const shapes = ROOM_SHAPES[roomType] || ROOM_SHAPES.combat;
-  const s = shapes[Math.floor(Math.random() * shapes.length)];
-  return { tw: s[0], th: s[1] };
-}
 
 // Deterministic RNG (mulberry32). Room decoration derives from a seed synced
 // to co-op guests, so both sides must draw an identical stream.

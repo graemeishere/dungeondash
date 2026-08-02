@@ -11,10 +11,12 @@
 // The tiles grid syncs to co-op guests as a string, so the LAYOUT uses
 // Math.random freely; only the DECOR is seeded (via floor.seed).
 
-import { TILE } from "./util.js?v=8addee6b";
-import { room } from "./room.js?v=8addee6b";
+import { TILE } from "./util.js?v=ff8ca445";
 
-const FLOOR = 0, WALL = 1;
+// OBSTACLE matches room.js's tile encoding (FLOOR=0, WALL=1, DOOR=2,
+// OBSTACLE=3) — a solid tile that decor3d/room.js render as a prop
+// (pillar/crate/rubble) instead of a plain wall block.
+const FLOOR = 0, WALL = 1, OBSTACLE = 3;
 
 // Macro cell holds one small room plus the corridor gap around it. Rooms are
 // centred in their cell so neighbours line up and corridors run dead straight
@@ -81,8 +83,13 @@ export function generateFloor(opts = {}) {
     }
   }
 
-  // side rooms: hang 1-3 detours off random non-terminal critical rooms
-  const sideCount = 1 + ((Math.random() * 3) | 0);
+  // side rooms: hang 1-3 detours off random non-terminal critical rooms.
+  // opts.sideRooms === false opts out entirely — the raid and finale
+  // set-pieces want a tight, undiluted gauntlet straight to the boss rather
+  // than the exploratory shrine/storage/dining/treasure spurs a normal floor
+  // offers, so they pass this to keep their pacing distinct from an ordinary
+  // dungeon floor.
+  const sideCount = opts.sideRooms === false ? 0 : 1 + ((Math.random() * 3) | 0);
   const critRooms = rooms.slice(1, rooms.length - 1);
   let placed = 0;
   for (const base of shuffleArr(critRooms)) {
@@ -152,9 +159,27 @@ export function generateFloor(opts = {}) {
     y: stairsRoom.rect.y,
   };
 
+  // Interior dressing: corner notches + jittered obstacle clusters (ported
+  // from the classic single-room generator's approach, scaled down to these
+  // much smaller room footprints) plus trap-room spike bands. Both are BFS-
+  // validated per room against that room's own door/entry/stairs anchors
+  // before being committed, so a placement that would ever wall off a
+  // required path is dropped rather than risking an unsolvable floor — the
+  // classic generator never needed this because its one room was always a
+  // simple top-door/bottom-entry box; a floor room's doors can be on any
+  // side, so this check is the floor-mode-specific safety the port needs.
+  const spikes = [];
+  for (const rm of rooms) {
+    const keep = doorAnchors(rm);
+    if (rm === entryRoom) keep.push([Math.round(entry.x / TILE), Math.round(entry.y / TILE)]);
+    if (rm.id === stairsRoom.id) keep.push([stairs.x, stairs.y]);
+    carveRoomFeatures(tiles, W, rm, keep);
+    if (rm.type === "trap") spikes.push(...trapSpikes(tiles, W, rm, keep));
+  }
+
   return {
     tiles, w: W, h: H, rooms, edges, doors, walls,
-    entry, stairsRoomId: stairsRoom.id, stairs,
+    entry, stairsRoomId: stairsRoom.id, stairs, spikes,
     seed: (Math.random() * 0x7fffffff) | 0,
   };
 };
@@ -192,6 +217,147 @@ function carveCorridor(tiles, W, a, b, doors, walls) {
     walls.push({ x: x0 + 1, y: tBorder, dir: "N" });
     walls.push({ x: x0 + 1, y: bBorder, dir: "S" });
   }
+}
+
+// The interior cell (inside the room's own rect) bordering each of its door
+// cells — these plus any extra required point (entry/stairs) must always
+// stay mutually reachable; carveRoomFeatures/trapSpikes never touch them.
+function doorAnchors(rm) {
+  const R = rm.rect;
+  const inRect = (x, y) => x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h;
+  const pts = [];
+  for (const c of rm.doorCells) {
+    const cand = [[c.x - 1, c.y], [c.x + 1, c.y], [c.x, c.y - 1], [c.x, c.y + 1]]
+      .find(([x, y]) => inRect(x, y));
+    if (cand) pts.push(cand);
+  }
+  if (!pts.length) pts.push([R.x + (R.w >> 1), R.y + (R.h >> 1)]);
+  return pts;
+}
+
+// Corner-notch biting + jittered obstacle clusters, ported from the classic
+// single-room generator's approach (js/room.js's old `generate()`) and scaled
+// to these much smaller room footprints. `keep` cells (door/entry/stairs
+// anchors) are never touched, and every candidate placement is BFS-checked
+// against the room's own floor space before being committed — see the
+// generateFloor comment above for why that check exists here and didn't in
+// the classic path.
+function carveRoomFeatures(tiles, W, rm, keep) {
+  const R = rm.rect;
+  const inRect = (x, y) => x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h;
+  const at = (x, y) => tiles[y * W + x];
+  const keepSet = new Set(keep.map(([x, y]) => x + "," + y));
+
+  // Can every keep-anchor still reach every other, treating `blocked` cells
+  // (plus existing non-FLOOR cells) as impassable within this room's rect?
+  function reachableAll(blocked) {
+    const [sx, sy] = keep[0];
+    const seen = new Set([sx + "," + sy]);
+    const stack = [[sx, sy]];
+    while (stack.length) {
+      const [cx, cy] = stack.pop();
+      for (const [nx, ny] of [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]) {
+        if (!inRect(nx, ny)) continue;
+        const k = nx + "," + ny;
+        if (seen.has(k) || blocked.has(k)) continue;
+        if (at(nx, ny) !== FLOOR && !keepSet.has(k)) continue;
+        seen.add(k);
+        stack.push([nx, ny]);
+      }
+    }
+    return keep.every(([x, y]) => seen.has(x + "," + y));
+  }
+
+  const w = R.w, h = R.h;
+  const roomy = w >= 6 && h >= 5; // only the boss chamber has room to spare
+
+  // corner notches: bite a small walled rectangle out of a corner, skipped
+  // wherever it would eat a keep-anchor or sever the room
+  if (roomy) {
+    for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      if (Math.random() > 0.35) continue;
+      const nw = Math.max(1, Math.min(3, Math.floor(w * 0.22)));
+      const nh = Math.max(1, Math.min(3, Math.floor(h * 0.22)));
+      const x0 = cx ? R.x + w - nw : R.x, y0 = cy ? R.y + h - nh : R.y;
+      const blocked = new Set();
+      let hitsKeep = false;
+      for (let y = y0; y < y0 + nh; y++) {
+        for (let x = x0; x < x0 + nw; x++) {
+          const k = x + "," + y;
+          if (keepSet.has(k)) { hitsKeep = true; break; }
+          blocked.add(k);
+        }
+        if (hitsKeep) break;
+      }
+      if (hitsKeep || !reachableAll(blocked)) continue;
+      for (const k of blocked) {
+        const [x, y] = k.split(",").map(Number);
+        tiles[y * W + x] = WALL;
+      }
+    }
+  }
+
+  // obstacle clusters near the room quarters, jittered; shapes vary 1x1..2x2
+  // in the boss chamber, single tiles only in the small standard rooms
+  const qxs = [R.x + Math.round(w * 0.27), R.x + Math.round(w * 0.66)];
+  const qys = [R.y + Math.round(h * 0.28), R.y + Math.round(h * 0.62)];
+  const SHAPES = roomy ? [[1, 1], [2, 1], [1, 2], [2, 2]] : [[1, 1]];
+  for (const qx of qxs) {
+    for (const qy of qys) {
+      if (Math.random() < 0.25) continue; // not every quarter gets one
+      const [sw, sh] = SHAPES[(Math.random() * SHAPES.length) | 0];
+      const jx = Math.round((Math.random() - 0.5) * 2), jy = Math.round((Math.random() - 0.5) * 2);
+      const loX = R.x + 1, hiX = R.x + w - 2 - sw;
+      const loY = R.y + 1, hiY = R.y + h - 2 - sh;
+      if (hiX < loX || hiY < loY) continue; // room too small for this shape
+      const px = Math.max(loX, Math.min(hiX, qx + jx));
+      const py = Math.max(loY, Math.min(hiY, qy + jy));
+      const blocked = new Set();
+      let ok = true;
+      for (let dy = 0; dy < sh && ok; dy++) {
+        for (let dx = 0; dx < sw; dx++) {
+          const x = px + dx, y = py + dy, k = x + "," + y;
+          if (keepSet.has(k) || at(x, y) !== FLOOR) { ok = false; break; }
+          blocked.add(k);
+        }
+      }
+      if (!ok || !blocked.size || !reachableAll(blocked)) continue;
+      for (const k of blocked) {
+        const [x, y] = k.split(",").map(Number);
+        tiles[y * W + x] = OBSTACLE;
+      }
+    }
+  }
+}
+
+// Trap-room spike bands, ported from the classic gauntlet's spike logic and
+// scaled to a floor room's fixed small height: one band per ~3 tiles of
+// height (always 1 at today's ROOM_H), each with a couple of safe gap columns
+// and its own timing offset. Skips keep-anchors and any cell an obstacle
+// already claimed. Returns {tx,ty,offset} in absolute floor tile coords —
+// room.setFloor() installs these directly into room.spikes.
+function trapSpikes(tiles, W, rm, keep) {
+  const R = rm.rect;
+  const at = (x, y) => tiles[y * W + x];
+  const keepSet = new Set(keep.map(([x, y]) => x + "," + y));
+  const out = [];
+  const bandCount = Math.max(1, Math.floor(R.h / 3));
+  for (let band = 0; band < bandCount; band++) {
+    const ty = R.y + Math.round(R.h * ((band + 1) / (bandCount + 1)));
+    const gapCount = Math.max(2, Math.round(R.w / 3));
+    const gaps = new Set();
+    let tries = 0;
+    while (gaps.size < Math.min(gapCount, Math.max(1, R.w - 2)) && tries < 50) {
+      gaps.add(R.x + 1 + ((Math.random() * Math.max(1, R.w - 2)) | 0));
+      tries++;
+    }
+    for (let tx = R.x; tx < R.x + R.w; tx++) {
+      const k = tx + "," + ty;
+      if (gaps.has(tx) || keepSet.has(k) || at(tx, ty) !== FLOOR) continue;
+      out.push({ tx, ty, offset: band * 0.7 });
+    }
+  }
+  return out;
 }
 
 function shuffleArr(arr) {

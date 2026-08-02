@@ -1,4 +1,4 @@
-import { CLASSES } from "./entities.js?v=8addee6b";
+import { CLASSES } from "./entities.js?v=ff8ca445";
 
 export const ATTRS = ["might", "agility", "focus", "vitality"];
 

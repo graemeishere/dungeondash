@@ -2,19 +2,19 @@
 // The walkable town and dungeon-lobby rooms, the four NPCs and their menus, and
 // the raid / finale set-pieces that are built out of the town.
 
-import { audio } from "./audio.js?v=8addee6b";
-import { CLASSES } from "./entities.js?v=8addee6b";
-import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=8addee6b";
-import { particles } from "./particles.js?v=8addee6b";
-import { profile } from "./profile.js?v=8addee6b";
-import { room } from "./room.js?v=8addee6b";
-import { sprites } from "./sprites.js?v=8addee6b";
-import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=8addee6b";
-import { canvas, menuEl } from "./dom.js?v=8addee6b";
-import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=8addee6b";
-import { startRun, beginRun } from "./run.js?v=8addee6b";
-import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=8addee6b";
-import { sizeRoomToCanvas } from "./draw.js?v=8addee6b";
+import { audio } from "./audio.js?v=ff8ca445";
+import { CLASSES } from "./entities.js?v=ff8ca445";
+import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=ff8ca445";
+import { particles } from "./particles.js?v=ff8ca445";
+import { profile } from "./profile.js?v=ff8ca445";
+import { room } from "./room.js?v=ff8ca445";
+import { sprites } from "./sprites.js?v=ff8ca445";
+import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=ff8ca445";
+import { canvas, menuEl } from "./dom.js?v=ff8ca445";
+import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=ff8ca445";
+import { startFloorRun, beginRun } from "./run.js?v=ff8ca445";
+import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=ff8ca445";
+import { sizeRoomToCanvas } from "./draw.js?v=ff8ca445";
 
 // Themed entry room with three tier doorways. Walk through one to start a run.
 export function showDungeonLobby(dungeonId) {
@@ -352,7 +352,9 @@ function buildRaidDungeon(faction) {
   return {
     id: "townRaid", name: "Town Under Siege", faction, theme: "town",
     enemyLabel: src.enemyLabel,
-    floors: [{ name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds, plan: ["combat", "combat", "boss"] }],
+    // no side rooms: a raid is a tight gauntlet straight to the boss, not an
+    // exploratory floor with shrine/storage/dining/treasure detours
+    floors: [{ name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds, plan: ["combat", "combat", "boss"], sideRooms: false }],
     tiers: src.tiers.map((t) => ({ ...t, bossName: "RAID CAPTAIN" })),
   };
 }
@@ -361,7 +363,7 @@ export function startRaid() {
   document.getElementById("raid-warning").classList.add("hidden");
   const classKey = (game.hero && game.hero.classKey) || game.classKey;
   DUNGEONS.townRaid = buildRaidDungeon(game.raidFaction);
-  startRun(classKey, "townRaid", game.tier);
+  startFloorRun(classKey, "townRaid", game.tier);
   game.raidMode = true;
 }
 
@@ -371,11 +373,14 @@ function buildFinaleDungeon() {
   return {
     id: "finale", name: "The Last Stand", faction: "skeleton", bossFaction: "finale",
     theme: "town", multiFaction: true, enemyLabel: "Raiders",
+    // no side rooms: the Champion-only finale is a straight-line siege, the
+    // biggest set-piece in the game, not a floor to be explored
     floors: [{
       name: "Town Under Siege",
       kinds: ["melee", "goblin", "zombie", "archer", "goblinArcher", "warlock", "goblinBerserker", "goblinBomber"],
       eliteKinds: ["goblinBerserker", "warlock", "archer"],
       plan: ["combat", "combat", "combat", "boss"],
+      sideRooms: false,
     }],
     tiers: [{ tier: 0, levelHint: "30+", scale: 8.0, bossHp: 440, bossDmg: 10, bossName: "THE WORLD-EATER", summonKind: "goblinBerserker" }],
   };
@@ -384,7 +389,7 @@ function buildFinaleDungeon() {
 export function startFinale() {
   const classKey = (game.hero && game.hero.classKey) || game.classKey;
   DUNGEONS.finale = buildFinaleDungeon();
-  startRun(classKey, "finale", 0);
+  startFloorRun(classKey, "finale", 0);
 }
 
 // ---- town / lobby rendering ----

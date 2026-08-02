@@ -402,9 +402,27 @@ export function planRoomDecor(desc) {
       }
     }
   }
-  // trap rooms: grates form their own cluster near the middle band
+  // trap rooms: grates form their own cluster near the middle band. Floor
+  // mode has many rooms per desc (desc.roomType is the whole grid's literal
+  // "floor"), so this keys off each room's OWN type via roomAt — the same
+  // per-room lookup tablesAt already uses above — and scopes the search to
+  // that room's own rect rather than the whole floor.
   const grate = new Set();
-  if (desc.roomType === "trap") {
+  if (floorRooms) {
+    for (const r of floorRooms) {
+      if (r.type !== "trap") continue;
+      const R = r.rect;
+      for (let t = 0, made = 0; t < 20 && made < 2; t++) {
+        const x = R.x + 1 + Math.floor(rng() * Math.max(1, R.w - 2));
+        const y = R.y + 1 + Math.floor(rng() * Math.max(1, R.h - 2));
+        if (!patchOk(x, y) || patch.has(idx(x, y)) || grate.has(idx(x, y))) continue;
+        grate.add(idx(x, y));
+        if (patchOk(x + 1, y) && !patch.has(idx(x + 1, y))) grate.add(idx(x + 1, y));
+        if (patchOk(x, y + 1) && !patch.has(idx(x, y + 1)) && rng() < 0.5) grate.add(idx(x, y + 1));
+        made++;
+      }
+    }
+  } else if (desc.roomType === "trap") {
     for (let t = 0, made = 0; t < 20 && made < 2; t++) {
       const x = 2 + Math.floor(rng() * (w - 4)), y = 2 + Math.floor(rng() * (h - 4));
       if (!patchOk(x, y) || patch.has(idx(x, y)) || grate.has(idx(x, y))) continue;
@@ -778,8 +796,18 @@ export function planRoomDecor(desc) {
   }
 
   // ---- pass 10: scripted lights (no rng) -----------------------------------
+  // Same per-room-vs-whole-grid distinction as the grate/tablesAt passes
+  // above: in floor mode desc.roomType is the whole grid's literal "floor",
+  // so the boss chamber's dramatic light is keyed off the actual boss room's
+  // rect instead.
   const lights = [];
-  if (desc.roomType === "boss") {
+  const bossRoom = floorRooms ? floorRooms.find((r) => r.type === "boss") : null;
+  if (bossRoom) {
+    lights.push({
+      gx: bossRoom.rect.x + bossRoom.rect.w / 2 - 0.5, gy: bossRoom.rect.y + bossRoom.rect.h / 2 - 0.5,
+      up: 0.6, color: 0xffb870, intensity: 1.6,
+    });
+  } else if (desc.roomType === "boss") {
     lights.push({ gx: w / 2 - 0.5, gy: h / 2 - 0.5, up: 0.6, color: 0xffb870, intensity: 1.6 });
   } else if (desc.isTown || desc.isLobby) {
     lights.push({ gx: w / 2 - 0.5, gy: h / 2 - 0.5, up: 0.7, color: 0xffd9a0, intensity: 1.1 });

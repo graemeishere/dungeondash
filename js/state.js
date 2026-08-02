@@ -5,11 +5,10 @@
 // object rather than a set of exported bindings because importers assign to its
 // fields constantly, and an imported binding is read-only.
 
-import { CLASSES } from "./entities.js?v=8addee6b";
-import { profile } from "./profile.js?v=8addee6b";
-import { dist } from "./util.js?v=8addee6b";
-import { menuEl, resultEl, levelupEl, hubEl } from "./dom.js?v=8addee6b";
-import { classicRun } from "./env.js?v=8addee6b";
+import { CLASSES } from "./entities.js?v=ff8ca445";
+import { profile } from "./profile.js?v=ff8ca445";
+import { dist } from "./util.js?v=ff8ca445";
+import { menuEl, resultEl, levelupEl, hubEl } from "./dom.js?v=ff8ca445";
 
 const SAVE_KEY = "dungeondash_save_v1";
 
@@ -224,14 +223,14 @@ export function clearSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
 }
 
-// A save is only resumable if it matches the current run mode. An old
-// single-room save (floorMode falsey) would resume as a big room now that
-// connected floors are the default — so a mismatched save is stale: discard it
-// and offer no Continue rather than dropping the player into the wrong layout.
+// A save is only resumable if it matches the current run mode. Phase 1
+// retired the classic single-room path, so a save from before that (or one
+// otherwise missing floorMode) would resume as the wrong layout — discard it
+// and offer no Continue rather than dropping the player into a broken room.
 export function usableSave() {
   const s = readSave();
   if (!s || !CLASSES[s.classKey]) return null;
-  if (!!s.floorMode !== !classicRun) { clearSave(); return null; }
+  if (!s.floorMode) { clearSave(); return null; }
   return s;
 }
 

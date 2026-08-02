@@ -5,22 +5,21 @@
 // everything else and otherwise left alone. The guest still runs on raw
 // level-1 class stats; that defect is knowingly open, see roadmap section 4.
 
-import { rt } from "./runtime.js?v=8addee6b";
-import { audio } from "./audio.js?v=8addee6b";
-import { CLASSES, Player, UPGRADES } from "./entities.js?v=8addee6b";
-import { input } from "./input.js?v=8addee6b";
-import { RemoteInput, net, netSync } from "./net.js?v=8addee6b";
-import { particles } from "./particles.js?v=8addee6b";
-import { profile } from "./profile.js?v=8addee6b";
-import { room } from "./room.js?v=8addee6b";
-import { updateView } from "./util.js?v=8addee6b";
-import { canvas } from "./dom.js?v=8addee6b";
-import { game, uiFlags, clearSave } from "./state.js?v=8addee6b";
-import { classicRun } from "./env.js?v=8addee6b";
-import { loadFloor, loadRoom, showResult } from "./run.js?v=8addee6b";
-import { freshGameState } from "./state.js?v=8addee6b";
-import { showLobby, setMenuMode, buildUpgradeCards, backToMenu, guestUpgradePicked, guestLeftLevelUp, lobbyEl, lobbyStatus, lobbyIn, roomCodeEl, codeIn } from "./overlays.js?v=8addee6b";
-import { levelupEl, menuEl, resultEl, hubEl, upgradeCardsEl } from "./dom.js?v=8addee6b";
+import { rt } from "./runtime.js?v=ff8ca445";
+import { audio } from "./audio.js?v=ff8ca445";
+import { CLASSES, Player, UPGRADES } from "./entities.js?v=ff8ca445";
+import { input } from "./input.js?v=ff8ca445";
+import { RemoteInput, net, netSync } from "./net.js?v=ff8ca445";
+import { particles } from "./particles.js?v=ff8ca445";
+import { profile } from "./profile.js?v=ff8ca445";
+import { room } from "./room.js?v=ff8ca445";
+import { updateView } from "./util.js?v=ff8ca445";
+import { canvas } from "./dom.js?v=ff8ca445";
+import { game, uiFlags, clearSave } from "./state.js?v=ff8ca445";
+import { loadFloor, showResult } from "./run.js?v=ff8ca445";
+import { freshGameState } from "./state.js?v=ff8ca445";
+import { showLobby, setMenuMode, buildUpgradeCards, backToMenu, guestUpgradePicked, guestLeftLevelUp, lobbyEl, lobbyStatus, lobbyIn, roomCodeEl, codeIn } from "./overlays.js?v=ff8ca445";
+import { levelupEl, menuEl, resultEl, hubEl, upgradeCardsEl } from "./dom.js?v=ff8ca445";
 
 // The class the guest picked, held until the connection opens.
 let guestClass = "warrior";
@@ -91,8 +90,8 @@ export function startCoopRun(guestClassKey) {
   game.kills = 0;
   game.killsByFaction = { skeleton: 0, goblin: 0, undead: 0 };
   game.time = 0;
-  game.floorMode = !classicRun; // co-op runs connected floors by default too
-  if (game.floorMode) loadFloor(); else loadRoom(0);
+  game.floorMode = true; // co-op runs the connected-floor path too
+  loadFloor();
   lobbyEl.classList.add("hidden");
   setMenuMode(null, "");
   freshGameState();

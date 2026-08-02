@@ -1,7 +1,7 @@
 // Procedurally generated pixel-art assets. Every sprite is drawn onto an
 // offscreen canvas at boot, so the game needs no image files at all.
 
-import { TILE, choice, randi } from "./util.js?v=8addee6b";
+import { TILE, choice, randi } from "./util.js?v=ff8ca445";
 
 const PX = 4;      // screen pixels per art pixel
 const GRID = 16;   // character sprites are authored on a 16x16 grid

@@ -11,34 +11,34 @@
 // wiring and the boot sequence - is what guarantees that: by the time this file
 // body runs, every import has finished evaluating.
 
-import { rt } from "./runtime.js?v=8addee6b";
-import { devFlagsAllowed, safeMode } from "./env.js?v=8addee6b";
-import { params, devBoot, floorsBoot } from "./env.js?v=8addee6b";
-import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=8addee6b";
-import { sprites } from "./sprites.js?v=8addee6b";
-import { audio } from "./audio.js?v=8addee6b";
-import { input } from "./input.js?v=8addee6b";
-import { net } from "./net.js?v=8addee6b";
-import { room } from "./room.js?v=8addee6b";
-import { particles } from "./particles.js?v=8addee6b";
-import { profile } from "./profile.js?v=8addee6b";
-import { game3d } from "./game3d.js?v=8addee6b";
-import { CLASSES, Boss } from "./entities.js?v=8addee6b";
-import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=8addee6b";
-import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=8addee6b";
-import { startRun, startFloorRun, resumeRun } from "./run.js?v=8addee6b";
+import { rt } from "./runtime.js?v=ff8ca445";
+import { devFlagsAllowed, safeMode } from "./env.js?v=ff8ca445";
+import { params, devBoot, floorsBoot } from "./env.js?v=ff8ca445";
+import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=ff8ca445";
+import { sprites } from "./sprites.js?v=ff8ca445";
+import { audio } from "./audio.js?v=ff8ca445";
+import { input } from "./input.js?v=ff8ca445";
+import { net } from "./net.js?v=ff8ca445";
+import { room } from "./room.js?v=ff8ca445";
+import { particles } from "./particles.js?v=ff8ca445";
+import { profile } from "./profile.js?v=ff8ca445";
+import { game3d } from "./game3d.js?v=ff8ca445";
+import { CLASSES, Boss } from "./entities.js?v=ff8ca445";
+import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=ff8ca445";
+import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=ff8ca445";
+import { startFloorRun, resumeRun } from "./run.js?v=ff8ca445";
 import {
   backToMenu, buildClassCards, closeInventory, openInventory, playAgain,
   refreshContinueButton, setMenuMode, showHub,
-} from "./overlays.js?v=8addee6b";
+} from "./overlays.js?v=ff8ca445";
 import {
   closeQuestGiverOverlay, closeStatsOverlay, closeTraderOverlay, handleTownTap,
   showTownRoom, startRaid,
-} from "./town.js?v=8addee6b";
-import { handleMapTap, showMap } from "./worldmap.js?v=8addee6b";
-import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=8addee6b";
-import { codeIn } from "./overlays.js?v=8addee6b";
-import { fitCanvas, onResize, startLoop } from "./draw.js?v=8addee6b";
+} from "./town.js?v=ff8ca445";
+import { handleMapTap, showMap } from "./worldmap.js?v=ff8ca445";
+import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=ff8ca445";
+import { codeIn } from "./overlays.js?v=ff8ca445";
+import { fitCanvas, onResize, startLoop } from "./draw.js?v=ff8ca445";
 
 document.getElementById("btn-inv-close").addEventListener("click", closeInventory);
 
@@ -185,13 +185,16 @@ if (_bootHero) {
 }
 
 // Dev shortcut for verifying the 3D path: ?dev=combat jumps straight into a
-// solo combat room (skips menus). Not wired to any UI.
+// run (skips menus). Not wired to any UI. Phase 1 retired the classic
+// single-room path this used to boot into; it now boots the same connected
+// floor a normal run would (equivalent to ?floors, kept as its own flag for
+// existing bookmarks/scripts).
 if (devBoot === "combat") {
   document.querySelectorAll(".overlay").forEach((el) => el.classList.add("hidden"));
   const cls = params.get("class"); // ?class=mage|ranger|rogue|warrior
   // ?dungeon=crypt (warlocks/necromancers) | goblinMines (shamans) | catacombs
   const dng = params.get("dungeon");
-  startRun(CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
+  startFloorRun(CLASSES[cls] ? cls : "warrior", DUNGEONS[dng] ? dng : "catacombs", 0);
 }
 
 // ?floors boots a connected-floor run with per-room combat gating + descent.

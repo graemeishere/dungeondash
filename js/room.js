@@ -1,5 +1,5 @@
-import { TILE, WIDTH, HEIGHT, ROOM_W, ROOM_H, clamp, dist, randi, setRoomSize } from "./util.js?v=8addee6b";
-import { sprites } from "./sprites.js?v=8addee6b";
+import { TILE, WIDTH, HEIGHT, ROOM_W, ROOM_H, dist, randi, setRoomSize } from "./util.js?v=ff8ca445";
+import { sprites } from "./sprites.js?v=ff8ca445";
 
 // OBSTACLE cells are solid like walls but render as props (pillars, crates,
 // barrels) instead of wall blocks.
@@ -28,91 +28,6 @@ export const room = {
     this.theme = (sprites.themes && sprites.themes[id]) ? id : "catacombs";
   },
 
-  generate(opts = {}) {
-    this.doorOpen = false;
-    this.spikes = [];
-    this.tierDoorCols = null;
-    this.tierPads = null;
-    this.isLobby = false;
-    this.isTown = false;
-    this.isFloor = false;
-    this.roomType = null; // the caller stamps it after generate()
-    this.exit = "door";   // ...and the exit style ("stairs" on floor bosses)
-    // decoration seed: the 3D decor planner derives every visual choice from
-    // this, so co-op guests rebuild identical rooms from {tiles, seed}
-    this.seed = (Math.random() * 0x7fffffff) | 0;
-    tiles = new Array(ROOM_W * ROOM_H).fill(FLOOR);
-
-    // border walls
-    for (let x = 0; x < ROOM_W; x++) {
-      tiles[x] = WALL;
-      tiles[(ROOM_H - 1) * ROOM_W + x] = WALL;
-    }
-    for (let y = 0; y < ROOM_H; y++) {
-      tiles[y * ROOM_W] = WALL;
-      tiles[y * ROOM_W + ROOM_W - 1] = WALL;
-    }
-
-    // exit door, top wall center
-    this.doorCols = [Math.floor(ROOM_W / 2) - 1, Math.floor(ROOM_W / 2)];
-    for (const c of this.doorCols) tiles[c] = DOOR;
-
-    // Corner notches: sometimes bite a walled rectangle out of a corner so
-    // rooms aren't always plain rectangles. Top notches keep clear of the
-    // door columns; the bottom stays shallow so the entry band survives.
-    const W = ROOM_W, H = ROOM_H;
-    const corners = [[0, 0], [1, 0], [0, 1], [1, 1]];
-    for (const [cx, cy] of corners) {
-      if (Math.random() > 0.35) continue;
-      const nw = randi(3, Math.max(3, Math.floor(W * 0.24)));
-      const nh = randi(2, Math.max(2, Math.floor(H * (cy ? 0.18 : 0.3))));
-      const x0 = cx ? W - nw : 0, y0 = cy ? H - nh : 0;
-      // never swallow the doorway or the entry point
-      if (!cy && x0 <= this.doorCols[1] + 1 && x0 + nw >= this.doorCols[0] - 1) continue;
-      for (let y = y0; y < y0 + nh; y++) {
-        for (let x = x0; x < x0 + nw; x++) tiles[y * W + x] = WALL;
-      }
-    }
-
-    // Obstacle clusters near the room quarters, with jitter: solid tiles
-    // rendered as props (pillars/crates/barrels). Shapes vary 1x1..2x2;
-    // the center band and entry band stay open.
-    const qxs = [Math.round(W * 0.27), Math.round(W * 0.66)];
-    const qys = [Math.round(H * 0.28), Math.round(H * 0.62)];
-    const SHAPES = [[1, 1], [2, 1], [1, 2], [2, 2]];
-    for (const qx of qxs) {
-      for (const qy of qys) {
-        const [sw, sh] = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-        const px = clamp(qx + randi(-1, 1), 2, W - 2 - sw);
-        const py = clamp(qy + randi(-1, 1), 3, H - 4 - sh);
-        for (let dy = 0; dy < sh; dy++) {
-          for (let dx = 0; dx < sw; dx++) {
-            const i = (py + dy) * W + (px + dx);
-            if (tiles[i] === FLOOR) tiles[i] = OBSTACLE;
-          }
-        }
-      }
-    }
-
-    if (opts.spikes) {
-      // horizontal spike bands across the room with random safe gaps,
-      // each band on its own timing offset
-      const bandYs = [0.3, 0.5, 0.7].map((f) => Math.round(ROOM_H * f));
-      bandYs.forEach((ty, band) => {
-        const gaps = new Set();
-        while (gaps.size < Math.max(2, Math.round(ROOM_W / 10))) {
-          gaps.add(randi(1, ROOM_W - 2));
-        }
-        for (let tx = 1; tx < ROOM_W - 1; tx++) {
-          if (gaps.has(tx) || tileAt(tx, ty) !== FLOOR) continue;
-          this.spikes.push({ tx, ty, offset: band * 0.7 });
-        }
-      });
-    }
-
-    this.prerender();
-  },
-
   // Install a whole floor (js/floor.js spec) as the live world: one large
   // tiles grid of small rooms + corridors. Collision/movement/decor all
   // operate on `tiles` unchanged; `rooms` metadata drives per-room decor,
@@ -123,7 +38,7 @@ export const room = {
     this.isFloor = true;
     this.isLobby = false;
     this.isTown = false;
-    this.spikes = [];
+    this.spikes = f.spikes || []; // trap-room hazards, in absolute floor tile coords
     this.doorCols = [];
     this.doorOpen = true;         // floors gate per-room (see room.locked)
     this.rooms = f.rooms;

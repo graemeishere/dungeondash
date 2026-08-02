@@ -1,22 +1,23 @@
 "use strict";
 // The frame: simulation update, the draw dispatch, and the rAF loop.
 
-import { audio } from "./audio.js?v=8addee6b";
-import { Skeleton, rollGrade } from "./entities.js?v=8addee6b";
-import { game3d } from "./game3d.js?v=8addee6b";
-import { input } from "./input.js?v=8addee6b";
-import { net, netSync } from "./net.js?v=8addee6b";
-import { particles } from "./particles.js?v=8addee6b";
-import { room } from "./room.js?v=8addee6b";
-import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView, view } from "./util.js?v=8addee6b";
-import { canvas, ctx, resultEl } from "./dom.js?v=8addee6b";
-import { safeMode } from "./env.js?v=8addee6b";
-import { game, uiFlags } from "./state.js?v=8addee6b";
-import { advanceFloor, advanceRoom, endRun, reachStairs, setRoomCleared, showResult, startTransition, updateFloorGating } from "./run.js?v=8addee6b";
-import { openInventory, openLevelUp, showHub } from "./overlays.js?v=8addee6b";
-import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=8addee6b";
-import { showMap, drawMap } from "./worldmap.js?v=8addee6b";
-import { sendGuestInput } from "./coop.js?v=8addee6b";
+import { audio } from "./audio.js?v=ff8ca445";
+import { Skeleton, rollGrade } from "./entities.js?v=ff8ca445";
+import { game3d } from "./game3d.js?v=ff8ca445";
+import { input } from "./input.js?v=ff8ca445";
+import { net, netSync } from "./net.js?v=ff8ca445";
+import { particles } from "./particles.js?v=ff8ca445";
+import { room } from "./room.js?v=ff8ca445";
+import { generateFloor } from "./floor.js?v=ff8ca445";
+import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView, view } from "./util.js?v=ff8ca445";
+import { canvas, ctx, resultEl } from "./dom.js?v=ff8ca445";
+import { safeMode } from "./env.js?v=ff8ca445";
+import { game, uiFlags } from "./state.js?v=ff8ca445";
+import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=ff8ca445";
+import { openInventory, openLevelUp, showHub } from "./overlays.js?v=ff8ca445";
+import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=ff8ca445";
+import { showMap, drawMap } from "./worldmap.js?v=ff8ca445";
+import { sendGuestInput } from "./coop.js?v=ff8ca445";
 
 export function fitCanvas() {
   canvas.width = Math.max(320, window.innerWidth);
@@ -60,7 +61,7 @@ export function update(dt) {
     game.transitionT += dt * 2.6;
     if (game.transitionT >= 1) {
       if (game.transitionPhase === "out") {
-        if (game.floorMode) advanceFloor(); else advanceRoom();
+        advanceFloor();
         game.transitionPhase = "in";
         game.transitionT = 0;
       } else {
@@ -136,38 +137,22 @@ export function update(dt) {
       return;
     }
 
-    // floor mode: per-room combat gating (lock on entry, unlock on clear,
-    // reveal the stairs when the boss chamber falls)
-    if (room.isFloor) updateFloorGating();
+    // per-room combat gating (lock on entry, unlock on clear, reveal the
+    // stairs when the boss chamber falls)
+    updateFloorGating();
 
     // walk onto the revealed stairs -> descend (or win on the last floor).
     // reachStairs() branches to advanceFloor()/endRun(true) itself.
-    if (room.isFloor && game.stairsReady && !game._stairsTaken &&
+    if (game.stairsReady && !game._stairsTaken &&
         game.players.some((p) => p.alive() && room.onStairs(p.x, p.y))) {
       reachStairs();
       return;
-    }
-
-    // room-clear conditions (single-room mode; floors gate per-room)
-    if (!room.isFloor && !game.roomCleared) {
-      if (game.roomType === "treasure") {
-        if (game.chests.every((c) => c.opened)) setRoomCleared();
-      } else if (game.skeletons.every((s) => s.dying) && game.spawnQueue.length === 0) {
-        // dying skeletons are gameplay-dead (fading corpses) — don't block clear
-        setRoomCleared();
-      }
     }
 
     // pending level-ups pause the action
     if (game.pendingLevelUps > 0) {
       openLevelUp();
       return;
-    }
-
-    // walk through the open door -> next room (single-room mode)
-    if (!room.isFloor && game.roomCleared && room.doorOpen &&
-        game.players.some((p) => p.alive() && room.inDoorway(p.x, p.y - p.r))) {
-      startTransition();
     }
   } else if (game.state === "won" || game.state === "lost") {
     if (game.endT > 0) {
@@ -215,11 +200,12 @@ export function updatePeaceful(dt) {
 // ---- draw ----
 
 export function draw(dt) {
-  // menu/hub show a generated dungeon as their 3D backdrop
+  // menu/hub show a generated dungeon as their 3D backdrop. Phase 1 retired
+  // the classic single-room generator this used to call — a small connected
+  // floor stands in fine, since it's just eye candy behind the menu.
   if ((game.state === "menu" || game.state === "hub") && !room.prerendered) {
-    sizeRoomToCanvas();
     room.setTheme("catacombs"); // neutral backdrop, not the last dungeon's theme
-    room.generate();
+    room.setFloor(generateFloor({ plan: ["combat", "boss"], boss: true }));
     updateView(canvas);
     room.prerendered = true;
   }
