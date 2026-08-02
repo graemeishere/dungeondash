@@ -16,6 +16,17 @@ import { startFloorRun, beginRun } from "./run.js?v=__BUILD__";
 import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=__BUILD__";
 import { sizeRoomToCanvas } from "./draw.js?v=__BUILD__";
 
+// One-line faction motive, keyed by DUNGEONS[id].faction. Shown once per
+// dungeon per session, on first entering that dungeon's lobby (see
+// showDungeonLobby below) — the game never otherwise says why a faction
+// fights the player or the town.
+const FACTION_LORE = {
+  skeleton: "The Catacombs' dead don't invade — they've guarded a king who died a thousand years ago, and no one told them to stop.",
+  goblin:   "The goblins didn't dig the Mines for gold — they dug them for a home, and they raid the town for everything the rock won't give them.",
+  undead:   "The Crypt's dead don't rest, and neither does the Lich's hunger — every soul it takes buys it one more day undying.",
+};
+const metDungeonLobbies = new Set(); // dungeon ids the player has already seen the lore toast for, this session
+
 // Themed entry room with three tier doorways. Walk through one to start a run.
 export function showDungeonLobby(dungeonId) {
   if (!DUNGEONS[dungeonId]) return;
@@ -43,6 +54,11 @@ export function showDungeonLobby(dungeonId) {
   spawnHeroInRoom();
   game.padTi = -1;
   game.padDwell = 0;
+  if (!metDungeonLobbies.has(dungeonId)) {
+    metDungeonLobbies.add(dungeonId);
+    const lore = FACTION_LORE[DUNGEONS[dungeonId].faction];
+    if (lore) townToast(lore, "#bdb3d6");
+  }
 }
 
 export function tierLocked(ti) {
@@ -95,10 +111,30 @@ export function showTownRoom(skipRaid) {
 
 // ---- town NPC interactions ----
 
+// One characterizing line per NPC, shown once per NPC on the player's first
+// interact with them in a given session — the "[E] Talk to <name>" prompt
+// (js/game3d.js drawPeacefulOverlay) otherwise promises a conversation and
+// gets a stats/shop/quest panel with no greeting.
+const NPC_GREETINGS = {
+  barkeep:    "You look like you've seen some fights, friend — let's see what they left you with.",
+  innkeeper:  "Plenty of rooms upstairs, plenty of callings to try on — walk out of here whoever you like.",
+  trader:     "Fresh from the vaults below, priced fair — mind the sharp ones.",
+  questgiver: "The town's got more trouble than hands to spare for it — care to even the odds?",
+};
+const metNpcs = new Set(); // npc ids already greeted this session
+
+function greetOnce(id) {
+  if (metNpcs.has(id)) return;
+  metNpcs.add(id);
+  const line = NPC_GREETINGS[id];
+  if (line) townToast(line, "#d8cfee");
+}
+
 const statsOverlayEl = document.getElementById("stats-overlay");
 
 export function openBarkeepMenu() {
   if (!game.hero) return;
+  greetOnce("barkeep");
   game.state = "stats";
   buildStatsOverlay(game.hero);
   statsOverlayEl.classList.remove("hidden");
@@ -111,6 +147,7 @@ export function closeStatsOverlay() {
 }
 
 export function openInnkeeperMenu() {
+  greetOnce("innkeeper");
   uiFlags.townSwitchClass = true;
   game.state = "menu";
   menuEl.classList.remove("hidden");
@@ -122,6 +159,7 @@ const traderEl = document.getElementById("trader");
 
 export function openTraderMenu() {
   if (!game.hero) return;
+  greetOnce("trader");
   game.state = "trader";
   buildTraderOverlay(game.hero);
   traderEl.classList.remove("hidden");
@@ -214,6 +252,7 @@ const questGiverEl = document.getElementById("questgiver");
 
 export function openQuestGiverMenu() {
   if (!game.hero) return;
+  greetOnce("questgiver");
   game.state = "quests";
   buildQuestGiverOverlay(game.hero);
   questGiverEl.classList.remove("hidden");
@@ -329,14 +368,24 @@ export function switchClass(classKey) {
 
 // ---- raid warning ----
 
+// Why this faction, specifically, is at the walls tonight — one clause each,
+// distinct from FACTION_LORE's dungeon-lobby framing (that's the standing
+// motive; this is what's brought them topside for this one raid).
+const RAID_CLAUSE = {
+  skeleton: "Something's stirred the dead from their tombs.",
+  goblin:   "The goblins have come topside for plunder.",
+  undead:   "The Lich has sent its dead to feed on the town.",
+};
+
 export function showRaidWarning() {
   game.state = "raid-warn";
   game.raidFaction = choice(["goblin", "skeleton", "undead"]);
   const dungeonName = {
     goblin: "Goblin Mines", skeleton: "Catacombs", undead: "The Crypt",
   }[game.raidFaction];
+  const clause = RAID_CLAUSE[game.raidFaction] || "";
   document.getElementById("raid-text").textContent =
-    `Raiders from the ${dungeonName} are attacking the town!`;
+    `Raiders from the ${dungeonName} are attacking the town! ${clause}`;
   document.getElementById("raid-warning").classList.remove("hidden");
 }
 

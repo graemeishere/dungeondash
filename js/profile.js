@@ -115,17 +115,19 @@ function clear() {
 
 // Goal types: kills (optional faction), bossKill (dungeon id), clearDungeon
 // (dungeon id), wonRuns, repelRaid. Rewards grant gold (+ optional xp).
+// desc is the Quest Giver's own voice — a reason, not a goal restatement.
+// goal/reward are untouched; only the flavor text changed here.
 const QUEST_DEFS = [
-  { id: "first_blood",  title: "First Blood",   desc: "Defeat 1 enemy.",                   goal: { kills: 1 },                        reward: { gold: 20 } },
-  { id: "bone_hunter",  title: "Bone Hunter",   desc: "Defeat 25 skeletons.",              goal: { kills: 25, faction: "skeleton" },  reward: { gold: 75 } },
-  { id: "goblin_slayer",title: "Goblin Slayer", desc: "Defeat 25 goblins.",                goal: { kills: 25, faction: "goblin" },    reward: { gold: 80 } },
-  { id: "ghost_hunter", title: "Ghost Hunter",  desc: "Defeat 20 undead.",                 goal: { kills: 20, faction: "undead" },    reward: { gold: 90 } },
-  { id: "slay_king",    title: "Slay the King", desc: "Defeat the Skeleton King.",          goal: { bossKill: "catacombs" },           reward: { gold: 200, xp: 60 } },
-  { id: "warlord_end",  title: "Warlord's End", desc: "Defeat the Goblin Warlord.",         goal: { bossKill: "goblinMines" },         reward: { gold: 220, xp: 70 } },
-  { id: "lich_hunter",  title: "Lich Hunter",   desc: "Defeat the Lich.",                  goal: { bossKill: "crypt" },               reward: { gold: 250, xp: 90 } },
-  { id: "mine_clear",   title: "Clear the Mines", desc: "Clear every floor of the Goblin Mines.", goal: { clearDungeon: "goblinMines" }, reward: { gold: 180, xp: 50 } },
-  { id: "survivor",     title: "Survivor",      desc: "Complete a full dungeon run.",      goal: { wonRuns: 1 },                      reward: { gold: 120 } },
-  { id: "defender",     title: "Town Defender", desc: "Repel a town raid.",                goal: { repelRaid: 1 },                    reward: { gold: 120, xp: 40 } },
+  { id: "first_blood",  title: "First Blood",   desc: "New in town? Prove you can hold your own — draw first blood.",                        goal: { kills: 1 },                        reward: { gold: 20 } },
+  { id: "bone_hunter",  title: "Bone Hunter",   desc: "The Catacombs' dead don't stay buried on their own — thin their numbers before they reach town.",  goal: { kills: 25, faction: "skeleton" },  reward: { gold: 75 } },
+  { id: "goblin_slayer",title: "Goblin Slayer", desc: "Goblins keep raiding the road for whatever the Mines won't give them — give them a reason to stay below.", goal: { kills: 25, faction: "goblin" },    reward: { gold: 80 } },
+  { id: "ghost_hunter", title: "Ghost Hunter",  desc: "Something in the Crypt raises the dead faster than we can bury them — put them down for good.",   goal: { kills: 20, faction: "undead" },    reward: { gold: 90 } },
+  { id: "slay_king",    title: "Slay the King", desc: "A thousand years guarding a throne with no king left to sit it — end the Skeleton King's watch.",  goal: { bossKill: "catacombs" },           reward: { gold: 200, xp: 60 } },
+  { id: "warlord_end",  title: "Warlord's End", desc: "Every goblin in the Mines answers to one warlord — cut the head off and the raids stop.",          goal: { bossKill: "goblinMines" },         reward: { gold: 220, xp: 70 } },
+  { id: "lich_hunter",  title: "Lich Hunter",   desc: "The Lich has outlived everything it's ever fed on — make sure it doesn't outlive this, too.",     goal: { bossKill: "crypt" },               reward: { gold: 250, xp: 90 } },
+  { id: "mine_clear",   title: "Clear the Mines", desc: "Don't just bloody the Goblin Mines — clear them floor to floor, so nothing crawls back up.",     goal: { clearDungeon: "goblinMines" }, reward: { gold: 180, xp: 50 } },
+  { id: "survivor",     title: "Survivor",      desc: "Most who go down don't come back up — finish a full dungeon run and prove you're not most.",      goal: { wonRuns: 1 },                      reward: { gold: 120 } },
+  { id: "defender",     title: "Town Defender", desc: "The town can't hold a raid without hands on the walls — be one of them.",                          goal: { repelRaid: 1 },                    reward: { gold: 120, xp: 40 } },
 ];
 
 function questDef(id) { return QUEST_DEFS.find((d) => d.id === id) || null; }

@@ -1,8 +1,11 @@
 # Dungeon Dash — Game Design & Flow
 
-A browser action-roguelite built in vanilla JS on a single HTML5 canvas, with no build step and
-no image assets (all sprites are procedurally drawn at boot). This document captures the intended
-design, the current state of the systems, and the roadmap.
+A browser action-roguelite built in vanilla JS, no build step. Gameplay logic runs on a 2D tile
+grid; the dungeon, town, and characters render through a vendored three.js layer (KayKit/Kenney
+GLB model packs), with a transparent 2D canvas overlay for HUD, world map, and damage numbers.
+NPC/pickup/UI sprites are still procedurally drawn at boot onto that overlay, but the 3D scene's
+characters and environment are vendored art assets, not code-drawn. This document captures the
+intended design, the current state of the systems, and the roadmap.
 
 ---
 
@@ -137,8 +140,8 @@ mobile) to interact. Exit via the top door → world map.
 |-----|------|--------|
 | **Barkeep** | Opens the stats overlay: view stats, spend attribute points, manage equipment & bag | **done** |
 | **Innkeeper** | Change class while keeping all progression | **done** |
-| **Trader** | Buy/sell gear for gold | stub ("coming soon") |
-| **Quest Giver** | Accept/track quests | stub ("coming soon") |
+| **Trader** | Buy/sell gear for gold | **done** |
+| **Quest Giver** | Accept/track quests | **done** |
 
 ### Town raids
 On ~25% of town arrivals a **raid warning** appears: **Fight Back** or **Flee to Map**. Fighting
