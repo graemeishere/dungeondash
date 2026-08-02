@@ -105,6 +105,15 @@ continueBtn.addEventListener("click", () => {
   if (save) { audio.unlock(); resumeRun(save); }
 });
 window.addEventListener("keydown", (e) => {
+  // Settings/onboarding are transient modals layered over whatever screen is
+  // behind them, not part of the game.state machine — guard them first so
+  // Escape can't fall through to a state-changing branch while they're the
+  // visibly topmost thing on screen.
+  if (e.key === "Escape") {
+    const settingsEl = document.getElementById("settings");
+    if (!settingsEl.classList.contains("hidden")) { settingsEl.classList.add("hidden"); return; }
+    if (!document.getElementById("onboarding").classList.contains("hidden")) return;
+  }
   if (e.key === "i" || e.key === "I") {
     if (game.state === "play" || game.state === "hub") { openInventory(); return; }
     if (game.state === "inventory") { closeInventory(); return; }
