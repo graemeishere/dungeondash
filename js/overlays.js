@@ -2,23 +2,23 @@
 // Every DOM overlay: the hero hub, the barkeep sheet, the level-up picker, the
 // inventory, the class-select cards and the co-op lobby panel.
 
-import { audio } from "./audio.js?v=0511a6b1";
-import { CLASSES, Player, UPGRADES } from "./entities.js?v=0511a6b1";
-import { input } from "./input.js?v=0511a6b1";
-import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=0511a6b1";
-import { net } from "./net.js?v=0511a6b1";
-import { particles } from "./particles.js?v=0511a6b1";
-import { profile } from "./profile.js?v=0511a6b1";
-import { room } from "./room.js?v=0511a6b1";
-import { sprites } from "./sprites.js?v=0511a6b1";
-import { ATTRS, deriveStats } from "./stats.js?v=0511a6b1";
-import { HEIGHT, TILE, WIDTH } from "./util.js?v=0511a6b1";
-import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=0511a6b1";
-import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=0511a6b1";
-import { beginRun, resumeRun } from "./run.js?v=0511a6b1";
-import { showMap } from "./worldmap.js?v=0511a6b1";
-import { showTownRoom, switchClass } from "./town.js?v=0511a6b1";
-import { hostWithClass, joinWithClass } from "./coop.js?v=0511a6b1";
+import { audio } from "./audio.js?v=6fd6c2e4";
+import { CLASSES, Player, UPGRADES } from "./entities.js?v=6fd6c2e4";
+import { input } from "./input.js?v=6fd6c2e4";
+import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=6fd6c2e4";
+import { net } from "./net.js?v=6fd6c2e4";
+import { particles } from "./particles.js?v=6fd6c2e4";
+import { profile } from "./profile.js?v=6fd6c2e4";
+import { room } from "./room.js?v=6fd6c2e4";
+import { sprites } from "./sprites.js?v=6fd6c2e4";
+import { ATTRS, deriveStats } from "./stats.js?v=6fd6c2e4";
+import { HEIGHT, TILE, WIDTH } from "./util.js?v=6fd6c2e4";
+import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=6fd6c2e4";
+import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=6fd6c2e4";
+import { beginRun, resumeRun } from "./run.js?v=6fd6c2e4";
+import { showMap } from "./worldmap.js?v=6fd6c2e4";
+import { showTownRoom, switchClass } from "./town.js?v=6fd6c2e4";
+import { hostWithClass, joinWithClass } from "./coop.js?v=6fd6c2e4";
 
 export function refreshContinueButton() {
   const save = usableSave();
@@ -121,7 +121,7 @@ export function buildHub(hero) {
   if (questsEl) {
     const active = profile.data.quests.active;
     if (active.length === 0) {
-      questsEl.innerHTML = `<div class="hub-quest-row" style="color:#6b5e96">No active quests — visit the Quest Giver in town.</div>`;
+      questsEl.innerHTML = `<div class="hub-quest-row" style="color:#9b90b8">No active quests — visit the Quest Giver in town.</div>`;
     } else {
       questsEl.innerHTML = active.slice(0, 3).map((q) => {
         const def = profile.questDefs.find((d) => d.id === q.id);
@@ -166,14 +166,19 @@ export function showHub(hero) {
 }
 
 // Called when player picks a class from the class-select screen.
-// Creates/switches the hero profile then goes to the world map.
+// Creates/switches the hero profile then goes to the world map (or, on a
+// player's very first-ever class pick, the one-time onboarding screen first).
 export function selectClass(classKey) {
   uiFlags.townSwitchClass = false;
   const hero = profile.getOrCreateHero(classKey);
   game.hero = hero;
   game.classKey = classKey;
   menuEl.classList.add("hidden");
-  showMap();
+  if (!profile.data.onboarded) {
+    document.getElementById("onboarding").classList.remove("hidden");
+  } else {
+    showMap();
+  }
 }
 
 // Spawn the local hero at the bottom-center of the current room.

@@ -23,9 +23,21 @@
       <div class="coop-row">
         <button id="btn-host" class="small-btn">Host Co-op</button>
         <button id="btn-join" class="small-btn">Join Co-op</button>
+        <button id="btn-menu-settings" class="small-btn">Settings</button>
       </div>
       <p class="hint">Keyboard: WASD move &nbsp;&bull;&nbsp; click/space attack, aim with mouse &nbsp;&bull;&nbsp; Shift dash<br>
       Touch: left thumb moves &nbsp;&bull;&nbsp; right thumb aims &amp; attacks</p>
+    </div>
+
+    <div id="onboarding" class="overlay hidden">
+      <h1 class="small">HOW TO PLAY</h1>
+      <p id="ob-line1" class="tagline"></p>
+      <p id="ob-line2" class="tagline"></p>
+      <p id="ob-line3" class="tagline"></p>
+      <p id="ob-line4" class="tagline"></p>
+      <div class="buttons">
+        <button id="btn-onboarding-done">Let's Go</button>
+      </div>
     </div>
 
     <div id="lobby" class="overlay hidden">
@@ -89,6 +101,7 @@
       <div class="coop-row">
         <button id="btn-hub-host" class="small-btn">Host Co-op</button>
         <button id="btn-hub-join" class="small-btn">Join Co-op</button>
+        <button id="btn-hub-settings" class="small-btn">Settings</button>
       </div>
       <div id="hub-quests-wrap">
         <div class="inv-slot-label">QUESTS</div>
@@ -198,6 +211,19 @@
       <p class="hint">Click to equip &nbsp;&bull;&nbsp; I or Esc to close</p>
       <button id="btn-inv-close" class="small-btn">Close</button>
     </div>
+
+    <!-- Transient modal, not part of the game.state machine: can be opened
+         over menu or hub, so it's placed last in DOM order to always stack
+         on top of whatever screen is behind it. -->
+    <div id="settings" class="overlay hidden">
+      <h1 class="small">SETTINGS</h1>
+      <div class="hint">
+        <label for="settings-volume">Sound Volume</label><br>
+        <input type="range" id="settings-volume" min="0" max="100" step="1">
+      </div>
+      <button id="btn-settings-close" class="small-btn">Close</button>
+    </div>
+
     <div id="inv-tooltip" class="inv-tooltip hidden"></div>
   </div>
 
@@ -211,11 +237,11 @@
        module, so net.js can rely on window.Peer existing. -->
   <script src="js/lib/peerjs.min.js"></script>
 
-  <!-- ?v=0511a6b1 is stamped with the commit SHA at deploy time (pages.yml) so
+  <!-- ?v=6fd6c2e4 is stamped with the commit SHA at deploy time (pages.yml) so
        each release busts the browser cache; lib/ scripts are pinned + unchanged
        so they stay cacheable across deploys and are deliberately unstamped.
        Load order now lives in the modules' own import graph, not in tag order. -->
-  <script type="module" src="js/boot.js?v=0511a6b1"></script>
-  <script type="module" src="js/boot3d.js?v=0511a6b1"></script>
+  <script type="module" src="js/boot.js?v=6fd6c2e4"></script>
+  <script type="module" src="js/boot3d.js?v=6fd6c2e4"></script>
 </body>
 </html>

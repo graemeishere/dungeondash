@@ -11,36 +11,71 @@
 // wiring and the boot sequence - is what guarantees that: by the time this file
 // body runs, every import has finished evaluating.
 
-import { rt } from "./runtime.js?v=0511a6b1";
-import { devFlagsAllowed, safeMode } from "./env.js?v=0511a6b1";
-import { params, devBoot, floorsBoot } from "./env.js?v=0511a6b1";
-import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=0511a6b1";
-import { sprites } from "./sprites.js?v=0511a6b1";
-import { audio } from "./audio.js?v=0511a6b1";
-import { input } from "./input.js?v=0511a6b1";
-import { net } from "./net.js?v=0511a6b1";
-import { room } from "./room.js?v=0511a6b1";
-import { particles } from "./particles.js?v=0511a6b1";
-import { profile } from "./profile.js?v=0511a6b1";
-import { game3d } from "./game3d.js?v=0511a6b1";
-import { CLASSES, Boss } from "./entities.js?v=0511a6b1";
-import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=0511a6b1";
-import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=0511a6b1";
-import { startFloorRun, resumeRun } from "./run.js?v=0511a6b1";
+import { rt } from "./runtime.js?v=6fd6c2e4";
+import { devFlagsAllowed, safeMode } from "./env.js?v=6fd6c2e4";
+import { params, devBoot, floorsBoot } from "./env.js?v=6fd6c2e4";
+import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=6fd6c2e4";
+import { sprites } from "./sprites.js?v=6fd6c2e4";
+import { audio } from "./audio.js?v=6fd6c2e4";
+import { input } from "./input.js?v=6fd6c2e4";
+import { net } from "./net.js?v=6fd6c2e4";
+import { room } from "./room.js?v=6fd6c2e4";
+import { particles } from "./particles.js?v=6fd6c2e4";
+import { profile } from "./profile.js?v=6fd6c2e4";
+import { game3d } from "./game3d.js?v=6fd6c2e4";
+import { CLASSES, Boss } from "./entities.js?v=6fd6c2e4";
+import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=6fd6c2e4";
+import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=6fd6c2e4";
+import { startFloorRun, resumeRun } from "./run.js?v=6fd6c2e4";
 import {
   backToMenu, buildClassCards, closeInventory, openInventory, playAgain,
   refreshContinueButton, setMenuMode, showHub,
-} from "./overlays.js?v=0511a6b1";
+} from "./overlays.js?v=6fd6c2e4";
 import {
   closeQuestGiverOverlay, closeStatsOverlay, closeTraderOverlay, handleTownTap,
   showTownRoom, startRaid,
-} from "./town.js?v=0511a6b1";
-import { handleMapTap, showMap } from "./worldmap.js?v=0511a6b1";
-import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=0511a6b1";
-import { codeIn } from "./overlays.js?v=0511a6b1";
-import { fitCanvas, onResize, startLoop } from "./draw.js?v=0511a6b1";
+} from "./town.js?v=6fd6c2e4";
+import { handleMapTap, showMap } from "./worldmap.js?v=6fd6c2e4";
+import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=6fd6c2e4";
+import { codeIn } from "./overlays.js?v=6fd6c2e4";
+import { fitCanvas, onResize, startLoop } from "./draw.js?v=6fd6c2e4";
 
 document.getElementById("btn-inv-close").addEventListener("click", closeInventory);
+
+// ---- onboarding (one-time, shown on a player's first-ever class pick) ----
+
+document.getElementById("ob-line1").textContent =
+  "Fight through dungeon rooms, grab loot, and reach the stairs.";
+document.getElementById("ob-line2").textContent =
+  "Back in Town, spend gold with the Barkeep, Trader, and Quest Giver.";
+document.getElementById("ob-line3").textContent =
+  "The World Map is home base — pick a dungeon, or head back to Town.";
+document.getElementById("ob-line4").textContent =
+  "Town isn't always safe — raids happen. Fight back, or flee to the map.";
+
+document.getElementById("btn-onboarding-done").addEventListener("click", () => {
+  profile.setOnboarded();
+  document.getElementById("onboarding").classList.add("hidden");
+  showMap();
+});
+
+// ---- settings (volume) ----
+
+function openSettings() {
+  document.getElementById("settings-volume").value = Math.round((profile.data.settings.volume ?? 1) * 100);
+  document.getElementById("settings").classList.remove("hidden");
+}
+document.getElementById("btn-menu-settings").addEventListener("click", openSettings);
+document.getElementById("btn-hub-settings").addEventListener("click", openSettings);
+document.getElementById("btn-settings-close").addEventListener("click", () => {
+  document.getElementById("settings").classList.add("hidden");
+});
+document.getElementById("settings-volume").addEventListener("input", (e) => {
+  const v = Number(e.target.value) / 100;
+  audio.setMasterVolume(v);
+  profile.data.settings.volume = v;
+  profile.save();
+});
 
 
 document.getElementById("btn-host").addEventListener("click", () => {
@@ -70,6 +105,15 @@ continueBtn.addEventListener("click", () => {
   if (save) { audio.unlock(); resumeRun(save); }
 });
 window.addEventListener("keydown", (e) => {
+  // Settings/onboarding are transient modals layered over whatever screen is
+  // behind them, not part of the game.state machine — guard them first so
+  // Escape can't fall through to a state-changing branch while they're the
+  // visibly topmost thing on screen.
+  if (e.key === "Escape") {
+    const settingsEl = document.getElementById("settings");
+    if (!settingsEl.classList.contains("hidden")) { settingsEl.classList.add("hidden"); return; }
+    if (!document.getElementById("onboarding").classList.contains("hidden")) return;
+  }
   if (e.key === "i" || e.key === "I") {
     if (game.state === "play" || game.state === "hub") { openInventory(); return; }
     if (game.state === "inventory") { closeInventory(); return; }
@@ -172,6 +216,7 @@ sprites.init();
 fitCanvas();
 input.init(canvas);
 buildClassCards();
+audio.setMasterVolume(profile.data.settings.volume ?? 1);
 const _bootHero = profile.getActiveHero();
 if (_bootHero) {
   game.hero = _bootHero;

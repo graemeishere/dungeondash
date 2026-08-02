@@ -1,6 +1,6 @@
-import { WIDTH, HEIGHT, angleTo, dist, view } from "./util.js?v=0511a6b1";
-import { audio } from "./audio.js?v=0511a6b1";
-import { rt } from "./runtime.js?v=0511a6b1";
+import { WIDTH, HEIGHT, angleTo, dist } from "./util.js?v=6fd6c2e4";
+import { audio } from "./audio.js?v=6fd6c2e4";
+import { rt } from "./runtime.js?v=6fd6c2e4";
 
 const keys = {};
 // x/y are the world-ground point under the cursor (for aim); sx/sy are the
@@ -28,15 +28,12 @@ function toScreen(canvas, clientX, clientY) {
   };
 }
 
-// Screen pixel -> view world (the 2D letterbox). Used for mouse.x/y, which
-// the 2D map screen reads for hover. Combat aim instead ray-casts through the
-// live 3D camera (see aimAngle) so it's correct under the follow camera.
+// Raw canvas pixel coordinates. Used for mouse.x/y, which the world map
+// screen reads for hover (drawMap draws directly in canvas pixel space).
+// Combat aim instead ray-casts through the live 3D camera (see aimAngle) so
+// it's correct under the follow camera.
 function toWorld(canvas, clientX, clientY) {
-  const s = toScreen(canvas, clientX, clientY);
-  return {
-    x: (s.x - view.ox) / view.scale,
-    y: (s.y - view.oy) / view.scale,
-  };
+  return toScreen(canvas, clientX, clientY);
 }
 
 function stickVector(stick) {
@@ -88,7 +85,7 @@ export const input = {
       const s = toScreen(canvas, e.clientX, e.clientY);
       mouse.sx = s.x; mouse.sy = s.y;      // for the 3D-camera aim raycast
       const p = toWorld(canvas, e.clientX, e.clientY);
-      mouse.x = p.x; mouse.y = p.y;        // letterbox world, for the 2D map
+      mouse.x = p.x; mouse.y = p.y;        // canvas pixels, for the world map's hover
     };
     canvas.addEventListener("mousemove", onMouse);
     canvas.addEventListener("mousedown", (e) => {

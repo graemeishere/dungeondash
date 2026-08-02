@@ -1,23 +1,23 @@
 "use strict";
 // The frame: simulation update, the draw dispatch, and the rAF loop.
 
-import { audio } from "./audio.js?v=0511a6b1";
-import { Skeleton, rollGrade } from "./entities.js?v=0511a6b1";
-import { game3d } from "./game3d.js?v=0511a6b1";
-import { input } from "./input.js?v=0511a6b1";
-import { net, netSync } from "./net.js?v=0511a6b1";
-import { particles } from "./particles.js?v=0511a6b1";
-import { room } from "./room.js?v=0511a6b1";
-import { generateFloor } from "./floor.js?v=0511a6b1";
-import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView, view } from "./util.js?v=0511a6b1";
-import { canvas, ctx, resultEl } from "./dom.js?v=0511a6b1";
-import { safeMode } from "./env.js?v=0511a6b1";
-import { game, uiFlags } from "./state.js?v=0511a6b1";
-import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=0511a6b1";
-import { openInventory, openLevelUp, showHub } from "./overlays.js?v=0511a6b1";
-import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=0511a6b1";
-import { showMap, drawMap } from "./worldmap.js?v=0511a6b1";
-import { sendGuestInput } from "./coop.js?v=0511a6b1";
+import { audio } from "./audio.js?v=6fd6c2e4";
+import { Skeleton, rollGrade } from "./entities.js?v=6fd6c2e4";
+import { game3d } from "./game3d.js?v=6fd6c2e4";
+import { input } from "./input.js?v=6fd6c2e4";
+import { net, netSync } from "./net.js?v=6fd6c2e4";
+import { particles } from "./particles.js?v=6fd6c2e4";
+import { room } from "./room.js?v=6fd6c2e4";
+import { generateFloor } from "./floor.js?v=6fd6c2e4";
+import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView } from "./util.js?v=6fd6c2e4";
+import { canvas, ctx, resultEl } from "./dom.js?v=6fd6c2e4";
+import { safeMode } from "./env.js?v=6fd6c2e4";
+import { game, uiFlags } from "./state.js?v=6fd6c2e4";
+import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=6fd6c2e4";
+import { openInventory, openLevelUp, showHub } from "./overlays.js?v=6fd6c2e4";
+import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=6fd6c2e4";
+import { showMap, drawMap } from "./worldmap.js?v=6fd6c2e4";
+import { sendGuestInput } from "./coop.js?v=6fd6c2e4";
 
 export function fitCanvas() {
   canvas.width = Math.max(320, window.innerWidth);
@@ -223,11 +223,7 @@ export function draw(dt) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   if (game.state === "map") {
-    ctx.save();
-    ctx.translate(view.ox, view.oy);
-    ctx.scale(view.scale, view.scale);
     drawMap(ctx);
-    ctx.restore();
   }
 }
 
@@ -241,11 +237,6 @@ export function onResize() {
   // their layout and letterbox until the next room loads
   if (game.state === "menu" || game.state === "hub") {
     room.prerendered = false;
-  } else if (game.state === "map") {
-    // the map is redrawn each frame from WIDTH/HEIGHT — resync them so it
-    // reflows to the new aspect instead of letterboxing the old shape
-    sizeRoomToCanvas();
-    updateView(canvas);
   } else if (game.state === "town") {
     showTownRoom(true);
   } else if (game.state === "lobby") {

@@ -2,19 +2,19 @@
 // The walkable town and dungeon-lobby rooms, the four NPCs and their menus, and
 // the raid / finale set-pieces that are built out of the town.
 
-import { audio } from "./audio.js?v=0511a6b1";
-import { CLASSES } from "./entities.js?v=0511a6b1";
-import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=0511a6b1";
-import { particles } from "./particles.js?v=0511a6b1";
-import { profile } from "./profile.js?v=0511a6b1";
-import { room } from "./room.js?v=0511a6b1";
-import { sprites } from "./sprites.js?v=0511a6b1";
-import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=0511a6b1";
-import { canvas, menuEl } from "./dom.js?v=0511a6b1";
-import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=0511a6b1";
-import { startFloorRun, beginRun } from "./run.js?v=0511a6b1";
-import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=0511a6b1";
-import { sizeRoomToCanvas } from "./draw.js?v=0511a6b1";
+import { audio } from "./audio.js?v=6fd6c2e4";
+import { CLASSES } from "./entities.js?v=6fd6c2e4";
+import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=6fd6c2e4";
+import { particles } from "./particles.js?v=6fd6c2e4";
+import { profile } from "./profile.js?v=6fd6c2e4";
+import { room } from "./room.js?v=6fd6c2e4";
+import { sprites } from "./sprites.js?v=6fd6c2e4";
+import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=6fd6c2e4";
+import { canvas, menuEl } from "./dom.js?v=6fd6c2e4";
+import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=6fd6c2e4";
+import { startFloorRun, beginRun } from "./run.js?v=6fd6c2e4";
+import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=6fd6c2e4";
+import { sizeRoomToCanvas } from "./draw.js?v=6fd6c2e4";
 
 // Themed entry room with three tier doorways. Walk through one to start a run.
 export function showDungeonLobby(dungeonId) {
