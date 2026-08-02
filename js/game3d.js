@@ -188,7 +188,10 @@ function drawCombat3D(game, dt) {
   const worldOf = (e) => dr.cellToWorld(e.x / TILE, e.y / TILE);
   const asChar = (e, modelKey, rotationY, anim, opacity) => {
     const w = worldOf(e);
-    chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity, scale: e.modelScale || 1 });
+    // faction (goblin/undead/skeleton/...) selects a texture-variant reskin
+    // in char3d.js's CharacterFactory.spawn(); undefined for players (heroes
+    // aren't faction-tagged, decor3d/char3d Task 1 scope).
+    chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity, scale: e.modelScale || 1, faction: e.faction });
   };
 
   // Players + skeletons render as 3D characters once the models have loaded;

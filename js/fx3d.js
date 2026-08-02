@@ -170,12 +170,28 @@ export class FX3D {
   // Melee weapon trail: a flat additive arc segment at world (wx,wy,wz) that
   // sweeps across the swing over `dur` seconds and fades. `angle`/`arc` are 2D
   // radians (aim direction + swing width), `radius` the reach in world units.
+  //
+  // depthTest:false (graphics audit re-verification, Phase 4): the arc is
+  // centered ON the attacker at ~waist height and swept toward wherever they're
+  // aiming, which is very often away from the camera (the follow camera sits
+  // behind/south of the player by design, render3d.js's fixed camAngle). For
+  // any swing aimed into or out of the screen, most of the wedge sits on the
+  // far side of the attacker's own opaque body from the camera and was being
+  // depth-clipped by it almost entirely -- a screenshot aimed cross-screen (east/
+  // west) showed a bold, high-contrast wedge against BOTH a grey (catacombs) and
+  // warm tan (goblinMines) floor, so the floor-palette contrast the original
+  // audit worried about was fine; the earlier "inconclusive" pin was very likely
+  // catching a toward/away-from-camera swing and reading its self-occluded
+  // sliver. Skipping the depth test (already depthWrite:false, so this can't
+  // occlude anything drawn after it) makes the trail read the same regardless
+  // of swing direction without touching color, opacity or timing.
   swingArc(wx, wy, wz, angle, arc, radius, color, dur) {
     let m = this.arcPool.pop();
     if (!m) {
       m = new THREE.Mesh(this.arcGeo, new THREE.MeshBasicMaterial({
-        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
       }));
+      m.renderOrder = 10; // draw after opaque characters/props regardless of scene-graph order
       this.scene.add(m);
     }
     m.material.color.set(color || "#fff8e0");
