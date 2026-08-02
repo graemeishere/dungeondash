@@ -11,7 +11,7 @@
 // The tiles grid syncs to co-op guests as a string, so the LAYOUT uses
 // Math.random freely; only the DECOR is seeded (via floor.seed).
 
-import { TILE } from "./util.js?v=6fd6c2e4";
+import { TILE } from "./util.js?v=4e2b9596";
 
 // OBSTACLE matches room.js's tile encoding (FLOOR=0, WALL=1, DOOR=2,
 // OBSTACLE=3) — a solid tile that decor3d/room.js render as a prop

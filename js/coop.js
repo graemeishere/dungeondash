@@ -5,21 +5,21 @@
 // everything else and otherwise left alone. The guest still runs on raw
 // level-1 class stats; that defect is knowingly open, see roadmap section 4.
 
-import { rt } from "./runtime.js?v=6fd6c2e4";
-import { audio } from "./audio.js?v=6fd6c2e4";
-import { CLASSES, Player, UPGRADES } from "./entities.js?v=6fd6c2e4";
-import { input } from "./input.js?v=6fd6c2e4";
-import { RemoteInput, net, netSync } from "./net.js?v=6fd6c2e4";
-import { particles } from "./particles.js?v=6fd6c2e4";
-import { profile } from "./profile.js?v=6fd6c2e4";
-import { room } from "./room.js?v=6fd6c2e4";
-import { updateView } from "./util.js?v=6fd6c2e4";
-import { canvas } from "./dom.js?v=6fd6c2e4";
-import { game, uiFlags, clearSave } from "./state.js?v=6fd6c2e4";
-import { loadFloor, showResult } from "./run.js?v=6fd6c2e4";
-import { freshGameState } from "./state.js?v=6fd6c2e4";
-import { showLobby, setMenuMode, buildUpgradeCards, backToMenu, guestUpgradePicked, guestLeftLevelUp, lobbyEl, lobbyStatus, lobbyIn, roomCodeEl, codeIn } from "./overlays.js?v=6fd6c2e4";
-import { levelupEl, menuEl, resultEl, hubEl, upgradeCardsEl } from "./dom.js?v=6fd6c2e4";
+import { rt } from "./runtime.js?v=4e2b9596";
+import { audio } from "./audio.js?v=4e2b9596";
+import { CLASSES, Player, UPGRADES } from "./entities.js?v=4e2b9596";
+import { input } from "./input.js?v=4e2b9596";
+import { RemoteInput, net, netSync } from "./net.js?v=4e2b9596";
+import { particles } from "./particles.js?v=4e2b9596";
+import { profile } from "./profile.js?v=4e2b9596";
+import { room } from "./room.js?v=4e2b9596";
+import { updateView } from "./util.js?v=4e2b9596";
+import { canvas } from "./dom.js?v=4e2b9596";
+import { game, uiFlags, clearSave } from "./state.js?v=4e2b9596";
+import { loadFloor, showResult } from "./run.js?v=4e2b9596";
+import { freshGameState } from "./state.js?v=4e2b9596";
+import { showLobby, setMenuMode, buildUpgradeCards, backToMenu, guestUpgradePicked, guestLeftLevelUp, lobbyEl, lobbyStatus, lobbyIn, roomCodeEl, codeIn } from "./overlays.js?v=4e2b9596";
+import { levelupEl, menuEl, resultEl, hubEl, upgradeCardsEl } from "./dom.js?v=4e2b9596";
 
 // The class the guest picked, held until the connection opens.
 let guestClass = "warrior";

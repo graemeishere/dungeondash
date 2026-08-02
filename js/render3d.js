@@ -14,8 +14,8 @@
 // resolves the bare "three" specifier to js/lib/three/three.module.js.
 import * as THREE from "three";
 import { GLTFLoader } from "./lib/three/GLTFLoader.js";
-import { planRoomDecor, PIECE_DIR } from "./decor3d.js?v=6fd6c2e4";
-import { TILE } from "./util.js?v=6fd6c2e4";
+import { planRoomDecor, PIECE_DIR } from "./decor3d.js?v=4e2b9596";
+import { TILE } from "./util.js?v=4e2b9596";
 
 const FLOOR = 0, WALL = 1, DOOR = 2;
 
