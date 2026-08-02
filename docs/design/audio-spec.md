@@ -330,7 +330,7 @@ right source for the 3D art, just not for this).
 | 2 | Goblin mines | "Quirky Goblins (Looping)" by Eric Matyas | OGA, `opengameart.org/content/quirky-goblins-looping` | CC-BY 3.0 | Yes — `"Quirky Goblins" by Eric Matyas [www.soundimage.org](https://www.soundimage.org)` | OGG, 40.0s — **short of the 90–150s target, see flag below** |
 | 3 | Crypt | "Crypt" by Machine (file: "Dark Loop.mp3") | OGA, `opengameart.org/content/crypt` | CC-BY 3.0 | Yes — standard CC-BY (title/author/link), no custom text | MP3, 70.0s |
 | 4 | Town | "Town Theme RPG" by cynicmusic | OGA, `opengameart.org/content/town-theme-rpg` | **CC0** ("Now CC0 Public Domain License!") | No — optional shout-out to cynicmusic.com/pixelsphere.org | MP3, 97.5s — **short of the 120–180s dwell-time target, see flag below** |
-| 5 | Menu/title | "Tragic ambient main menu" by brandon75689 (submitted by HaelDB) | OGA, `opengameart.org/content/tragic-ambient-main-menu` | Dual-licensed OGA-BY 3.0 / **CC0** — take the CC0 option | No (CC0 option) | OGG, 100.0s — **tonal and length caveats, see flag below** |
+| 5 | Menu/title | "The Field Of Dreams" | OGA, `opengameart.org/content/the-field-of-dreams` | **CC0** | No | MP3, 84.6s |
 
 **Ambience**
 
@@ -356,11 +356,6 @@ an account, but downloading the actual file requires a free Freesound login.
   "Snowland Town," looked like better instrumentation matches but are bundled in
   multi-file zips that couldn't be unpacked to confirm individual track length —
   worth a follow-up pass).
-- **#5 Menu (tonal mismatch + 100s vs. 45–90s target).** Composed for a sci-fi/
-  post-apocalyptic game, not fantasy — the mood still fits the spec's "between
-  town's warmth and the dungeon themes' dread" brief better than any fantasy-tagged
-  alternative found, but it's a stretch on genre, not just length. Listen before
-  committing; if it doesn't land, this slot needs another pass.
 - **#7 Goblin mines ambience is only partially solved.** The pick covers the
   pickaxe/clank layer only — no single file combines clank + dripping + guttural
   chatter as specced in §3. A dripping-water layer exists (OGA "Dripping Water" by
@@ -376,12 +371,22 @@ an account, but downloading the actual file requires a free Freesound login.
   vocal content works in-context (it may read as too specific/narrative for a
   looping bed).
 
+**#5 Menu backups**, in case "The Field Of Dreams" doesn't land on a listen-through:
+"Legends of Long Ago (Looping)" (OGA, `opengameart.org/content/legends-of-long-ago-looping`,
+CC-BY 3.0, attribution text `"Legends of Long Ago" by Eric Matyas www.soundimage.org`,
+OGG 39.3s — purpose-written for fantasy title screens and explicitly seamless-loop,
+but under the 45–90s target) and "Horror Game Menu" (OGA,
+`opengameart.org/content/horror-game-menu`, CC-BY 4.0, attribution text
+`"Horror Game Menu" by Eric Matyas Soundimage.org`, MP3 68.3s — skews darker/more
+dread-driven than a true town/dungeon midpoint, treat as a fallback toward the
+dungeon side rather than the ideal pick).
+
 **Net assessment:** all 8 slots now have a page-verified, no-cost candidate — a
 real improvement over the earlier CC0-only pass, which had no goblin-mines
-candidate at all. Five are CC0 outright (#4, #5, #6, #7, #8 — #5 by taking its
-CC0 dual-license option), three are CC-BY requiring the `CREDITS.md` entries above
-(#1, #2, #3). Three length/tone flags and one incomplete-layer flag remain open
-and need a listen-and-decide pass before these are finalized and downloaded.
+candidate at all. Five are CC0 outright, no attribution needed (#4, #5, #6, #7,
+#8), three are CC-BY requiring the `CREDITS.md` entries above (#1, #2, #3). Two
+length flags (#2, #4) and one incomplete-layer flag (#7) remain open and need a
+listen-and-decide pass before these are finalized and downloaded.
 
 ---
 
