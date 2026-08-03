@@ -1,23 +1,23 @@
 "use strict";
 // The frame: simulation update, the draw dispatch, and the rAF loop.
 
-import { audio } from "./audio.js?v=4e2b9596";
-import { Skeleton, rollGrade } from "./entities.js?v=4e2b9596";
-import { game3d } from "./game3d.js?v=4e2b9596";
-import { input } from "./input.js?v=4e2b9596";
-import { net, netSync } from "./net.js?v=4e2b9596";
-import { particles } from "./particles.js?v=4e2b9596";
-import { room } from "./room.js?v=4e2b9596";
-import { generateFloor } from "./floor.js?v=4e2b9596";
-import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView } from "./util.js?v=4e2b9596";
-import { canvas, ctx, resultEl } from "./dom.js?v=4e2b9596";
-import { safeMode } from "./env.js?v=4e2b9596";
-import { game, uiFlags } from "./state.js?v=4e2b9596";
-import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=4e2b9596";
-import { openInventory, openLevelUp, showHub } from "./overlays.js?v=4e2b9596";
-import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=4e2b9596";
-import { showMap, drawMap } from "./worldmap.js?v=4e2b9596";
-import { sendGuestInput } from "./coop.js?v=4e2b9596";
+import { audio } from "./audio.js?v=428b9b89";
+import { Skeleton, rollGrade } from "./entities.js?v=428b9b89";
+import { game3d } from "./game3d.js?v=428b9b89";
+import { input } from "./input.js?v=428b9b89";
+import { net, netSync } from "./net.js?v=428b9b89";
+import { particles } from "./particles.js?v=428b9b89";
+import { room } from "./room.js?v=428b9b89";
+import { generateFloor } from "./floor.js?v=428b9b89";
+import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView } from "./util.js?v=428b9b89";
+import { canvas, ctx, resultEl } from "./dom.js?v=428b9b89";
+import { safeMode } from "./env.js?v=428b9b89";
+import { game, uiFlags } from "./state.js?v=428b9b89";
+import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=428b9b89";
+import { openInventory, openLevelUp, showHub } from "./overlays.js?v=428b9b89";
+import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=428b9b89";
+import { showMap, drawMap } from "./worldmap.js?v=428b9b89";
+import { sendGuestInput } from "./coop.js?v=428b9b89";
 
 export function fitCanvas() {
   canvas.width = Math.max(320, window.innerWidth);
