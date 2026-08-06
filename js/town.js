@@ -2,19 +2,19 @@
 // The walkable town and dungeon-lobby rooms, the four NPCs and their menus, and
 // the raid / finale set-pieces that are built out of the town.
 
-import { audio } from "./audio.js?v=f2e4a613";
-import { CLASSES } from "./entities.js?v=f2e4a613";
-import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=f2e4a613";
-import { particles } from "./particles.js?v=f2e4a613";
-import { profile } from "./profile.js?v=f2e4a613";
-import { room } from "./room.js?v=f2e4a613";
-import { sprites } from "./sprites.js?v=f2e4a613";
-import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=f2e4a613";
-import { canvas, menuEl } from "./dom.js?v=f2e4a613";
-import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=f2e4a613";
-import { startFloorRun, beginRun } from "./run.js?v=f2e4a613";
-import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=f2e4a613";
-import { sizeRoomToCanvas } from "./draw.js?v=f2e4a613";
+import { audio } from "./audio.js?v=39980037";
+import { CLASSES } from "./entities.js?v=39980037";
+import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=39980037";
+import { particles } from "./particles.js?v=39980037";
+import { profile } from "./profile.js?v=39980037";
+import { room } from "./room.js?v=39980037";
+import { sprites } from "./sprites.js?v=39980037";
+import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=39980037";
+import { canvas, menuEl } from "./dom.js?v=39980037";
+import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=39980037";
+import { startFloorRun, beginRun } from "./run.js?v=39980037";
+import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=39980037";
+import { sizeRoomToCanvas } from "./draw.js?v=39980037";
 
 // One-line faction motive, keyed by DUNGEONS[id].faction. Shown once per
 // dungeon per session, on first entering that dungeon's lobby (see

@@ -4,18 +4,18 @@
 // classic single-room generator/`?classic`; raids and the finale route
 // through here too now).
 
-import { audio } from "./audio.js?v=f2e4a613";
-import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=f2e4a613";
-import { generateFloor } from "./floor.js?v=f2e4a613";
-import { input } from "./input.js?v=f2e4a613";
-import { net } from "./net.js?v=f2e4a613";
-import { particles } from "./particles.js?v=f2e4a613";
-import { profile } from "./profile.js?v=f2e4a613";
-import { room } from "./room.js?v=f2e4a613";
-import { TILE, choice, clamp, updateView } from "./util.js?v=f2e4a613";
-import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=f2e4a613";
-import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=f2e4a613";
-import { sendRoomToGuest } from "./coop.js?v=f2e4a613";
+import { audio } from "./audio.js?v=39980037";
+import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=39980037";
+import { generateFloor } from "./floor.js?v=39980037";
+import { input } from "./input.js?v=39980037";
+import { net } from "./net.js?v=39980037";
+import { particles } from "./particles.js?v=39980037";
+import { profile } from "./profile.js?v=39980037";
+import { room } from "./room.js?v=39980037";
+import { TILE, choice, clamp, updateView } from "./util.js?v=39980037";
+import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=39980037";
+import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=39980037";
+import { sendRoomToGuest } from "./coop.js?v=39980037";
 
 // Connected-floor run: explore a floor of small rooms joined by
 // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock

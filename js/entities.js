@@ -1,11 +1,11 @@
-import { TILE, WIDTH, HEIGHT, angleDiff, angleTo, clamp, dist, rand, randi } from "./util.js?v=f2e4a613";
-import { sprites } from "./sprites.js?v=f2e4a613";
-import { audio } from "./audio.js?v=f2e4a613";
-import { particles } from "./particles.js?v=f2e4a613";
-import { room } from "./room.js?v=f2e4a613";
-import { profile } from "./profile.js?v=f2e4a613";
-import { deriveStats } from "./stats.js?v=f2e4a613";
-import { INV_CAP, ITEM_RARITY, rollItem } from "./items.js?v=f2e4a613";
+import { TILE, WIDTH, HEIGHT, angleDiff, angleTo, clamp, dist, rand, randi } from "./util.js?v=39980037";
+import { sprites } from "./sprites.js?v=39980037";
+import { audio } from "./audio.js?v=39980037";
+import { particles } from "./particles.js?v=39980037";
+import { room } from "./room.js?v=39980037";
+import { profile } from "./profile.js?v=39980037";
+import { deriveStats } from "./stats.js?v=39980037";
+import { INV_CAP, ITEM_RARITY, rollItem } from "./items.js?v=39980037";
 
 // Dormant ("inactive") skeletons wake when a player gets within this radius,
 // then play the awaken animation for this long before chasing.

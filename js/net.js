@@ -3,8 +3,8 @@
 // game data still flows directly between the two players. A free TURN relay
 // is configured so strict NATs can connect too.
 
-import { room } from "./room.js?v=f2e4a613";
-import { CLASSES, Player, Skeleton, Boss, Chest, Projectile, EnemyShot, Pickup } from "./entities.js?v=f2e4a613";
+import { room } from "./room.js?v=39980037";
+import { CLASSES, Player, Skeleton, Boss, Chest, Projectile, EnemyShot, Pickup } from "./entities.js?v=39980037";
 
 let peer = null;
 let conn = null;
