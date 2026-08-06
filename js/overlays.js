@@ -159,6 +159,7 @@ export function buildHub(hero) {
 export function showHub(hero) {
   game.state = "hub";
   game.hero = hero;
+  audio.setContext("menu"); // hub is menu-adjacent chrome, not the walkable town
   menuEl.classList.add("hidden");
   resultEl.classList.add("hidden");
   hubEl.classList.remove("hidden");
@@ -268,7 +269,7 @@ export function buildStatsOverlay(hero) {
       const img = document.createElement("img");
       img.src = sprites.items[item.icon].toDataURL();
       slotEl.appendChild(img);
-      slotEl.onclick = () => { unequip(hero, slot); profile.save(); buildStatsOverlay(hero); };
+      slotEl.onclick = () => { audio.unequip(); unequip(hero, slot); profile.save(); buildStatsOverlay(hero); };
       slotEl.onmouseenter = (e) => showInvTooltip(e, hero, item, null);
       slotEl.onmouseleave = hideInvTooltip;
     }
@@ -291,7 +292,7 @@ export function buildStatsOverlay(hero) {
       const img = document.createElement("img");
       img.src = sprites.items[item.icon].toDataURL();
       cell.appendChild(img);
-      cell.onclick = () => { equip(hero, item); profile.save(); buildStatsOverlay(hero); };
+      cell.onclick = () => { audio.equip(); equip(hero, item); profile.save(); buildStatsOverlay(hero); };
       cell.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
       cell.onmouseleave = hideInvTooltip;
       grid.appendChild(cell);
@@ -315,6 +316,7 @@ export function backToMenu() {
     menuEl.classList.remove("hidden");
     refreshContinueButton();
     game.state = "menu";
+    audio.setContext("menu");
   }
 }
 
@@ -448,7 +450,7 @@ export function renderInventory(hero) {
       const img = document.createElement("img");
       img.src = sprites.items[item.icon].toDataURL();
       el.appendChild(img);
-      el.onclick = () => { unequip(hero, slot); rebaseLocalPlayer(); profile.save(); renderInventory(hero); };
+      el.onclick = () => { audio.unequip(); unequip(hero, slot); rebaseLocalPlayer(); profile.save(); renderInventory(hero); };
       el.onmouseenter = (e) => showInvTooltip(e, hero, item, null);
       el.onmouseleave = hideInvTooltip;
     } else {
@@ -473,6 +475,7 @@ export function renderInventory(hero) {
       img.src = sprites.items[item.icon].toDataURL();
       cell.appendChild(img);
       cell.onclick = () => {
+        audio.equip();
         equip(hero, item);
         rebaseLocalPlayer();
         profile.save();

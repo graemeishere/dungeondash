@@ -62,7 +62,7 @@ document.getElementById("btn-onboarding-done").addEventListener("click", () => {
 // ---- settings (volume) ----
 
 function openSettings() {
-  document.getElementById("settings-volume").value = Math.round((profile.data.settings.volume ?? 1) * 100);
+  document.getElementById("settings-volume").value = Math.round((profile.data.settings.volume ?? 0.8) * 100);
   document.getElementById("settings").classList.remove("hidden");
 }
 document.getElementById("btn-menu-settings").addEventListener("click", openSettings);
@@ -216,7 +216,11 @@ sprites.init();
 fitCanvas();
 input.init(canvas);
 buildClassCards();
-audio.setMasterVolume(profile.data.settings.volume ?? 1);
+audio.setMasterVolume(profile.data.settings.volume ?? 0.8);
+// Menu/hub share one music context (see js/audio.js's MUSIC_TRACKS map — the
+// design spec only defines 5 contexts: menu, town, catacombs, goblinMines,
+// crypt; the hub screen is menu-adjacent chrome, not the walkable town).
+audio.setContext("menu");
 const _bootHero = profile.getActiveHero();
 if (_bootHero) {
   game.hero = _bootHero;
@@ -278,7 +282,7 @@ window.addEventListener("resize", onResize);
 // If a first-party module ever reaches for window.DD, that module is the bug.
 // The 3D handles stay getters so they reflect boot3d.js's staged loading.
 window.DD = {
-  game, room, net, particles, game3d, input, sprites, profile, TILE,
+  game, room, net, particles, game3d, input, sprites, profile, audio, TILE,
   Boss,   // room-checks does `instanceof DD.Boss`
   view,   // letterbox transform: world coords -> canvas px, for driving taps
   // env.js's dev-flag gate, so a headless check can assert on it directly

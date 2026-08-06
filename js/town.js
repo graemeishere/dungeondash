@@ -39,6 +39,7 @@ export function showDungeonLobby(dungeonId) {
   game.time = 0;
   game.nearbyNpc = null;
   game.townNpcs = [];
+  audio.setContext(dungeonId);
   sizeRoomToCanvas();
   room.setTheme(dungeonId);
   const lvl = (game.hero && game.hero.level) || 1;
@@ -98,6 +99,7 @@ export function showTownRoom(skipRaid) {
   game.state = "town";
   game.peaceful = true;
   game.raidMode = false;
+  audio.setContext("town");
   game.time = 0;
   game.nearbyNpc = null;
   sizeRoomToCanvas();
@@ -203,7 +205,7 @@ export function buildTraderOverlay(hero) {
         hero.gold -= price;
         hero.inventory.push(item);
         game.shopStock = game.shopStock.filter((s) => s !== item);
-        audio.coin();
+        audio.purchase();
         profile.save();
         buildTraderOverlay(hero);
       };
@@ -236,7 +238,7 @@ export function buildTraderOverlay(hero) {
         if (idx < 0) return;
         hero.inventory.splice(idx, 1);
         hero.gold = (hero.gold || 0) + value;
-        audio.coin();
+        audio.purchase();
         profile.save();
         buildTraderOverlay(hero);
       };
@@ -253,6 +255,7 @@ const questGiverEl = document.getElementById("questgiver");
 export function openQuestGiverMenu() {
   if (!game.hero) return;
   greetOnce("questgiver");
+  audio.questTalk();
   game.state = "quests";
   buildQuestGiverOverlay(game.hero);
   questGiverEl.classList.remove("hidden");

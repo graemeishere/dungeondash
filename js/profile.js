@@ -1,3 +1,5 @@
+import { audio } from "./audio.js?v=__BUILD__";
+
 const PROFILE_KEY = "dungeondash_profile_v2";
 const PROFILE_VERSION = 3;
 
@@ -33,7 +35,7 @@ const profileData = {
   quests: { active: [], completed: [] },
   unlocks: {},
   onboarded: false,
-  settings: { volume: 1 },
+  settings: { volume: 0.8 }, // matches js/audio.js's masterGain default (see docs/design/audio-spec.md §1.4/§4.1)
 };
 
 function save() {
@@ -67,7 +69,7 @@ function load() {
       profileData.meta = raw.meta || { shards: 0 };
       profileData.unlocks = raw.unlocks || {};
       profileData.onboarded = !!raw.onboarded;
-      profileData.settings = raw.settings || { volume: 1 };
+      profileData.settings = raw.settings || { volume: 0.8 };
       const q = raw.quests || {};
       // v2 auto-assigned every quest to "active"; quests are now NPC-accepted,
       // so on upgrade keep completed but clear the auto-assigned active list.
@@ -194,6 +196,7 @@ function progressQuests(update) {
 function completeQuest(q, def) {
   if (profileData.quests.completed.includes(q.id)) return;
   profileData.quests.completed.push(q.id);
+  audio.questComplete();
   const hero = getActiveHero();
   if (hero) {
     if (def.reward.gold) hero.gold = (hero.gold || 0) + def.reward.gold;

@@ -30,6 +30,7 @@ export function startFloorRun(classKey, dungeonId = "catacombs", tier = 0) {
   game.floorMode = true;
   game.peaceful = false;
   game.raidMode = false;
+  audio.setContext(dungeonId);
   game.townNpcs = [];
   game.nearbyNpc = null;
   room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
@@ -210,7 +211,7 @@ export function updateFloorGating() {
     rm.locked = true;
     game.activeRoomId = rm.id;
     activateRoom(rm.id);
-    audio.door();
+    audio.roomLock();
     particles.text((rm.rect.x + rm.rect.w / 2) * TILE, (rm.rect.y - 0.2) * TILE, "The doors slam shut!", "#ff9234");
   }
   if (game.activeRoomId != null) {
@@ -219,7 +220,7 @@ export function updateFloorGating() {
       arm.locked = false;
       arm.cleared = true;
       game.activeRoomId = null;
-      audio.door();
+      audio.roomClear();
       if (arm.id === room.stairsRoomId) {
         // Boss chamber cleared: reveal the stairs instead of auto-descending,
         // so the player gets a beat to loot/heal. Walking onto them descends
@@ -238,6 +239,7 @@ export function updateFloorGating() {
 export function reachStairs() {
   if (game._stairsTaken) return;
   game._stairsTaken = true;
+  audio.floorTransition();
   const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
   writeSave();
   if (game.floor >= dungeon.floors.length - 1) { endRun(true); return; }
@@ -275,6 +277,7 @@ export function resumeRun(save) {
   game.dungeonId = save.dungeonId || "catacombs";
   game.tier = save.tier || 0;
   game.peaceful = false;
+  audio.setContext(game.dungeonId);
   room.setTheme(game.dungeonId);
   game.floor = save.floor;
   game.xp = hero ? (hero.xp || 0) : (save.xp || 0);
