@@ -4,18 +4,18 @@
 // classic single-room generator/`?classic`; raids and the finale route
 // through here too now).
 
-import { audio } from "./audio.js?v=428b9b89";
-import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=428b9b89";
-import { generateFloor } from "./floor.js?v=428b9b89";
-import { input } from "./input.js?v=428b9b89";
-import { net } from "./net.js?v=428b9b89";
-import { particles } from "./particles.js?v=428b9b89";
-import { profile } from "./profile.js?v=428b9b89";
-import { room } from "./room.js?v=428b9b89";
-import { TILE, choice, clamp, updateView } from "./util.js?v=428b9b89";
-import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=428b9b89";
-import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=428b9b89";
-import { sendRoomToGuest } from "./coop.js?v=428b9b89";
+import { audio } from "./audio.js?v=f2e4a613";
+import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=f2e4a613";
+import { generateFloor } from "./floor.js?v=f2e4a613";
+import { input } from "./input.js?v=f2e4a613";
+import { net } from "./net.js?v=f2e4a613";
+import { particles } from "./particles.js?v=f2e4a613";
+import { profile } from "./profile.js?v=f2e4a613";
+import { room } from "./room.js?v=f2e4a613";
+import { TILE, choice, clamp, updateView } from "./util.js?v=f2e4a613";
+import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=f2e4a613";
+import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=f2e4a613";
+import { sendRoomToGuest } from "./coop.js?v=f2e4a613";
 
 // Connected-floor run: explore a floor of small rooms joined by
 // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock
@@ -30,6 +30,7 @@ export function startFloorRun(classKey, dungeonId = "catacombs", tier = 0) {
   game.floorMode = true;
   game.peaceful = false;
   game.raidMode = false;
+  audio.setContext(dungeonId);
   game.townNpcs = [];
   game.nearbyNpc = null;
   room.setTheme((DUNGEONS[dungeonId] && DUNGEONS[dungeonId].theme) || dungeonId);
@@ -210,7 +211,7 @@ export function updateFloorGating() {
     rm.locked = true;
     game.activeRoomId = rm.id;
     activateRoom(rm.id);
-    audio.door();
+    audio.roomLock();
     particles.text((rm.rect.x + rm.rect.w / 2) * TILE, (rm.rect.y - 0.2) * TILE, "The doors slam shut!", "#ff9234");
   }
   if (game.activeRoomId != null) {
@@ -219,7 +220,7 @@ export function updateFloorGating() {
       arm.locked = false;
       arm.cleared = true;
       game.activeRoomId = null;
-      audio.door();
+      audio.roomClear();
       if (arm.id === room.stairsRoomId) {
         // Boss chamber cleared: reveal the stairs instead of auto-descending,
         // so the player gets a beat to loot/heal. Walking onto them descends
@@ -238,6 +239,7 @@ export function updateFloorGating() {
 export function reachStairs() {
   if (game._stairsTaken) return;
   game._stairsTaken = true;
+  audio.floorTransition();
   const dungeon = DUNGEONS[game.dungeonId] || DUNGEONS.catacombs;
   writeSave();
   if (game.floor >= dungeon.floors.length - 1) { endRun(true); return; }
@@ -275,6 +277,7 @@ export function resumeRun(save) {
   game.dungeonId = save.dungeonId || "catacombs";
   game.tier = save.tier || 0;
   game.peaceful = false;
+  audio.setContext(game.dungeonId);
   room.setTheme(game.dungeonId);
   game.floor = save.floor;
   game.xp = hero ? (hero.xp || 0) : (save.xp || 0);

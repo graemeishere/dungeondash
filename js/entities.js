@@ -1,11 +1,11 @@
-import { TILE, WIDTH, HEIGHT, angleDiff, angleTo, clamp, dist, rand, randi } from "./util.js?v=428b9b89";
-import { sprites } from "./sprites.js?v=428b9b89";
-import { audio } from "./audio.js?v=428b9b89";
-import { particles } from "./particles.js?v=428b9b89";
-import { room } from "./room.js?v=428b9b89";
-import { profile } from "./profile.js?v=428b9b89";
-import { deriveStats } from "./stats.js?v=428b9b89";
-import { INV_CAP, ITEM_RARITY, rollItem } from "./items.js?v=428b9b89";
+import { TILE, WIDTH, HEIGHT, angleDiff, angleTo, clamp, dist, rand, randi } from "./util.js?v=f2e4a613";
+import { sprites } from "./sprites.js?v=f2e4a613";
+import { audio } from "./audio.js?v=f2e4a613";
+import { particles } from "./particles.js?v=f2e4a613";
+import { room } from "./room.js?v=f2e4a613";
+import { profile } from "./profile.js?v=f2e4a613";
+import { deriveStats } from "./stats.js?v=f2e4a613";
+import { INV_CAP, ITEM_RARITY, rollItem } from "./items.js?v=f2e4a613";
 
 // Dormant ("inactive") skeletons wake when a player gets within this radius,
 // then play the awaken animation for this long before chasing.
@@ -219,6 +219,7 @@ export class Player {
     this.downT = DOWNED_TIME;
     this.reviveP = 0;
     this.hp = 0;
+    audio.downed();
   }
 
   revive(partial) {
@@ -1153,6 +1154,7 @@ export class Boss extends Skeleton {
       if (this.slamCd <= 0 && dist(this.x, this.y, pl.x, pl.y) < 150) {
         this.slamT = 0.85;
         this.slamAnimAt = game.time; // rising edge -> 3D telegraph + jump-chop
+        audio.slamTelegraph();
         this.slamCd = enraged ? 3.2 : 5.0;
         return;
       }
@@ -1212,7 +1214,7 @@ export class Chest {
   open(game, player) {
     if (this.opened) return;
     this.opened = true;
-    audio.chest();
+    audio.chestOpen();
     particles.burst(this.x, this.y - 14, { count: 14, colors: ["#ffd14a", "#fff3b8"], speed: 120, life: 0.5, gravity: -40 });
     if (this.shrine) {
       // shrine reward: one random permanent-for-the-run buff, smaller in
@@ -1310,7 +1312,7 @@ export class Pickup {
       game.hero.inventory.push(this.item);
       profile.save();
       const rColor = ITEM_RARITY[this.item.rarity].color;
-      audio.chest();
+      audio.lootPickup();
       particles.text(this.x, this.y - 16, this.item.name, rColor);
       particles.burst(this.x, this.y, { count: 8, colors: [rColor, "#fff"], speed: 70, life: 0.4, gravity: -60 });
     }

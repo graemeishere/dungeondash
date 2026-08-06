@@ -5,13 +5,13 @@
 // js/render3d.js; the character rigs/clips in js/char3d.js. game.js calls
 // game3d.active()/draw()/resize() and stays 3D-agnostic otherwise.
 
-import { TILE, clamp } from "./util.js?v=428b9b89";
-import { rt } from "./runtime.js?v=428b9b89";
-import { room } from "./room.js?v=428b9b89";
-import { input } from "./input.js?v=428b9b89";
-import { particles } from "./particles.js?v=428b9b89";
-import { hud } from "./hud.js?v=428b9b89";
-import { Boss } from "./entities.js?v=428b9b89";
+import { TILE, clamp } from "./util.js?v=f2e4a613";
+import { rt } from "./runtime.js?v=f2e4a613";
+import { room } from "./room.js?v=f2e4a613";
+import { input } from "./input.js?v=f2e4a613";
+import { particles } from "./particles.js?v=f2e4a613";
+import { hud } from "./hud.js?v=f2e4a613";
+import { Boss } from "./entities.js?v=f2e4a613";
 
 // Loaded before game.js, so parse the URL ourselves.
 const params = new URLSearchParams(location.search);
@@ -188,7 +188,10 @@ function drawCombat3D(game, dt) {
   const worldOf = (e) => dr.cellToWorld(e.x / TILE, e.y / TILE);
   const asChar = (e, modelKey, rotationY, anim, opacity) => {
     const w = worldOf(e);
-    chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity, scale: e.modelScale || 1 });
+    // faction (goblin/undead/skeleton/...) selects a texture-variant reskin
+    // in char3d.js's CharacterFactory.spawn(); undefined for players (heroes
+    // aren't faction-tagged, decor3d/char3d Task 1 scope).
+    chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity, scale: e.modelScale || 1, faction: e.faction });
   };
 
   // Players + skeletons render as 3D characters once the models have loaded;

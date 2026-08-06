@@ -14,6 +14,12 @@
     <canvas id="game3d"></canvas>
     <canvas id="game" width="960" height="576"></canvas>
 
+    <!-- NPC greeting, shown once per NPC per session on first interact. Lives
+         above every .overlay (z-index 5) so it's still legible the instant an
+         NPC's stats/shop/quest overlay covers the world canvas underneath it -
+         see js/town.js's npcGreetToast(). -->
+    <div id="npc-greet-toast" class="npc-greet hidden"></div>
+
     <div id="menu" class="overlay">
       <h1>DUNGEON&nbsp;DASH</h1>
       <p class="tagline">Pick a class and conquer the dungeon</p>
@@ -237,11 +243,11 @@
        module, so net.js can rely on window.Peer existing. -->
   <script src="js/lib/peerjs.min.js"></script>
 
-  <!-- ?v=428b9b89 is stamped with the commit SHA at deploy time (pages.yml) so
+  <!-- ?v=f2e4a613 is stamped with the commit SHA at deploy time (pages.yml) so
        each release busts the browser cache; lib/ scripts are pinned + unchanged
        so they stay cacheable across deploys and are deliberately unstamped.
        Load order now lives in the modules' own import graph, not in tag order. -->
-  <script type="module" src="js/boot.js?v=428b9b89"></script>
-  <script type="module" src="js/boot3d.js?v=428b9b89"></script>
+  <script type="module" src="js/boot.js?v=f2e4a613"></script>
+  <script type="module" src="js/boot3d.js?v=f2e4a613"></script>
 </body>
 </html>

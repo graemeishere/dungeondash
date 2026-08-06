@@ -1,4 +1,4 @@
-import { choice } from "./util.js?v=428b9b89";
+import { choice } from "./util.js?v=f2e4a613";
 
 export const INV_CAP = 15;
 

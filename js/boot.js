@@ -11,34 +11,34 @@
 // wiring and the boot sequence - is what guarantees that: by the time this file
 // body runs, every import has finished evaluating.
 
-import { rt } from "./runtime.js?v=428b9b89";
-import { devFlagsAllowed, safeMode } from "./env.js?v=428b9b89";
-import { params, devBoot, floorsBoot } from "./env.js?v=428b9b89";
-import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=428b9b89";
-import { sprites } from "./sprites.js?v=428b9b89";
-import { audio } from "./audio.js?v=428b9b89";
-import { input } from "./input.js?v=428b9b89";
-import { net } from "./net.js?v=428b9b89";
-import { room } from "./room.js?v=428b9b89";
-import { particles } from "./particles.js?v=428b9b89";
-import { profile } from "./profile.js?v=428b9b89";
-import { game3d } from "./game3d.js?v=428b9b89";
-import { CLASSES, Boss } from "./entities.js?v=428b9b89";
-import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=428b9b89";
-import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=428b9b89";
-import { startFloorRun, resumeRun } from "./run.js?v=428b9b89";
+import { rt } from "./runtime.js?v=f2e4a613";
+import { devFlagsAllowed, safeMode } from "./env.js?v=f2e4a613";
+import { params, devBoot, floorsBoot } from "./env.js?v=f2e4a613";
+import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=f2e4a613";
+import { sprites } from "./sprites.js?v=f2e4a613";
+import { audio } from "./audio.js?v=f2e4a613";
+import { input } from "./input.js?v=f2e4a613";
+import { net } from "./net.js?v=f2e4a613";
+import { room } from "./room.js?v=f2e4a613";
+import { particles } from "./particles.js?v=f2e4a613";
+import { profile } from "./profile.js?v=f2e4a613";
+import { game3d } from "./game3d.js?v=f2e4a613";
+import { CLASSES, Boss } from "./entities.js?v=f2e4a613";
+import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=f2e4a613";
+import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=f2e4a613";
+import { startFloorRun, resumeRun } from "./run.js?v=f2e4a613";
 import {
   backToMenu, buildClassCards, closeInventory, openInventory, playAgain,
   refreshContinueButton, setMenuMode, showHub,
-} from "./overlays.js?v=428b9b89";
+} from "./overlays.js?v=f2e4a613";
 import {
   closeQuestGiverOverlay, closeStatsOverlay, closeTraderOverlay, handleTownTap,
   showTownRoom, startRaid,
-} from "./town.js?v=428b9b89";
-import { handleMapTap, showMap } from "./worldmap.js?v=428b9b89";
-import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=428b9b89";
-import { codeIn } from "./overlays.js?v=428b9b89";
-import { fitCanvas, onResize, startLoop } from "./draw.js?v=428b9b89";
+} from "./town.js?v=f2e4a613";
+import { handleMapTap, showMap } from "./worldmap.js?v=f2e4a613";
+import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=f2e4a613";
+import { codeIn } from "./overlays.js?v=f2e4a613";
+import { fitCanvas, onResize, startLoop } from "./draw.js?v=f2e4a613";
 
 document.getElementById("btn-inv-close").addEventListener("click", closeInventory);
 
@@ -62,7 +62,7 @@ document.getElementById("btn-onboarding-done").addEventListener("click", () => {
 // ---- settings (volume) ----
 
 function openSettings() {
-  document.getElementById("settings-volume").value = Math.round((profile.data.settings.volume ?? 1) * 100);
+  document.getElementById("settings-volume").value = Math.round((profile.data.settings.volume ?? 0.8) * 100);
   document.getElementById("settings").classList.remove("hidden");
 }
 document.getElementById("btn-menu-settings").addEventListener("click", openSettings);
@@ -216,7 +216,11 @@ sprites.init();
 fitCanvas();
 input.init(canvas);
 buildClassCards();
-audio.setMasterVolume(profile.data.settings.volume ?? 1);
+audio.setMasterVolume(profile.data.settings.volume ?? 0.8);
+// Menu/hub share one music context (see js/audio.js's MUSIC_TRACKS map — the
+// design spec only defines 5 contexts: menu, town, catacombs, goblinMines,
+// crypt; the hub screen is menu-adjacent chrome, not the walkable town).
+audio.setContext("menu");
 const _bootHero = profile.getActiveHero();
 if (_bootHero) {
   game.hero = _bootHero;
@@ -278,7 +282,7 @@ window.addEventListener("resize", onResize);
 // If a first-party module ever reaches for window.DD, that module is the bug.
 // The 3D handles stay getters so they reflect boot3d.js's staged loading.
 window.DD = {
-  game, room, net, particles, game3d, input, sprites, profile, TILE,
+  game, room, net, particles, game3d, input, sprites, profile, audio, TILE,
   Boss,   // room-checks does `instanceof DD.Boss`
   view,   // letterbox transform: world coords -> canvas px, for driving taps
   // env.js's dev-flag gate, so a headless check can assert on it directly

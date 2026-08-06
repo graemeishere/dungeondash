@@ -85,7 +85,9 @@ guest disconnects, the host continues solo seamlessly.
 - Coin/heart pickups with magnet collection, HP/XP bars, boss HP bar
 - Responsive rooms that fill any screen, with twin-stick touch controls on mobile
 - Hit feedback: knockback, hit-flash, damage numbers, particles, screen shake
-- Synthesized sound effects via the Web Audio API
+- Synthesized sound effects via the Web Audio API, plus vendored looping
+  music/ambience beds per dungeon and town, mixed through a 4-bus (SFX world/
+  UI, music, ambience) graph with a master limiter
 
 ## Assets
 
@@ -94,9 +96,12 @@ step): the **Kenney Modular Dungeon Kit** for the architecture and the
 **KayKit** Adventurers / Skeletons / Character Animations packs for the
 animated heroes and enemies, loaded with a vendored three.js (`js/lib/three/`).
 
-Everything else is still code: NPC/pickup/UI sprites are pixel art generated
-onto offscreen canvases at boot in `js/sprites.js` (they stand in the 3D scene
-as billboards), and every sound is synthesized at runtime in `js/audio.js`.
+NPC/pickup/UI sprites are pixel art generated onto offscreen canvases at boot
+in `js/sprites.js` (they stand in the 3D scene as billboards). Every sound
+*effect* is synthesized at runtime in `js/audio.js` — no files. Music and
+ambience, by contrast, are vendored loops under `assets/audio/` (mixed
+licenses — CC0 and CC-BY; see `assets/audio/CREDITS.md` for per-track
+attribution).
 
 ## Code layout
 

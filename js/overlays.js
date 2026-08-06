@@ -2,23 +2,23 @@
 // Every DOM overlay: the hero hub, the barkeep sheet, the level-up picker, the
 // inventory, the class-select cards and the co-op lobby panel.
 
-import { audio } from "./audio.js?v=428b9b89";
-import { CLASSES, Player, UPGRADES } from "./entities.js?v=428b9b89";
-import { input } from "./input.js?v=428b9b89";
-import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=428b9b89";
-import { net } from "./net.js?v=428b9b89";
-import { particles } from "./particles.js?v=428b9b89";
-import { profile } from "./profile.js?v=428b9b89";
-import { room } from "./room.js?v=428b9b89";
-import { sprites } from "./sprites.js?v=428b9b89";
-import { ATTRS, deriveStats } from "./stats.js?v=428b9b89";
-import { HEIGHT, TILE, WIDTH } from "./util.js?v=428b9b89";
-import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=428b9b89";
-import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=428b9b89";
-import { beginRun, resumeRun } from "./run.js?v=428b9b89";
-import { showMap } from "./worldmap.js?v=428b9b89";
-import { showTownRoom, switchClass } from "./town.js?v=428b9b89";
-import { hostWithClass, joinWithClass } from "./coop.js?v=428b9b89";
+import { audio } from "./audio.js?v=f2e4a613";
+import { CLASSES, Player, UPGRADES } from "./entities.js?v=f2e4a613";
+import { input } from "./input.js?v=f2e4a613";
+import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=f2e4a613";
+import { net } from "./net.js?v=f2e4a613";
+import { particles } from "./particles.js?v=f2e4a613";
+import { profile } from "./profile.js?v=f2e4a613";
+import { room } from "./room.js?v=f2e4a613";
+import { sprites } from "./sprites.js?v=f2e4a613";
+import { ATTRS, deriveStats } from "./stats.js?v=f2e4a613";
+import { HEIGHT, TILE, WIDTH } from "./util.js?v=f2e4a613";
+import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=f2e4a613";
+import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=f2e4a613";
+import { beginRun, resumeRun } from "./run.js?v=f2e4a613";
+import { showMap } from "./worldmap.js?v=f2e4a613";
+import { showTownRoom, switchClass } from "./town.js?v=f2e4a613";
+import { hostWithClass, joinWithClass } from "./coop.js?v=f2e4a613";
 
 export function refreshContinueButton() {
   const save = usableSave();
@@ -159,6 +159,7 @@ export function buildHub(hero) {
 export function showHub(hero) {
   game.state = "hub";
   game.hero = hero;
+  audio.setContext("menu"); // hub is menu-adjacent chrome, not the walkable town
   menuEl.classList.add("hidden");
   resultEl.classList.add("hidden");
   hubEl.classList.remove("hidden");
@@ -268,7 +269,7 @@ export function buildStatsOverlay(hero) {
       const img = document.createElement("img");
       img.src = sprites.items[item.icon].toDataURL();
       slotEl.appendChild(img);
-      slotEl.onclick = () => { unequip(hero, slot); profile.save(); buildStatsOverlay(hero); };
+      slotEl.onclick = () => { audio.unequip(); unequip(hero, slot); profile.save(); buildStatsOverlay(hero); };
       slotEl.onmouseenter = (e) => showInvTooltip(e, hero, item, null);
       slotEl.onmouseleave = hideInvTooltip;
     }
@@ -291,7 +292,7 @@ export function buildStatsOverlay(hero) {
       const img = document.createElement("img");
       img.src = sprites.items[item.icon].toDataURL();
       cell.appendChild(img);
-      cell.onclick = () => { equip(hero, item); profile.save(); buildStatsOverlay(hero); };
+      cell.onclick = () => { audio.equip(); equip(hero, item); profile.save(); buildStatsOverlay(hero); };
       cell.onmouseenter = (e) => showInvTooltip(e, hero, item, hero.equipped[item.slot]);
       cell.onmouseleave = hideInvTooltip;
       grid.appendChild(cell);
@@ -315,6 +316,7 @@ export function backToMenu() {
     menuEl.classList.remove("hidden");
     refreshContinueButton();
     game.state = "menu";
+    audio.setContext("menu");
   }
 }
 
@@ -448,7 +450,7 @@ export function renderInventory(hero) {
       const img = document.createElement("img");
       img.src = sprites.items[item.icon].toDataURL();
       el.appendChild(img);
-      el.onclick = () => { unequip(hero, slot); rebaseLocalPlayer(); profile.save(); renderInventory(hero); };
+      el.onclick = () => { audio.unequip(); unequip(hero, slot); rebaseLocalPlayer(); profile.save(); renderInventory(hero); };
       el.onmouseenter = (e) => showInvTooltip(e, hero, item, null);
       el.onmouseleave = hideInvTooltip;
     } else {
@@ -473,6 +475,7 @@ export function renderInventory(hero) {
       img.src = sprites.items[item.icon].toDataURL();
       cell.appendChild(img);
       cell.onclick = () => {
+        audio.equip();
         equip(hero, item);
         rebaseLocalPlayer();
         profile.save();

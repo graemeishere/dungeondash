@@ -1,8 +1,8 @@
-import { TILE, WIDTH, clamp } from "./util.js?v=428b9b89";
-import { sprites } from "./sprites.js?v=428b9b89";
-import { input } from "./input.js?v=428b9b89";
-import { room } from "./room.js?v=428b9b89";
-import { Boss } from "./entities.js?v=428b9b89";
+import { TILE, WIDTH, clamp } from "./util.js?v=f2e4a613";
+import { sprites } from "./sprites.js?v=f2e4a613";
+import { input } from "./input.js?v=f2e4a613";
+import { room } from "./room.js?v=f2e4a613";
+import { Boss } from "./entities.js?v=f2e4a613";
 
 export const hud = {
   draw(ctx, game) {

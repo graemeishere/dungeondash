@@ -20,6 +20,24 @@ const SKEL = "KayKit Skeletons/characters/gltf/";
 const SKGEAR = "KayKit Skeletons/assets/gltf/";
 const MANNEQUIN = "KayKit Character Animations/Mannequin Character/characters/Mannequin_Medium.glb";
 
+// Per-faction texture-variant reskins of the shared skeleton_texture.png atlas
+// (roadmap decision 5: "Faction -> new texture assets" — texture variants
+// only, no new geometry). "skeleton" faction intentionally has no entry here:
+// it keeps riding the original texture embedded in the GLBs untouched. See
+// dev/make-faction-textures.py for how these PNGs were generated.
+const FACTION_TEX = {
+  goblin: SKEL + "skeleton_texture_goblin.png",
+  undead: SKEL + "skeleton_texture_undead.png",
+};
+// Every skeleton-pack mesh (body AND its SKGEAR weapons) shares one base
+// color map whose glTF image is named "skeleton_texture" (confirmed by
+// inspecting the .gltf JSON `images[]` entries). Archer rigs additionally
+// carry a KayKit *Adventurer* bow (GEAR, not SKGEAR) textured with its own
+// "ranger_texture" atlas with a different UV layout — gating the swap on the
+// existing map's name (rather than reskinning every mesh under the root)
+// keeps that bow from being incorrectly repainted with the skeleton palette.
+const SKELETON_TEX_NAME = "skeleton_texture";
+
 // ---------------------------------------------------------------------------
 // One registry per "rig": model + held weapon + which hand + the clip names for
 // each logical state. attacks[] is a COMBO (cycled one per swing) unless seq:true
@@ -106,6 +124,7 @@ export class CharacterFactory {
     this.clips = new Map();    // name -> THREE.AnimationClip (shared library)
     this.protos = new Map();   // rig key -> loaded gltf.scene (prototype to clone)
     this.weaponProtos = {};    // weapon url -> loaded scene
+    this.factionTextures = {}; // faction -> THREE.Texture (goblin/undead reskins)
   }
 
   async loadClips() {
@@ -124,6 +143,23 @@ export class CharacterFactory {
       this.loader.loadAsync(encodeURI(u))
         .then((g) => { this.weaponProtos[u] = g.scene; })
         .catch((e) => console.error("weapon load failed:", u, e))
+    ));
+    return this;
+  }
+
+  // Load the goblin/undead texture-variant PNGs (plain images, not GLTF) via
+  // TextureLoader. flipY/colorSpace are set to match what GLTFLoader would
+  // have produced for the embedded original, since these variants share the
+  // exact same UV layout and must drop into the same material slot.
+  async loadFactionTextures() {
+    const loader = new THREE.TextureLoader();
+    await Promise.allSettled(Object.entries(FACTION_TEX).map(([faction, url]) =>
+      loader.loadAsync(encodeURI(url)).then((tex) => {
+        tex.flipY = false; // GLTFLoader convention; these UVs were authored against it
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.name = SKELETON_TEX_NAME;
+        this.factionTextures[faction] = tex;
+      }).catch((e) => console.error("faction texture load failed:", faction, url, e))
     ));
     return this;
   }
@@ -150,7 +186,9 @@ export class CharacterFactory {
 
   // Spawn an independently-animated instance, attaching the rig's weapon to the
   // configured hand bone (handslot.r / handslot.l -> sanitised "handslotr"/"l").
-  spawn(key) {
+  // `faction` (goblin/undead/skeleton/finale/...) picks a texture-variant
+  // reskin for enemy rigs; skeleton/finale/unset keep the stock texture.
+  spawn(key, faction) {
     const rig = RIG[key];
     const proto = this.protos.get(key);
     if (!proto) throw new Error("model not loaded: " + key);
@@ -180,6 +218,30 @@ export class CharacterFactory {
     // cast-only: grounding shadows sell the 3D look; self-shadowing on toon
     // models looks muddy and costs extra
     root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    // Faction reskin: SkeletonUtils.clone shares materials between clones, so
+    // (like setOpacity below) clone this instance's materials once before
+    // swapping .map — otherwise every character sharing the base skeleton
+    // material would reskin together. Only touch materials whose current map
+    // IS the shared skeleton_texture atlas (by glTF image name), so an
+    // archer's Adventurer-pack bow (a different atlas/UV layout) is untouched.
+    const tex = faction && this.factionTextures[faction];
+    if (tex) {
+      root.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        const wasArray = Array.isArray(o.material);
+        const mats = wasArray ? o.material : [o.material];
+        let touched = false;
+        const cloned = mats.map((mat) => {
+          if (!mat.map || mat.map.name !== SKELETON_TEX_NAME) return mat;
+          const c = mat.clone();
+          c.map = tex;
+          c.needsUpdate = true;
+          touched = true;
+          return c;
+        });
+        if (touched) o.material = wasArray ? cloned : cloned[0];
+      });
+    }
     return new Character(root, this.clips);
   }
 }
@@ -241,7 +303,7 @@ class Character {
 }
 
 // Drives a pool of Characters from a per-frame list of placement items:
-//   { entity, modelKey, x, z, rotationY, clip, once, timeScale }
+//   { entity, modelKey, x, z, rotationY, clip, once, timeScale, faction }
 export class CharacterManager {
   constructor(scene, factory) {
     this.scene = scene;
@@ -261,11 +323,13 @@ export class CharacterManager {
     const modelsP = Promise.allSettled(keys.map((k) => this.factory.loadModelByKey(k, RIG[k].model)));
     const clipsP = this.factory.loadClips();
     const weaponsP = this.factory.loadWeapons();
+    const factionTexP = this.factory.loadFactionTextures();
     const results = await modelsP;
     results.forEach((r, i) => { if (r.status === "rejected") console.error("char3d: model FAILED", keys[i], r.reason); });
     console.log("char3d: models", results.filter((r) => r.status === "fulfilled").length, "/", keys.length);
-    await Promise.all([clipsP, weaponsP]);
-    console.log("char3d: clips", this.factory.clips.size, "weapons", Object.keys(this.factory.weaponProtos).length);
+    await Promise.all([clipsP, weaponsP, factionTexP]);
+    console.log("char3d: clips", this.factory.clips.size, "weapons", Object.keys(this.factory.weaponProtos).length,
+      "faction textures", Object.keys(this.factory.factionTextures).length);
     return this;
   }
 
@@ -278,7 +342,7 @@ export class CharacterManager {
         const key = this.factory.spawnable(it.modelKey) ? it.modelKey
           : (this.factory.spawnable("fallback") ? "fallback" : null);
         if (!key) continue;
-        ch = this.factory.spawn(key);
+        ch = this.factory.spawn(key, it.faction);
         ch._baseScale = (RIG[key] || { scale: 1 }).scale;
         this.scene.add(ch.root);
         this.chars.set(it.entity, ch);

@@ -2,19 +2,30 @@
 // The walkable town and dungeon-lobby rooms, the four NPCs and their menus, and
 // the raid / finale set-pieces that are built out of the town.
 
-import { audio } from "./audio.js?v=428b9b89";
-import { CLASSES } from "./entities.js?v=428b9b89";
-import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=428b9b89";
-import { particles } from "./particles.js?v=428b9b89";
-import { profile } from "./profile.js?v=428b9b89";
-import { room } from "./room.js?v=428b9b89";
-import { sprites } from "./sprites.js?v=428b9b89";
-import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=428b9b89";
-import { canvas, menuEl } from "./dom.js?v=428b9b89";
-import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=428b9b89";
-import { startFloorRun, beginRun } from "./run.js?v=428b9b89";
-import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=428b9b89";
-import { sizeRoomToCanvas } from "./draw.js?v=428b9b89";
+import { audio } from "./audio.js?v=f2e4a613";
+import { CLASSES } from "./entities.js?v=f2e4a613";
+import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=f2e4a613";
+import { particles } from "./particles.js?v=f2e4a613";
+import { profile } from "./profile.js?v=f2e4a613";
+import { room } from "./room.js?v=f2e4a613";
+import { sprites } from "./sprites.js?v=f2e4a613";
+import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=f2e4a613";
+import { canvas, menuEl } from "./dom.js?v=f2e4a613";
+import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=f2e4a613";
+import { startFloorRun, beginRun } from "./run.js?v=f2e4a613";
+import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=f2e4a613";
+import { sizeRoomToCanvas } from "./draw.js?v=f2e4a613";
+
+// One-line faction motive, keyed by DUNGEONS[id].faction. Shown once per
+// dungeon per session, on first entering that dungeon's lobby (see
+// showDungeonLobby below) — the game never otherwise says why a faction
+// fights the player or the town.
+const FACTION_LORE = {
+  skeleton: "The Catacombs' dead don't invade — they've guarded a king who died a thousand years ago, and no one told them to stop.",
+  goblin:   "The goblins didn't dig the Mines for gold — they dug them for a home, and they raid the town for everything the rock won't give them.",
+  undead:   "The Crypt's dead don't rest, and neither does the Lich's hunger — every soul it takes buys it one more day undying.",
+};
+const metDungeonLobbies = new Set(); // dungeon ids the player has already seen the lore toast for, this session
 
 // Themed entry room with three tier doorways. Walk through one to start a run.
 export function showDungeonLobby(dungeonId) {
@@ -28,6 +39,7 @@ export function showDungeonLobby(dungeonId) {
   game.time = 0;
   game.nearbyNpc = null;
   game.townNpcs = [];
+  audio.setContext(dungeonId);
   sizeRoomToCanvas();
   room.setTheme(dungeonId);
   const lvl = (game.hero && game.hero.level) || 1;
@@ -43,6 +55,11 @@ export function showDungeonLobby(dungeonId) {
   spawnHeroInRoom();
   game.padTi = -1;
   game.padDwell = 0;
+  if (!metDungeonLobbies.has(dungeonId)) {
+    metDungeonLobbies.add(dungeonId);
+    const lore = FACTION_LORE[DUNGEONS[dungeonId].faction];
+    if (lore) townToast(lore, "#bdb3d6");
+  }
 }
 
 export function tierLocked(ti) {
@@ -82,6 +99,7 @@ export function showTownRoom(skipRaid) {
   game.state = "town";
   game.peaceful = true;
   game.raidMode = false;
+  audio.setContext("town");
   game.time = 0;
   game.nearbyNpc = null;
   sizeRoomToCanvas();
@@ -95,10 +113,54 @@ export function showTownRoom(skipRaid) {
 
 // ---- town NPC interactions ----
 
+// One characterizing line per NPC, shown once per NPC on the player's first
+// interact with them in a given session — the "[E] Talk to <name>" prompt
+// (js/game3d.js drawPeacefulOverlay) otherwise promises a conversation and
+// gets a stats/shop/quest panel with no greeting.
+const NPC_GREETINGS = {
+  barkeep:    "You look like you've seen some fights, friend — let's see what they left you with.",
+  innkeeper:  "Plenty of rooms upstairs, plenty of callings to try on — walk out of here whoever you like.",
+  trader:     "Fresh from the vaults below, priced fair — mind the sharp ones.",
+  questgiver: "The town's got more trouble than hands to spare for it — care to even the odds?",
+};
+const metNpcs = new Set(); // npc ids already greeted this session
+
+// A canvas-drawn townToast() would be invisible here: every open*Menu below
+// shows a covering .overlay (z-index 5, ~88% opaque) in the same tick, and
+// js/draw.js's update() stops calling particles.update() for as long as that
+// overlay's state (stats/menu/trader/quests) is active, freezing the toast's
+// fade at its very first frame underneath the overlay rather than playing it
+// out visibly. #npc-greet-toast (index.html) sits above every .overlay via
+// z-index instead, so the greeting reads the instant the NPC's panel opens.
+const greetToastEl = document.getElementById("npc-greet-toast");
+let greetToastTimer = null;
+function npcGreetToast(text) {
+  if (!greetToastEl) return;
+  clearTimeout(greetToastTimer);
+  greetToastEl.textContent = text;
+  greetToastEl.classList.remove("hidden");
+  greetToastEl.classList.remove("visible"); // restart the transition if one's mid-fade
+  // eslint-disable-next-line no-unused-expressions
+  greetToastEl.offsetHeight; // force a reflow so the next class add re-triggers the CSS transition
+  greetToastEl.classList.add("visible");
+  greetToastTimer = setTimeout(() => {
+    greetToastEl.classList.remove("visible");
+    greetToastTimer = setTimeout(() => greetToastEl.classList.add("hidden"), 300);
+  }, 3600);
+}
+
+function greetOnce(id) {
+  if (metNpcs.has(id)) return;
+  metNpcs.add(id);
+  const line = NPC_GREETINGS[id];
+  if (line) npcGreetToast(line);
+}
+
 const statsOverlayEl = document.getElementById("stats-overlay");
 
 export function openBarkeepMenu() {
   if (!game.hero) return;
+  greetOnce("barkeep");
   game.state = "stats";
   buildStatsOverlay(game.hero);
   statsOverlayEl.classList.remove("hidden");
@@ -111,6 +173,7 @@ export function closeStatsOverlay() {
 }
 
 export function openInnkeeperMenu() {
+  greetOnce("innkeeper");
   uiFlags.townSwitchClass = true;
   game.state = "menu";
   menuEl.classList.remove("hidden");
@@ -122,6 +185,7 @@ const traderEl = document.getElementById("trader");
 
 export function openTraderMenu() {
   if (!game.hero) return;
+  greetOnce("trader");
   game.state = "trader";
   buildTraderOverlay(game.hero);
   traderEl.classList.remove("hidden");
@@ -165,7 +229,7 @@ export function buildTraderOverlay(hero) {
         hero.gold -= price;
         hero.inventory.push(item);
         game.shopStock = game.shopStock.filter((s) => s !== item);
-        audio.coin();
+        audio.purchase();
         profile.save();
         buildTraderOverlay(hero);
       };
@@ -198,7 +262,7 @@ export function buildTraderOverlay(hero) {
         if (idx < 0) return;
         hero.inventory.splice(idx, 1);
         hero.gold = (hero.gold || 0) + value;
-        audio.coin();
+        audio.purchase();
         profile.save();
         buildTraderOverlay(hero);
       };
@@ -214,6 +278,8 @@ const questGiverEl = document.getElementById("questgiver");
 
 export function openQuestGiverMenu() {
   if (!game.hero) return;
+  greetOnce("questgiver");
+  audio.questTalk();
   game.state = "quests";
   buildQuestGiverOverlay(game.hero);
   questGiverEl.classList.remove("hidden");
@@ -329,14 +395,24 @@ export function switchClass(classKey) {
 
 // ---- raid warning ----
 
+// Why this faction, specifically, is at the walls tonight — one clause each,
+// distinct from FACTION_LORE's dungeon-lobby framing (that's the standing
+// motive; this is what's brought them topside for this one raid).
+const RAID_CLAUSE = {
+  skeleton: "Something's stirred the dead from their tombs.",
+  goblin:   "The goblins have come topside for plunder.",
+  undead:   "The Lich has sent its dead to feed on the town.",
+};
+
 export function showRaidWarning() {
   game.state = "raid-warn";
   game.raidFaction = choice(["goblin", "skeleton", "undead"]);
   const dungeonName = {
     goblin: "Goblin Mines", skeleton: "Catacombs", undead: "The Crypt",
   }[game.raidFaction];
+  const clause = RAID_CLAUSE[game.raidFaction] || "";
   document.getElementById("raid-text").textContent =
-    `Raiders from the ${dungeonName} are attacking the town!`;
+    `Raiders from the ${dungeonName} are attacking the town! ${clause}`;
   document.getElementById("raid-warning").classList.remove("hidden");
 }
 
