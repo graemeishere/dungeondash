@@ -14,6 +14,12 @@
     <canvas id="game3d"></canvas>
     <canvas id="game" width="960" height="576"></canvas>
 
+    <!-- NPC greeting, shown once per NPC per session on first interact. Lives
+         above every .overlay (z-index 5) so it's still legible the instant an
+         NPC's stats/shop/quest overlay covers the world canvas underneath it -
+         see js/town.js's npcGreetToast(). -->
+    <div id="npc-greet-toast" class="npc-greet hidden"></div>
+
     <div id="menu" class="overlay">
       <h1>DUNGEON&nbsp;DASH</h1>
       <p class="tagline">Pick a class and conquer the dungeon</p>

@@ -125,11 +125,35 @@ const NPC_GREETINGS = {
 };
 const metNpcs = new Set(); // npc ids already greeted this session
 
+// A canvas-drawn townToast() would be invisible here: every open*Menu below
+// shows a covering .overlay (z-index 5, ~88% opaque) in the same tick, and
+// js/draw.js's update() stops calling particles.update() for as long as that
+// overlay's state (stats/menu/trader/quests) is active, freezing the toast's
+// fade at its very first frame underneath the overlay rather than playing it
+// out visibly. #npc-greet-toast (index.html) sits above every .overlay via
+// z-index instead, so the greeting reads the instant the NPC's panel opens.
+const greetToastEl = document.getElementById("npc-greet-toast");
+let greetToastTimer = null;
+function npcGreetToast(text) {
+  if (!greetToastEl) return;
+  clearTimeout(greetToastTimer);
+  greetToastEl.textContent = text;
+  greetToastEl.classList.remove("hidden");
+  greetToastEl.classList.remove("visible"); // restart the transition if one's mid-fade
+  // eslint-disable-next-line no-unused-expressions
+  greetToastEl.offsetHeight; // force a reflow so the next class add re-triggers the CSS transition
+  greetToastEl.classList.add("visible");
+  greetToastTimer = setTimeout(() => {
+    greetToastEl.classList.remove("visible");
+    greetToastTimer = setTimeout(() => greetToastEl.classList.add("hidden"), 300);
+  }, 3600);
+}
+
 function greetOnce(id) {
   if (metNpcs.has(id)) return;
   metNpcs.add(id);
   const line = NPC_GREETINGS[id];
-  if (line) townToast(line, "#d8cfee");
+  if (line) npcGreetToast(line);
 }
 
 const statsOverlayEl = document.getElementById("stats-overlay");

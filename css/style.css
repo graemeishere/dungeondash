@@ -299,6 +299,32 @@ body {
 .inv-tooltip-stat.better { color: #6fce6f; }
 .inv-tooltip-stat.worse  { color: #e8484f; }
 
+/* NPC greeting toast (js/town.js's npcGreetToast()). Fixed + above every
+   .overlay (z-index 5) and .inv-tooltip (200) so it stays legible the instant
+   an NPC's stats/shop/quest overlay opens over the world canvas underneath -
+   the overlay's own opacity would otherwise bury a canvas-drawn toast. */
+.npc-greet {
+  position: fixed;
+  left: 50%;
+  top: 10%;
+  transform: translate(-50%, -8px);
+  max-width: min(480px, 84vw);
+  background: #1a1626;
+  border: 2px solid #443a63;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  color: #d8cfee;
+  text-align: center;
+  line-height: 1.5;
+  z-index: 250;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.npc-greet.hidden { display: none; }
+.npc-greet.visible { opacity: 1; transform: translate(-50%, 0); }
+
 /* ---- Hero Hub ---- */
 #hub-header {
   display: flex;
