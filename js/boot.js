@@ -60,9 +60,16 @@ document.getElementById("btn-onboarding-done").addEventListener("click", () => {
 });
 
 // ---- settings (volume) ----
+// Four sliders per docs/design/audio-spec.md §4.1: Master, SFX, Music,
+// Ambience. Master keeps its legacy home in profile.data.settings.volume;
+// the other three live in the audio module's own persisted settings
+// (localStorage "dd-audio-settings", written by each set*Volume call).
 
 function openSettings() {
   document.getElementById("settings-volume").value = Math.round((profile.data.settings.volume ?? 0.8) * 100);
+  document.getElementById("settings-sfx").value = Math.round(audio.getSfxVolume() * 100);
+  document.getElementById("settings-music").value = Math.round(audio.getMusicVolume() * 100);
+  document.getElementById("settings-ambience").value = Math.round(audio.getAmbienceVolume() * 100);
   document.getElementById("settings").classList.remove("hidden");
 }
 document.getElementById("btn-menu-settings").addEventListener("click", openSettings);
@@ -75,6 +82,55 @@ document.getElementById("settings-volume").addEventListener("input", (e) => {
   audio.setMasterVolume(v);
   profile.data.settings.volume = v;
   profile.save();
+});
+document.getElementById("settings-sfx").addEventListener("input", (e) => {
+  audio.setSfxVolume(Number(e.target.value) / 100);
+});
+document.getElementById("settings-music").addEventListener("input", (e) => {
+  audio.setMusicVolume(Number(e.target.value) / 100);
+});
+document.getElementById("settings-ambience").addEventListener("input", (e) => {
+  audio.setAmbienceVolume(Number(e.target.value) / 100);
+});
+
+// ---- menu hover / confirm / back cues ----
+// The audio spec calls these the quietest, most-frequent cues in the roster,
+// so they're deliberately sparse: hover fires once per pointer entry into any
+// enabled button/card; confirm only on buttons that commit to something
+// (start/resume a run, accept, fight); back only on close/cancel-flavored
+// buttons. Plain "open a panel" clicks stay silent, and buttons with their
+// own richer cue (Buy/Sell -> purchase(), equip/unequip) are not listed.
+const MENU_CONFIRM_IDS = new Set([
+  "btn-onboarding-done", "btn-again", "btn-continue", "btn-hub-continue",
+  "btn-descend", "btn-fight-back", "btn-accept",
+  "btn-host", "btn-join", "btn-hub-host", "btn-hub-join",
+]);
+const MENU_BACK_IDS = new Set([
+  "btn-settings-close", "btn-stats-close", "btn-trader-close",
+  "btn-quest-close", "btn-inv-close", "btn-lobby-back", "btn-flee",
+]);
+document.addEventListener("click", (e) => {
+  const el = e.target.closest && e.target.closest("button, .class-card");
+  if (!el || el.disabled) return;
+  if (MENU_CONFIRM_IDS.has(el.id)) audio.menuConfirm();
+  else if (MENU_BACK_IDS.has(el.id)) audio.menuBack();
+  // picking a class commits to it (starts a run / switches class); the
+  // level-up cards are excluded — mid-combat, and the levelup jingle already
+  // owns that moment
+  else if (el.classList.contains("class-card") && !el.classList.contains("upgrade-card")) audio.menuConfirm();
+});
+// Hover cue via delegation: pointerenter doesn't bubble, so track the last
+// hovered control through pointerover/pointerout instead. Touch never hovers.
+let hoveredMenuEl = null;
+document.addEventListener("pointerover", (e) => {
+  if (e.pointerType === "touch") return;
+  const el = e.target.closest && e.target.closest("button, .class-card");
+  if (!el || el.disabled || el === hoveredMenuEl) return;
+  hoveredMenuEl = el;
+  audio.menuHover();
+});
+document.addEventListener("pointerout", (e) => {
+  if (hoveredMenuEl && !hoveredMenuEl.contains(e.relatedTarget)) hoveredMenuEl = null;
 });
 
 

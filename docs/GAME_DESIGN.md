@@ -146,7 +146,8 @@ mobile) to interact. Exit via the top door → world map.
 ### Town raids
 On ~25% of town arrivals a **raid warning** appears: **Fight Back** or **Flee to Map**. Fighting
 back drops you into a **town-themed mini-dungeon** (`buildRaidDungeon`): one floor, three rooms
-(`combat, combat, boss`) using the raiding faction's enemies, boss "RAID CAPTAIN". Clearing it (or
+(`combat, combat, boss`) using the raiding faction's enemies, led by a per-faction raid boss
+("RISEN MARSHAL" / "PLUNDER BOSS" / "CARRION ENVOY" for skeleton/goblin/undead). Clearing it (or
 "Play Again" from the result) returns you to the town.
 
 ---

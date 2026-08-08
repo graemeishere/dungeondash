@@ -82,7 +82,9 @@ export function spawnTownNpcs() {
     { id: "barkeep",    label: "Barkeep",     sprite: "npcBarkeep",    interact: openBarkeepMenu },
     { id: "innkeeper",  label: "Innkeeper",   sprite: "npcInnkeeper",  interact: openInnkeeperMenu },
     { id: "trader",     label: "Trader",      sprite: "npcTrader",     interact: openTraderMenu },
-    { id: "questgiver", label: "Quest Giver", sprite: "npcQuestGiver", interact: openQuestGiverMenu },
+    // sprite keys are generated as "npc" + capitalized kind (js/sprites.js), so
+    // "questgiver" yields "npcQuestgiver" — lowercase g, unlike the label
+    { id: "questgiver", label: "Quest Giver", sprite: "npcQuestgiver", interact: openQuestGiverMenu },
   ];
   return defs.map((d, i) => {
     const npc = { ...d, x: WIDTH * slots[i], y, r: 14, bob: Math.random() * Math.PI * 2 };
@@ -337,7 +339,7 @@ export function buildQuestGiverOverlay(hero) {
       btn.disabled = !canAfford;
       if (!canAfford) btn.title = "Not enough gold";
       btn.onclick = () => {
-        if (P.abandonQuest(q.id, hero)) buildQuestGiverOverlay(hero);
+        if (P.abandonQuest(q.id, hero)) { audio.menuBack(); buildQuestGiverOverlay(hero); }
       };
       actions.appendChild(btn);
       card.appendChild(actions);
@@ -367,7 +369,7 @@ export function buildQuestGiverOverlay(hero) {
       btn.disabled = full;
       if (full) btn.title = `Max ${P.ACTIVE_CAP} active quests`;
       btn.onclick = () => {
-        if (P.acceptQuest(def.id)) buildQuestGiverOverlay(hero);
+        if (P.acceptQuest(def.id)) { audio.menuConfirm(); buildQuestGiverOverlay(hero); }
       };
       actions.appendChild(btn);
       card.appendChild(actions);
@@ -404,6 +406,18 @@ const RAID_CLAUSE = {
   undead:   "The Lich has sent its dead to feed on the town.",
 };
 
+// Who leads the raid, per faction — extends decision 13's per-floor bossName
+// pattern to the raid's single floor. Each name answers its faction's
+// RAID_CLAUSE above (stirred dead need marshaling; plunder needs a boss; the
+// Lich sends an envoy) and deliberately shares no name with the ELITE_NAMES
+// pools or the dungeon bosses — the raid boss used to be hardcoded
+// "RAID CAPTAIN", colliding exactly with a goblin elite-room name.
+const RAID_BOSS_NAMES = {
+  skeleton: "RISEN MARSHAL",
+  goblin:   "PLUNDER BOSS",
+  undead:   "CARRION ENVOY",
+};
+
 export function showRaidWarning() {
   game.state = "raid-warn";
   game.raidFaction = choice(["goblin", "skeleton", "undead"]);
@@ -438,7 +452,7 @@ function buildRaidDungeon(faction) {
     floors: [{
       name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds,
       plan: ["combat", "combat", "boss"], sideRooms: false,
-      bossDmg: topFloor.bossDmg, bossName: "RAID CAPTAIN",
+      bossDmg: topFloor.bossDmg, bossName: RAID_BOSS_NAMES[faction] || "RAID WARLEADER",
     }],
     tiers: src.tiers,
   };

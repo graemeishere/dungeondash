@@ -106,25 +106,39 @@ attribution).
 ## Code layout
 
 ```
-index.html      page shell, DOM overlays, 3D boot
+index.html      page shell, DOM overlays, importmap, module boot
 css/style.css   layout and menu styling
-js/util.js      constants and math helpers
-js/sprites.js   procedural pixel-art generation (billboards + UI)
-js/audio.js     Web Audio sound effects
+js/boot.js      composition root: DOM wiring + the boot sequence (the only
+                module that runs code at import time)
+js/boot3d.js    3D boot: creates the renderer + character manager
+js/runtime.js   late-bound handles to the async-loaded 3D systems
+js/env.js       URL-flag parsing (?dev, ?floors, ...)
+js/util.js      constants, room sizing and math helpers
+js/dom.js       the DOM nodes more than one module touches
+js/state.js     the shared `game` state object, DUNGEONS table, mid-run save
+js/run.js       run lifecycle: start/generate/gate/advance/end a run
+js/floor.js     floor generator: rooms + corridors on one tile grid
+js/room.js      the live room/floor: tile grid, collision, themes
+js/entities.js  player classes, enemies, bosses, projectiles, pickups
+js/items.js     gear, rarities, inventory data
+js/stats.js     hero attributes and derived stats
+js/profile.js   persistent heroes, quests and save data
+js/draw.js      the frame: simulation update, draw dispatch, rAF loop
+js/hud.js       in-game HUD (screen-space overlay)
+js/overlays.js  DOM overlays: hub, level-up, inventory, class cards, lobby
+js/town.js      town + dungeon lobbies, NPC menus, raid/finale set-pieces
+js/worldmap.js  the world map screen (2D screen-space)
 js/input.js     keyboard + mouse + touch state
+js/sprites.js   procedural pixel-art generation (billboards + UI)
+js/audio.js     synthesized SFX + vendored music/ambience, 4-bus mix graph
+js/particles.js effect triggers bridged into fx3d + damage-number data
 js/render3d.js  three.js dungeon renderer (instanced Kenney kit)
 js/char3d.js    KayKit character rigs + animation clips
 js/fx3d.js      3D combat effects (particles, orbs, rings, swing trails)
 js/game3d.js    the 3D view driver: entities -> models/billboards, overlays
-js/particles.js effect triggers bridged into fx3d + damage-number data
-js/room.js      room generation, tile grid, collision
-js/entities.js  player classes, skeletons, projectiles, pickups
-js/items.js     gear, rarities, inventory data
-js/stats.js     hero attributes and derived stats
-js/profile.js   persistent heroes and save data
-js/hud.js       in-game HUD (screen-space overlay)
+js/decor3d.js   deterministic room-decoration planner
+js/coop.js      co-op hosting/joining + host/guest message handlers
 js/net.js       WebRTC pairing, remote input, world snapshot sync
-js/game.js      state machine, main loop, wiring
 ```
 
 ## Next steps (toward the design brief)

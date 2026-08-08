@@ -308,12 +308,15 @@ export function endRun(won) {
     if (won) game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
     game.hero.kills = (game.hero.kills || 0) + game.kills;
     if (!won) game.hero.deaths = (game.hero.deaths || 0) + 1;
+    // clearDungeon = every floor cleared, i.e. the run was won. bossKill is
+    // deliberately NOT passed here — it credits at the moment the final
+    // floor's boss dies (Boss.die in entities.js), which is a genuinely
+    // earlier event than taking the stairs out.
     const clearedDungeon = won && game.dungeonId !== "townRaid" ? game.dungeonId : null;
     profile.progressQuests({
       kills: game.kills,
       killsByFaction: game.killsByFaction,
       won,
-      bossKill: clearedDungeon,
       clearDungeon: clearedDungeon,
       repelRaid: (won && game.raidMode) ? 1 : 0,
     });

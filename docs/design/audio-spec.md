@@ -181,7 +181,7 @@ events, needs a split).
 | Run lose | COVERED | `lose()` | sfxUI |
 | Boss slam **telegraph onset** | **SILENT** | see below | sfxWorld |
 | Player/teammate goes downed (co-op) | **SILENT** | see below | sfxWorld |
-| Low-HP state | **SILENT** | no low-HP system exists at all (visual or audio) — flagging for `systems-design`/`ux-ui` that this cue has no state to hook until one exists | sfxUI |
+| Low-HP state | **SILENT** | cue still unbuilt, but the state now exists (Phase 5): gate on `player.lowHp` / `player.lowHpSince`, threshold `LOW_HP_FRAC` in `js/entities.js` — see below | sfxUI |
 | Floor transition (stairs taken) | **SILENT** | see below | sfxUI |
 | Quest completion | **SILENT** | see below | sfxUI |
 | Quest-giver interaction (talk) | **SILENT** | see below | sfxUI |
@@ -232,13 +232,14 @@ triangle tone (`440→880 Hz`) covers all three.
   Suggest a falling two-tone descent an octave lower than `hurt()`'s register, with
   a longer decay (~0.3–0.4s) so it's audibly heavier without becoming a music-length
   event.
-- **Low-HP state.** No low-HP system exists yet (confirmed no low/critical-HP
-  concept anywhere in `js/` per the audit) — this row cannot be built as a one-shot
-  because it's a *sustained* state, not an event. If/when `systems-design` defines
-  a low-HP threshold, the audio treatment should be a periodic low heartbeat-style
-  pulse (soft sine, low register, ~1 pulse/second) gated on/off by HP crossing the
-  threshold, not a repeating one-shot fired every frame. Flagging the dependency
-  rather than speccing sound for a state that doesn't exist yet.
+- **Low-HP state.** ~~No low-HP system exists yet~~ *Phase 5 update: the state
+  now exists.* `systems-design` defined the threshold as ≤35% of max HP
+  (`LOW_HP_FRAC`, `js/entities.js`): `player.lowHp` is the sustained boolean to
+  gate a looped/periodic treatment on each frame, and `player.lowHpSince`
+  (game.time on entry, -1 while not low) gives the rising edge. The audio
+  treatment itself is still unbuilt and should be a periodic low heartbeat-style
+  pulse (soft sine, low register, ~1 pulse/second) gated on/off by the state,
+  not a repeating one-shot fired every frame.
 - **Floor transition (stairs taken).** Trigger at `reachStairs()`
   (`game.js:486-496`). Sonic character: a short **descending** (going deeper)
   multi-note sweep, distinct from both `door()`-split cues and `levelup()` — 3 notes

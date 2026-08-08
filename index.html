@@ -223,9 +223,18 @@
          on top of whatever screen is behind it. -->
     <div id="settings" class="overlay hidden">
       <h1 class="small">SETTINGS</h1>
+      <!-- Four sliders per docs/design/audio-spec.md §4.1: Master, SFX, Music,
+           Ambience — each a [0,1] multiplier on its bus. Zero on a slider IS
+           mute; the spec wants no separate mute toggle. -->
       <div class="hint">
-        <label for="settings-volume">Sound Volume</label><br>
-        <input type="range" id="settings-volume" min="0" max="100" step="1">
+        <label for="settings-volume">Master Volume</label><br>
+        <input type="range" id="settings-volume" min="0" max="100" step="1"><br>
+        <label for="settings-sfx">Sound Effects</label><br>
+        <input type="range" id="settings-sfx" min="0" max="100" step="1"><br>
+        <label for="settings-music">Music</label><br>
+        <input type="range" id="settings-music" min="0" max="100" step="1"><br>
+        <label for="settings-ambience">Ambience</label><br>
+        <input type="range" id="settings-ambience" min="0" max="100" step="1">
       </div>
       <button id="btn-settings-close" class="small-btn">Close</button>
     </div>

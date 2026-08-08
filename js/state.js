@@ -202,6 +202,13 @@ export const game = {
 
   get localPlayer() { return this.players[this.localIndex]; },
   enemies() { return this.skeletons; },
+  // Is the current floor the dungeon's last (the one whose boss chamber holds
+  // the dungeon's own named boss)? Used to tell "the dungeon's boss died"
+  // (bossKill quests) apart from earlier per-floor boss fights.
+  onFinalFloor() {
+    const d = DUNGEONS[this.dungeonId];
+    return !!d && this.floor >= d.floors.length - 1;
+  },
   floorCfg() { return dungeonFloorCfg(); },
   plan() { return dungeonFloorCfg().plan; },
   xpNext() { return 25 + (this.level - 1) * 15; },
