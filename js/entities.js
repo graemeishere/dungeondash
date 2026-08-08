@@ -1,11 +1,11 @@
-import { TILE, WIDTH, HEIGHT, angleDiff, angleTo, clamp, dist, rand, randi } from "./util.js?v=39980037";
-import { sprites } from "./sprites.js?v=39980037";
-import { audio } from "./audio.js?v=39980037";
-import { particles } from "./particles.js?v=39980037";
-import { room } from "./room.js?v=39980037";
-import { profile } from "./profile.js?v=39980037";
-import { deriveStats } from "./stats.js?v=39980037";
-import { INV_CAP, ITEM_RARITY, rollItem } from "./items.js?v=39980037";
+import { TILE, WIDTH, HEIGHT, angleDiff, angleTo, clamp, dist, rand, randi } from "./util.js?v=ec23b270";
+import { sprites } from "./sprites.js?v=ec23b270";
+import { audio } from "./audio.js?v=ec23b270";
+import { particles } from "./particles.js?v=ec23b270";
+import { room } from "./room.js?v=ec23b270";
+import { profile } from "./profile.js?v=ec23b270";
+import { deriveStats } from "./stats.js?v=ec23b270";
+import { INV_CAP, ITEM_RARITY, rollItem } from "./items.js?v=ec23b270";
 
 // Dormant ("inactive") skeletons wake when a player gets within this radius,
 // then play the awaken animation for this long before chasing.
@@ -19,6 +19,20 @@ const SKELETON_FADE_T = 0.7;     // opacity fade at the tail of the death
 // Heroes get the same dying phase: play the rig's Death clip, fade, then
 // dead (which is when the run actually ends, so the fall is visible).
 const PLAYER_DEATH_T = 2.0;
+
+// ---- low-HP threshold (Phase 5 systems decision) ----
+// A player is "low" at or below 35% of max HP. 35% rather than the genre's
+// usual 30% because HP pools here are tiny integers (Mage starts at 6): at
+// 30% the Mage would only read as low at exactly 1 HP, too late to act on,
+// while 35% puts every class at least one survivable hit inside the warning
+// (Mage 6 -> low at <=2, Rogue/Ranger 8 -> <=2, Warrior 12 -> <=4), and it
+// scales with maxHp as vitality/upgrades raise it.
+// Consumers (the future low-HP audio cue and HUD/vignette signal): gate
+// sustained treatments on `player.lowHp` each frame, and edge-detect entry
+// by watching `player.lowHpSince` change (game.time when the state was
+// entered; -1 while not low). Downed/dying/dead are their own, stronger
+// states — lowHp is false in all of them.
+export const LOW_HP_FRAC = 0.35;
 
 export const CLASSES = {
   warrior: {
@@ -163,6 +177,18 @@ export class Player {
     this.downed = false;   // co-op: waiting for a revive
     this.downT = 0;
     this.reviveP = 0;
+    this.lowHp = false;    // sustained low-HP state, see LOW_HP_FRAC above
+    this.lowHpSince = -1;  // game.time the state was entered; -1 while not low
+  }
+
+  // Recomputed once per frame (first thing in update()) rather than on every
+  // hp write, so heals/damage/revives/maxHp buffs all flow through one place.
+  updateLowHp(game) {
+    const low = this.alive() && this.hp > 0 && this.hp <= this.maxHp * LOW_HP_FRAC;
+    if (low !== this.lowHp) {
+      this.lowHp = low;
+      this.lowHpSince = low ? game.time : -1;
+    }
   }
 
   recompute() {
@@ -233,6 +259,7 @@ export class Player {
   }
 
   update(dt, game) {
+    this.updateLowHp(game);
     if (this.dead) return;
 
     // dying: hold still while the death animation plays out, then be dead
@@ -1180,6 +1207,21 @@ export class Boss extends Skeleton {
   die(game, attacker) {
     super.die(game, attacker);
     game.bossDefeated = true;
+    // bossKill quests credit here, at the kill itself: "the dungeon's boss"
+    // is the top floor's boss, and it can die without the run being won (the
+    // player can still fall before reaching the stairs). clearDungeon quests
+    // credit at endRun() instead, once every floor is actually behind you.
+    // townRaid is a synthetic dungeon, same exclusion endRun applies.
+    if (game.hero && game.dungeonId !== "townRaid" && game.onFinalFloor()) {
+      // completeQuest banks reward XP straight onto hero.xp, which works at
+      // endRun (it runs after hero.xp is synced) but mid-run would be
+      // clobbered by endRun's `hero.xp = game.xp` — so move any reward XP
+      // into the run's live counter, which also pays out level-ups now.
+      const xpBefore = game.hero.xp || 0;
+      profile.progressQuests({ bossKill: game.dungeonId });
+      const rewardXp = (game.hero.xp || 0) - xpBefore;
+      if (rewardXp > 0) { game.hero.xp = xpBefore; game.addXP(rewardXp); }
+    }
     game.shake = 12;
     particles.burst(this.x, this.y - 20, { count: 50, colors: ["#ffd14a", "#e9e6da", "#fff"], speed: 260, life: 1.0, gravity: 200 });
     if (game.hero && rollItem) {

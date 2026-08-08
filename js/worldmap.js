@@ -4,13 +4,13 @@
 // the real canvas pixel size (see drawMap below) so it fills the viewport at
 // any aspect ratio instead of letterboxing to a fixed room shape.
 
-import { audio } from "./audio.js?v=39980037";
-import { input } from "./input.js?v=39980037";
-import { profile } from "./profile.js?v=39980037";
-import { dist } from "./util.js?v=39980037";
-import { game, DUNGEONS } from "./state.js?v=39980037";
-import { hideAllOverlays, showHub, backToMenu } from "./overlays.js?v=39980037";
-import { showTownRoom, showDungeonLobby, startFinale } from "./town.js?v=39980037";
+import { audio } from "./audio.js?v=ec23b270";
+import { input } from "./input.js?v=ec23b270";
+import { profile } from "./profile.js?v=ec23b270";
+import { dist } from "./util.js?v=ec23b270";
+import { game, DUNGEONS } from "./state.js?v=ec23b270";
+import { hideAllOverlays, showHub, backToMenu } from "./overlays.js?v=ec23b270";
+import { showTownRoom, showDungeonLobby, startFinale } from "./town.js?v=ec23b270";
 
 export function showMap() {
   hideAllOverlays();

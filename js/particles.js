@@ -1,5 +1,5 @@
-import { TILE } from "./util.js?v=39980037";
-import { rt } from "./runtime.js?v=39980037";
+import { TILE } from "./util.js?v=ec23b270";
+import { rt } from "./runtime.js?v=ec23b270";
 
 const texts = [];
 

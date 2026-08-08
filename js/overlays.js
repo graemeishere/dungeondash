@@ -2,23 +2,23 @@
 // Every DOM overlay: the hero hub, the barkeep sheet, the level-up picker, the
 // inventory, the class-select cards and the co-op lobby panel.
 
-import { audio } from "./audio.js?v=39980037";
-import { CLASSES, Player, UPGRADES } from "./entities.js?v=39980037";
-import { input } from "./input.js?v=39980037";
-import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=39980037";
-import { net } from "./net.js?v=39980037";
-import { particles } from "./particles.js?v=39980037";
-import { profile } from "./profile.js?v=39980037";
-import { room } from "./room.js?v=39980037";
-import { sprites } from "./sprites.js?v=39980037";
-import { ATTRS, deriveStats } from "./stats.js?v=39980037";
-import { HEIGHT, TILE, WIDTH } from "./util.js?v=39980037";
-import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=39980037";
-import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=39980037";
-import { beginRun, resumeRun } from "./run.js?v=39980037";
-import { showMap } from "./worldmap.js?v=39980037";
-import { showTownRoom, switchClass } from "./town.js?v=39980037";
-import { hostWithClass, joinWithClass } from "./coop.js?v=39980037";
+import { audio } from "./audio.js?v=ec23b270";
+import { CLASSES, Player, UPGRADES } from "./entities.js?v=ec23b270";
+import { input } from "./input.js?v=ec23b270";
+import { ITEM_RARITY, compareItems, equip, itemStatLines, unequip } from "./items.js?v=ec23b270";
+import { net } from "./net.js?v=ec23b270";
+import { particles } from "./particles.js?v=ec23b270";
+import { profile } from "./profile.js?v=ec23b270";
+import { room } from "./room.js?v=ec23b270";
+import { sprites } from "./sprites.js?v=ec23b270";
+import { ATTRS, deriveStats } from "./stats.js?v=ec23b270";
+import { HEIGHT, TILE, WIDTH } from "./util.js?v=ec23b270";
+import { menuEl, resultEl, levelupEl, upgradeCardsEl, continueBtn, hubEl } from "./dom.js?v=ec23b270";
+import { game, DUNGEONS, uiFlags, usableSave } from "./state.js?v=ec23b270";
+import { beginRun, resumeRun } from "./run.js?v=ec23b270";
+import { showMap } from "./worldmap.js?v=ec23b270";
+import { showTownRoom, switchClass } from "./town.js?v=ec23b270";
+import { hostWithClass, joinWithClass } from "./coop.js?v=ec23b270";
 
 export function refreshContinueButton() {
   const save = usableSave();

@@ -2,19 +2,19 @@
 // The walkable town and dungeon-lobby rooms, the four NPCs and their menus, and
 // the raid / finale set-pieces that are built out of the town.
 
-import { audio } from "./audio.js?v=39980037";
-import { CLASSES } from "./entities.js?v=39980037";
-import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=39980037";
-import { particles } from "./particles.js?v=39980037";
-import { profile } from "./profile.js?v=39980037";
-import { room } from "./room.js?v=39980037";
-import { sprites } from "./sprites.js?v=39980037";
-import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=39980037";
-import { canvas, menuEl } from "./dom.js?v=39980037";
-import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=39980037";
-import { startFloorRun, beginRun } from "./run.js?v=39980037";
-import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=39980037";
-import { sizeRoomToCanvas } from "./draw.js?v=39980037";
+import { audio } from "./audio.js?v=ec23b270";
+import { CLASSES } from "./entities.js?v=ec23b270";
+import { INV_CAP, buyPrice, rollShopStock, sellPrice } from "./items.js?v=ec23b270";
+import { particles } from "./particles.js?v=ec23b270";
+import { profile } from "./profile.js?v=ec23b270";
+import { room } from "./room.js?v=ec23b270";
+import { sprites } from "./sprites.js?v=ec23b270";
+import { HEIGHT, WIDTH, choice, dist, updateView, view } from "./util.js?v=ec23b270";
+import { canvas, menuEl } from "./dom.js?v=ec23b270";
+import { game, DUNGEONS, TIER_REQ, uiFlags } from "./state.js?v=ec23b270";
+import { startFloorRun, beginRun } from "./run.js?v=ec23b270";
+import { buildStatsOverlay, hideAllOverlays, spawnHeroInRoom, rebaseLocalPlayer, refreshContinueButton, setMenuMode, showInvTooltip, hideInvTooltip } from "./overlays.js?v=ec23b270";
+import { sizeRoomToCanvas } from "./draw.js?v=ec23b270";
 
 // One-line faction motive, keyed by DUNGEONS[id].faction. Shown once per
 // dungeon per session, on first entering that dungeon's lobby (see
@@ -82,7 +82,9 @@ export function spawnTownNpcs() {
     { id: "barkeep",    label: "Barkeep",     sprite: "npcBarkeep",    interact: openBarkeepMenu },
     { id: "innkeeper",  label: "Innkeeper",   sprite: "npcInnkeeper",  interact: openInnkeeperMenu },
     { id: "trader",     label: "Trader",      sprite: "npcTrader",     interact: openTraderMenu },
-    { id: "questgiver", label: "Quest Giver", sprite: "npcQuestGiver", interact: openQuestGiverMenu },
+    // sprite keys are generated as "npc" + capitalized kind (js/sprites.js), so
+    // "questgiver" yields "npcQuestgiver" — lowercase g, unlike the label
+    { id: "questgiver", label: "Quest Giver", sprite: "npcQuestgiver", interact: openQuestGiverMenu },
   ];
   return defs.map((d, i) => {
     const npc = { ...d, x: WIDTH * slots[i], y, r: 14, bob: Math.random() * Math.PI * 2 };
@@ -337,7 +339,7 @@ export function buildQuestGiverOverlay(hero) {
       btn.disabled = !canAfford;
       if (!canAfford) btn.title = "Not enough gold";
       btn.onclick = () => {
-        if (P.abandonQuest(q.id, hero)) buildQuestGiverOverlay(hero);
+        if (P.abandonQuest(q.id, hero)) { audio.menuBack(); buildQuestGiverOverlay(hero); }
       };
       actions.appendChild(btn);
       card.appendChild(actions);
@@ -367,7 +369,7 @@ export function buildQuestGiverOverlay(hero) {
       btn.disabled = full;
       if (full) btn.title = `Max ${P.ACTIVE_CAP} active quests`;
       btn.onclick = () => {
-        if (P.acceptQuest(def.id)) buildQuestGiverOverlay(hero);
+        if (P.acceptQuest(def.id)) { audio.menuConfirm(); buildQuestGiverOverlay(hero); }
       };
       actions.appendChild(btn);
       card.appendChild(actions);
@@ -404,6 +406,18 @@ const RAID_CLAUSE = {
   undead:   "The Lich has sent its dead to feed on the town.",
 };
 
+// Who leads the raid, per faction — extends decision 13's per-floor bossName
+// pattern to the raid's single floor. Each name answers its faction's
+// RAID_CLAUSE above (stirred dead need marshaling; plunder needs a boss; the
+// Lich sends an envoy) and deliberately shares no name with the ELITE_NAMES
+// pools or the dungeon bosses — the raid boss used to be hardcoded
+// "RAID CAPTAIN", colliding exactly with a goblin elite-room name.
+const RAID_BOSS_NAMES = {
+  skeleton: "RISEN MARSHAL",
+  goblin:   "PLUNDER BOSS",
+  undead:   "CARRION ENVOY",
+};
+
 export function showRaidWarning() {
   game.state = "raid-warn";
   game.raidFaction = choice(["goblin", "skeleton", "undead"]);
@@ -438,7 +452,7 @@ function buildRaidDungeon(faction) {
     floors: [{
       name: "Town Square", kinds: f0.kinds, eliteKinds: f0.eliteKinds,
       plan: ["combat", "combat", "boss"], sideRooms: false,
-      bossDmg: topFloor.bossDmg, bossName: "RAID CAPTAIN",
+      bossDmg: topFloor.bossDmg, bossName: RAID_BOSS_NAMES[faction] || "RAID WARLEADER",
     }],
     tiers: src.tiers,
   };

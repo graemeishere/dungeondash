@@ -4,18 +4,18 @@
 // classic single-room generator/`?classic`; raids and the finale route
 // through here too now).
 
-import { audio } from "./audio.js?v=39980037";
-import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=39980037";
-import { generateFloor } from "./floor.js?v=39980037";
-import { input } from "./input.js?v=39980037";
-import { net } from "./net.js?v=39980037";
-import { particles } from "./particles.js?v=39980037";
-import { profile } from "./profile.js?v=39980037";
-import { room } from "./room.js?v=39980037";
-import { TILE, choice, clamp, updateView } from "./util.js?v=39980037";
-import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=39980037";
-import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=39980037";
-import { sendRoomToGuest } from "./coop.js?v=39980037";
+import { audio } from "./audio.js?v=ec23b270";
+import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=ec23b270";
+import { generateFloor } from "./floor.js?v=ec23b270";
+import { input } from "./input.js?v=ec23b270";
+import { net } from "./net.js?v=ec23b270";
+import { particles } from "./particles.js?v=ec23b270";
+import { profile } from "./profile.js?v=ec23b270";
+import { room } from "./room.js?v=ec23b270";
+import { TILE, choice, clamp, updateView } from "./util.js?v=ec23b270";
+import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=ec23b270";
+import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=ec23b270";
+import { sendRoomToGuest } from "./coop.js?v=ec23b270";
 
 // Connected-floor run: explore a floor of small rooms joined by
 // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock
@@ -308,12 +308,15 @@ export function endRun(won) {
     if (won) game.hero.gold = Math.max(0, (game.hero.gold || 0) + game.gold);
     game.hero.kills = (game.hero.kills || 0) + game.kills;
     if (!won) game.hero.deaths = (game.hero.deaths || 0) + 1;
+    // clearDungeon = every floor cleared, i.e. the run was won. bossKill is
+    // deliberately NOT passed here — it credits at the moment the final
+    // floor's boss dies (Boss.die in entities.js), which is a genuinely
+    // earlier event than taking the stairs out.
     const clearedDungeon = won && game.dungeonId !== "townRaid" ? game.dungeonId : null;
     profile.progressQuests({
       kills: game.kills,
       killsByFaction: game.killsByFaction,
       won,
-      bossKill: clearedDungeon,
       clearDungeon: clearedDungeon,
       repelRaid: (won && game.raidMode) ? 1 : 0,
     });

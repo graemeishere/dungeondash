@@ -6,8 +6,8 @@
 //
 // Loaded after js/boot.js, matching the old ordering (game code first, then the
 // 3D layer attaching itself to it).
-import { DungeonRenderer } from "./render3d.js?v=39980037";
-import { rt } from "./runtime.js?v=39980037";
+import { DungeonRenderer } from "./render3d.js?v=ec23b270";
+import { rt } from "./runtime.js?v=ec23b270";
 
 const c3 = document.getElementById("game3d");
 const dr = new DungeonRenderer(c3);
@@ -22,7 +22,7 @@ dr.resize(c3.width || window.innerWidth, c3.height || window.innerHeight);
 // what kills the billboard flash. (The decor kit itself resolves fast; it was
 // the serialized char load after it that was slow.)
 (async () => {
-  const m = await import("./char3d.js?v=39980037");
+  const m = await import("./char3d.js?v=ec23b270");
   const mgr = new m.CharacterManager(dr.scene, new m.CharacterFactory());
   // expose the swappable mappings to the game
   rt.char3d = { classModelKey: m.classModelKey, enemyModelKey: m.enemyModelKey, RIG: m.RIG };
@@ -38,6 +38,6 @@ dr.loadItems().catch((e) => console.error("3D items load failed:", e)); // backg
 dr.loadProjectiles().catch((e) => console.error("3D projectiles load failed:", e));
 // 3D combat effects (particles); bridged from the particle system
 try {
-  const fx = await import("./fx3d.js?v=39980037");
+  const fx = await import("./fx3d.js?v=ec23b270");
   rt.fx3d = new fx.FX3D(dr.scene);
 } catch (e) { console.error("3D fx load failed:", e); }

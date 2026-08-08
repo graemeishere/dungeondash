@@ -13,7 +13,7 @@ export const params = new URLSearchParams(location.search);
 // ship; there is no build step to strip them, so the gate is a runtime one.
 //
 // A hostname allowlist rather than a build-stamped constant, because the two
-// fail in opposite directions. Testing "is the 39980037 token still literal"
+// fail in opposite directions. Testing "is the ec23b270 token still literal"
 // fails OPEN: if the deploy sed ever misses a file, the shipped build looks
 // un-stamped, reads as "not production", and quietly re-opens the exploit this
 // gate exists to close. An unrecognised hostname fails CLOSED. That is not a

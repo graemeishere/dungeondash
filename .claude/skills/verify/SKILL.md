@@ -54,13 +54,29 @@ both run in CI (`.github/workflows/room-checks.yml`, advisory-only for now):
   the stairs, town/lobby/map/hub/inventory, death and Play Again, raid,
   finale, save and resume, WebGL context loss, and the dev-flag gate.
 
-## Room navigation tricks
+## Floor / room navigation tricks
 
-- Jump to a specific room: `DD.game.floor = F; DD.game.roomIndex = I - 1;
-  DD.game.state = "transition"; DD.game.transitionPhase = "out";
-  DD.game.transitionT = 0.999;` — the transition machinery calls
-  advanceRoom() next frame (floor 1 of catacombs: index 1 = trap,
-  4 = treasure, 6 = boss).
+There is no in-place "jump to room I" — floors are connected room graphs
+(no roomIndex ordering), and the transition machinery calls `advanceFloor()`
+(js/run.js), which increments `game.floor` and generates a whole new floor.
+
+- Jump to floor F: `DD.game.floor = F - 1; DD.game.state = "transition";
+  DD.game.transitionPhase = "out"; DD.game.transitionT = 0.999;` — next
+  frame the fade-out completes and `advanceFloor()` lands you on floor F
+  with a fresh random layout.
+- Reach a specific room type on the already-loaded floor: teleport the
+  player into it (layouts are random, so find the room by type):
+
+  ```js
+  const rm = DD.room.rooms.find((r) => r.type === "boss"); // or "trap",
+  const pl = DD.game.players[0];        // "treasure", "elite", "shrine", ...
+  pl.x = (rm.rect.x + rm.rect.w / 2) * DD.TILE;
+  pl.y = (rm.rect.y + rm.rect.h / 2) * DD.TILE;
+  ```
+
+  Gated rooms (combat/elite/boss) lock their doors and wake their enemies
+  once the player is a tile inside the rect — teleporting to the room centre
+  triggers that on the next gating tick, same as walking in.
 - Clear a room: empty `DD.game.spawnQueue`, then for each skeleton set
   `s.state = "chase"` (dormant ones ignore damage) and call
   `s.damage(9999, s.x, s.y, DD.game)`.

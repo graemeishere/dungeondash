@@ -5,10 +5,10 @@
 // object rather than a set of exported bindings because importers assign to its
 // fields constantly, and an imported binding is read-only.
 
-import { CLASSES } from "./entities.js?v=39980037";
-import { profile } from "./profile.js?v=39980037";
-import { dist } from "./util.js?v=39980037";
-import { menuEl, resultEl, levelupEl, hubEl } from "./dom.js?v=39980037";
+import { CLASSES } from "./entities.js?v=ec23b270";
+import { profile } from "./profile.js?v=ec23b270";
+import { dist } from "./util.js?v=ec23b270";
+import { menuEl, resultEl, levelupEl, hubEl } from "./dom.js?v=ec23b270";
 
 const SAVE_KEY = "dungeondash_save_v1";
 
@@ -202,6 +202,13 @@ export const game = {
 
   get localPlayer() { return this.players[this.localIndex]; },
   enemies() { return this.skeletons; },
+  // Is the current floor the dungeon's last (the one whose boss chamber holds
+  // the dungeon's own named boss)? Used to tell "the dungeon's boss died"
+  // (bossKill quests) apart from earlier per-floor boss fights.
+  onFinalFloor() {
+    const d = DUNGEONS[this.dungeonId];
+    return !!d && this.floor >= d.floors.length - 1;
+  },
   floorCfg() { return dungeonFloorCfg(); },
   plan() { return dungeonFloorCfg().plan; },
   xpNext() { return 25 + (this.level - 1) * 15; },
