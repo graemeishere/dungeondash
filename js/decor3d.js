@@ -20,6 +20,18 @@ const FLOOR = 0, WALL = 1, DOOR = 2, OBSTACLE = 3;
 
 export const PIECE_DIR = "KayKit Dungeon Remastered/Assets/gltf/";
 
+// The floor exit is a stairwell going DOWN, not a flight going up. The piece
+// is dropped exactly one storey (STAIR_SINK x wallH) so its top step lands
+// flush with the floor and the rest of the flight runs down into the hole cut
+// out of the floor above it (see stairHoles in the floor pass).
+//
+// stairs_walled rather than the taller stairs_wide specifically because it is
+// 4.0u tall — exactly wallH — so "sink by one storey" lands the top step dead
+// level with the floor. stairs_wide is 5.1u, taller than the walls themselves,
+// which is why it used to read as a solid block rising out of the ground.
+const STAIR_PIECE = "stairs_walled";
+const STAIR_SINK = -1;
+
 // mulberry32 — identical to util.js's makeRng; kept local so the decor
 // planner stays importable on its own (dev/room-checks.mjs imports it directly).
 export function makeRng(seed) {
@@ -324,6 +336,30 @@ export function planRoomDecor(desc) {
   // is scoped to single-room mode; floors get their own door pass below.
   const floorMode = !!desc.rooms;
 
+  // The stairwell opening. The descending staircase (pass 9) is dropped a
+  // storey below the floor, so the floor tiles over it have to go or it would
+  // be buried under solid ground. Only the *visual* tile is skipped — the
+  // tiles grid is untouched, so the cell stays walkable and room.onStairs
+  // still fires when the player steps on to descend. These cells also join
+  // the exclusion mask, because a crate stack parked on the floor exit reads
+  // as a blocked way out.
+  const stairHoles = new Set();
+  if (floorMode) {
+    const cutHole = (sx, sy) => {
+      for (let dy = 0; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const i = idx(sx + dx, sy + dy);
+          if (!dx && !dy) stairHoles.add(i);
+          mask.add(i);
+        }
+      }
+    };
+    if (desc.stairs) cutHole(desc.stairs.x, desc.stairs.y);
+    for (const r of (desc.rooms || [])) {
+      if (r.type === "stairs") cutHole(Math.round(r.rect.x + r.rect.w / 2) - 1, Math.round(r.rect.y + r.rect.h / 2) - 1);
+    }
+  }
+
   // ---- pass 1: aisle roll + the room's composition intent ------------------
   const wantAisle = !floorMode && doorXs.length &&
     (desc.roomType === "treasure" || rng() < (pal.aisleChance || 0));
@@ -402,36 +438,15 @@ export function planRoomDecor(desc) {
       }
     }
   }
-  // trap rooms: grates form their own cluster near the middle band. Floor
-  // mode has many rooms per desc (desc.roomType is the whole grid's literal
-  // "floor"), so this keys off each room's OWN type via roomAt — the same
-  // per-room lookup tablesAt already uses above — and scopes the search to
-  // that room's own rect rather than the whole floor.
+  // Grates go exactly where the spikes are. The blades rise through the floor
+  // at desc.spikes cells (render3d instances floor_tile_big_spikes there), so
+  // those are the cells that have to read as a trap. Grates used to be
+  // scattered at random cells in a trap room instead, and because spike cells
+  // sit in the decor exclusion mask above, a grate could never land on one —
+  // the two were mutually exclusive by construction, and the blades appeared
+  // to erupt out of unbroken stone.
   const grate = new Set();
-  if (floorRooms) {
-    for (const r of floorRooms) {
-      if (r.type !== "trap") continue;
-      const R = r.rect;
-      for (let t = 0, made = 0; t < 20 && made < 2; t++) {
-        const x = R.x + 1 + Math.floor(rng() * Math.max(1, R.w - 2));
-        const y = R.y + 1 + Math.floor(rng() * Math.max(1, R.h - 2));
-        if (!patchOk(x, y) || patch.has(idx(x, y)) || grate.has(idx(x, y))) continue;
-        grate.add(idx(x, y));
-        if (patchOk(x + 1, y) && !patch.has(idx(x + 1, y))) grate.add(idx(x + 1, y));
-        if (patchOk(x, y + 1) && !patch.has(idx(x, y + 1)) && rng() < 0.5) grate.add(idx(x, y + 1));
-        made++;
-      }
-    }
-  } else if (desc.roomType === "trap") {
-    for (let t = 0, made = 0; t < 20 && made < 2; t++) {
-      const x = 2 + Math.floor(rng() * (w - 4)), y = 2 + Math.floor(rng() * (h - 4));
-      if (!patchOk(x, y) || patch.has(idx(x, y)) || grate.has(idx(x, y))) continue;
-      grate.add(idx(x, y));
-      if (patchOk(x + 1, y) && !patch.has(idx(x + 1, y))) grate.add(idx(x + 1, y));
-      if (patchOk(x, y + 1) && !patch.has(idx(x, y + 1)) && rng() < 0.5) grate.add(idx(x, y + 1));
-      made++;
-    }
-  }
+  for (const s of (desc.spikes || [])) grate.add(idx(s.tx, s.ty));
 
   // ---- pass 3: floor emission (fixed scan order) ---------------------------
   for (let y = 0; y < h; y++) {
@@ -439,6 +454,7 @@ export function planRoomDecor(desc) {
       const t = at(x, y);
       if (t === WALL) continue;
       const i = idx(x, y);
+      if (stairHoles.has(i)) continue; // stairwell: no floor over the descent
       if (t === DOOR || t === OBSTACLE) {
         floors.push({ piece: pal.base, gx: x, gy: y, rot: 0 });
         continue;
@@ -783,14 +799,18 @@ export function planRoomDecor(desc) {
         cells: (d.cells || []).map((c) => ({ gx: c.x, gy: c.y })),
       });
     }
-    // staircase at the boss chamber's back-centre; the player walks onto it to
+    // Staircase at the boss chamber's back-centre; the player walks onto it to
     // descend once the boss falls. desc.stairs is the cell (from generateFloor).
+    // It reads as going DOWN: the floor tile under it is omitted (see the
+    // stairHoles set consumed by the floor pass) so there's an opening, and the
+    // piece is dropped a storey and turned to face back into the room, so the
+    // top step meets the floor and the flight runs away below it.
     if (desc.stairs) {
-      props.push({ piece: "stairs_wide", gx: desc.stairs.x, gy: desc.stairs.y, rot: 0 });
+      props.push({ piece: STAIR_PIECE, gx: desc.stairs.x, gy: desc.stairs.y, rot: 0, up: STAIR_SINK });
     }
     for (const r of desc.rooms) {
       if (r.type === "stairs") {
-        props.push({ piece: "stairs_wide", gx: r.rect.x + r.rect.w / 2 - 0.5, gy: r.rect.y + r.rect.h / 2 - 0.5, rot: 0 });
+        props.push({ piece: STAIR_PIECE, gx: r.rect.x + r.rect.w / 2 - 0.5, gy: r.rect.y + r.rect.h / 2 - 0.5, rot: 0, up: STAIR_SINK });
       }
     }
   }

@@ -273,13 +273,25 @@ triangle tone (`440→880 Hz`) covers all three.
 Per Decision 6, these ship as vendored CC0 files (matching the KayKit/Kenney
 precedent already in the repo), not synthesized. This is a sourcing shopping list.
 
+> **Direction change (playtest).** The mood guidance below was rewritten after a
+> playtest of the shipped build: the original brief asked for cold/ominous/dread,
+> which does not match the game the art actually became — bright, chunky, cartoon
+> KayKit characters in a readable low-poly dungeon. The target now is **whimsical
+> storybook adventure**: light and playful, with menace played as *mischief*
+> rather than horror. Think plucked strings, celesta/glockenspiel, pizzicato,
+> light woodwind, hand percussion; sparing low brass or organ as a wink rather
+> than a threat. The per-context contrast is unchanged — town stays the warmest,
+> the crypt stays the most subdued — the whole scale just moves away from dread.
+> The tracks currently in `assets/audio/music/` still follow the *old* brief and
+> are the ones to replace.
+
 | Context | Track count | Target length | Loop structure | Tempo/instrumentation/mood | Ambience |
 |---|---|---|---|---|---|
-| Catacombs (dungeon theme 1) | 1 music track | 90–150s | Seamless loop (single loop point, no intro/outro split needed at this scope) | Slow, sparse, low-register — sustained drones/pads, occasional low strings or choir stab, minimal percussion. Mood: cold, ancient, faintly ominous. ~60–70 BPM feel if pulse is present at all. | Separate always-on bed on `ambience` bus: distant dripping water, faint wind, occasional stone-settling creak. Independent loop from the music track (different length, no phase-locking needed since they're on separate buses). |
-| Goblin mines (dungeon theme 2) | 1 music track | 90–150s | Seamless loop | Slightly more rhythmic than catacombs — light percussion (wood/metal clank), lower strings or plucked instrument motif, mood: scrappy, industrious-but-hostile. ~90–100 BPM feel. | Separate ambience bed: pickaxe/metal clank echoes, dripping, distant guttural chatter (non-verbal, textural). |
-| Crypt (dungeon theme 3) | 1 music track | 90–150s | Seamless loop | Sparsest and darkest of the three — long pads, dissonant intervals, very low percussion presence if any. Mood: dread, the "hardest" theme, reserving intensity for later floors. ~50–60 BPM feel or no discernible pulse. | Separate ambience bed: faint chanting/whispering texture (non-verbal), wind through stone, occasional distant chain rattle. |
-| Town | 1 music track | 120–180s (town is a dwell space, players spend real time there — longest loop of the set to reduce perceived repetition) | Loop-friendly; intro+loop segment structure is worth the extra sourcing effort here specifically, since it's the track players hear most often per session | Warmer, more melodic than any dungeon theme — acoustic-leaning instrumentation (strings, light woodwind or similar), moderate tempo (~85–110 BPM), mood: safe, a released-tension "hub" feel contrasting the dungeon themes. | Optional light bed on `ambience` bus: distant crowd murmur, birdsong — low priority, can ship without one if sourcing time is tight. |
-| Menu/title | 1 music track | 45–90s (shorter is fine — menu dwell time is much lower than town) | Seamless loop, no intro/outro needed | Sets tone for the whole game on first load — should sit tonally between town's warmth and the dungeon themes' dread, since it's the very first thing a new player hears. Moderate-low tempo, thematic/atmospheric rather than driving. | None needed. |
+| Catacombs (dungeon theme 1) | 1 music track | 90–150s | Seamless loop (single loop point, no intro/outro split needed at this scope) | Gently spooky, not grim — plucked strings or harp over a soft pad, a simple minor-key melody, light hand percussion. Mood: cobwebbed and curious, a haunted-house ride rather than a tomb. ~70–90 BPM. | Separate always-on bed on `ambience` bus: distant dripping water, faint wind, occasional stone-settling creak. Independent loop from the music track (different length, no phase-locking needed since they're on separate buses). |
+| Goblin mines (dungeon theme 2) | 1 music track | 90–150s | Seamless loop | The most playful of the three — bouncy pizzicato or marimba motif over clanky wood/metal percussion, a comic-scurrying feel. Mood: scrappy and mischievous, goblins being a nuisance rather than a horror. ~100–120 BPM. | Separate ambience bed: pickaxe/metal clank echoes, dripping, distant guttural chatter (non-verbal, textural). |
+| Crypt (dungeon theme 3) | 1 music track | 90–150s | Seamless loop | Still the most subdued of the three, but eerie-enchanted rather than dreadful — celesta or music-box melody over a soft low drone, a little theatrical organ or choir as a wink. Mood: the spooky finale of a storybook. ~60–80 BPM. | Separate ambience bed: faint chanting/whispering texture (non-verbal), wind through stone, occasional distant chain rattle. |
+| Town | 1 music track | 120–180s (town is a dwell space, players spend real time there — longest loop of the set to reduce perceived repetition) | Loop-friendly; intro+loop segment structure is worth the extra sourcing effort here specifically, since it's the track players hear most often per session | The warmest and most tuneful track in the set — acoustic guitar or lute, light woodwind, strings, a hummable melody. Mood: safe, cosy, village-fair; released tension after a run. ~85–110 BPM. | Optional light bed on `ambience` bus: distant crowd murmur, birdsong — low priority, can ship without one if sourcing time is tight. |
+| Menu/title | 1 music track | 45–90s (shorter is fine — menu dwell time is much lower than town) | Seamless loop, no intro/outro needed | Sets the tone on first load, so it has to promise the *right* game — adventurous and inviting with a storybook lilt, sitting between town's warmth and the dungeons' mischief. A clear melodic hook beats pure atmosphere here. ~90–110 BPM. | None needed. |
 
 **Totals:** 5 music tracks, 3 ambience beds (catacombs, goblin mines, crypt — town
 and menu skip ambience per the table). Rough total running time across the 5 music
@@ -296,6 +308,46 @@ worth recording as a requirement): switching floors/contexts should crossfade
 between music tracks on the `music` bus and between ambience beds on the
 `ambience` bus, not hard-cut — a ~1–2s linear crossfade is standard and avoids an
 audible pop given these are long sustained loops.
+
+### 3.0 Sourcing brief for the whimsical re-score (playtest follow-up)
+
+The five tracks in `assets/audio/music/` were sourced against the pre-playtest
+dark brief and are being replaced. **They must be downloaded outside this
+repo's build sandbox** — its network egress refuses OpenGameArt, Kenney,
+Pixabay, Incompetech, FreePD, Wikimedia and archive.org alike (403 at CONNECT),
+and there is no `ffmpeg` available to trim, convert or loudness-check a
+candidate. So this section is the shopping list to hand to whoever fetches
+them.
+
+| Slot | File to overwrite | Mood to search for | Tempo | Length | Notes |
+|---|---|---|---|---|---|
+| Menu | `music/menu.mp3` | Adventurous storybook opener with a clear hook — "whimsical fantasy title", "quirky adventure" | ~90–110 BPM | 45–90s | First thing a new player hears; sell the tone |
+| Town | `music/town.mp3` | Cosy village fair — lute/guitar, light woodwind, hummable | ~85–110 BPM | 120–180s | Longest loop: players dwell here between runs |
+| Catacombs | `music/catacombs.ogg` | Haunted-house-ride playful spooky — plucked strings, harp, light hand percussion | ~70–90 BPM | 90–150s | Gently eerie, never grim |
+| Goblin mines | `music/goblin-mines.ogg` | Comic scurrying — pizzicato/marimba over clanky percussion | ~100–120 BPM | 90–150s | The most playful of the three |
+| Crypt | `music/crypt.mp3` | Eerie-enchanted music box — celesta over a soft drone, theatrical organ as a wink | ~60–80 BPM | 90–150s | Most subdued, still storybook |
+
+Requirements for every candidate:
+
+- **Seamlessly loopable.** These play on `loop = true` forever; an audible seam
+  at the loop point is the single most fatiguing defect at this scale.
+- **Any no-cost license**, attribution allowed (see the policy note in §3.1).
+  Prefer CC0 to keep the credits obligation small, but CC-BY is fine.
+- **`.mp3` or `.ogg`** — `MUSIC_TRACKS` in `js/audio.js` takes whatever path it
+  is given and the two are interchangeable; commit the file as downloaded, no
+  re-encode (matching how the current set was vendored).
+- **Keep the filenames above.** The context→path map is the only wiring, so
+  overwriting a file in place needs no code change at all; a different
+  extension needs the one path string updated.
+- **Roughly even loudness across the five.** There is no per-track gain trim in
+  the mix graph — the music bus sits at a fixed 0.55 — so one hot track will
+  jump out relative to the others.
+
+Update `assets/audio/CREDITS.md` in its existing two-table format as files land,
+copying each attribution string **verbatim** from the licence page. Three of the
+five outgoing tracks are CC-BY, so retiring them may also retire attribution
+obligations — the credits file must end up describing exactly what ships, with
+no stale rows for files that are gone.
 
 ### 3.1 Candidate sources (page-verified)
 

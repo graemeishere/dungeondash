@@ -173,6 +173,7 @@ export function generateFloor(opts = {}) {
     const keep = doorAnchors(rm);
     if (rm === entryRoom) keep.push([Math.round(entry.x / TILE), Math.round(entry.y / TILE)]);
     if (rm.id === stairsRoom.id) keep.push([stairs.x, stairs.y]);
+    if (rm.type === "boss") keep.push(...bossArenaCells(rm));
     carveRoomFeatures(tiles, W, rm, keep);
     if (rm.type === "trap") spikes.push(...trapSpikes(tiles, W, rm, keep));
   }
@@ -233,6 +234,36 @@ function doorAnchors(rm) {
   }
   if (!pts.length) pts.push([R.x + (R.w >> 1), R.y + (R.h >> 1)]);
   return pts;
+}
+
+// The boss chamber's open middle. The boss spawns dead centre and is the one
+// entity too wide to squeeze through a single-tile gap, so the decor passes
+// must never claim this block: obstacle clusters are aimed at the room
+// quarters (see carveRoomFeatures) which in an 8x7 chamber land right on top
+// of it, and a cluster there used to spawn the boss inside solid tiles, unable
+// to move in any direction for the whole fight.
+export function bossArenaCells(rm) {
+  const R = rm.rect;
+  const cx = R.x + Math.floor(R.w / 2), cy = R.y + Math.floor(R.h / 2);
+  const cells = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = cx + dx, y = cy + dy;
+      if (x > R.x && x < R.x + R.w - 1 && y > R.y && y < R.y + R.h - 1) cells.push([x, y]);
+    }
+  }
+  return cells;
+}
+
+// The tile-centred world position the boss spawns at — the middle of
+// bossArenaCells' centre cell, so its collision box sits inside one clear tile
+// rather than straddling four.
+export function bossSpawnPos(rm) {
+  const R = rm.rect;
+  return {
+    x: (R.x + Math.floor(R.w / 2) + 0.5) * TILE,
+    y: (R.y + Math.floor(R.h / 2) + 0.5) * TILE,
+  };
 }
 
 // Corner-notch biting + jittered obstacle clusters, ported from the classic

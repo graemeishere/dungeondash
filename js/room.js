@@ -245,7 +245,12 @@ export const room = {
 
   // Move an entity with radius r, sliding along walls. Mutates ent.x/ent.y.
   moveEntity(ent, dx, dy) {
-    const r = ent.r;
+    // collR lets an entity collide smaller than it fights. The boss is the
+    // only user: its combat radius (18) makes a 36px box, wider than the 32px
+    // tile grid, so it needed two clear tiles to move in any direction and
+    // jammed on ordinary decor. Colliding at 14 keeps its box inside a single
+    // tile without touching hit detection, which still reads `r`.
+    const r = ent.collR || ent.r;
     if (dx !== 0) {
       const nx = ent.x + dx;
       if (!this.boxHitsWall(nx - r, ent.y - r, r * 2, r * 2)) ent.x = nx;

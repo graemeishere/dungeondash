@@ -6,7 +6,7 @@
 
 import { audio } from "./audio.js?v=__BUILD__";
 import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=__BUILD__";
-import { generateFloor } from "./floor.js?v=__BUILD__";
+import { generateFloor, bossSpawnPos } from "./floor.js?v=__BUILD__";
 import { input } from "./input.js?v=__BUILD__";
 import { net } from "./net.js?v=__BUILD__";
 import { particles } from "./particles.js?v=__BUILD__";
@@ -121,8 +121,14 @@ export function spawnFloorEntities(floor) {
       }
       combatIdx++;
     } else if (rm.type === "boss") {
-      const cx = (rm.rect.x + rm.rect.w / 2) * TILE, cy = (rm.rect.y + rm.rect.h / 2) * TILE;
-      game.skeletons.push(new Boss(cx, cy, {
+      // Tile-centred, and on a cell the generator reserves as the boss arena
+      // (floor.js bossArenaCells) — the old raw rect-centre could land on a
+      // tile boundary inside an obstacle cluster, wedging the boss for the
+      // whole fight. Fall back to any open floor cell if that ever fails.
+      const c = bossSpawnPos(rm);
+      const cx0 = Math.floor(c.x / TILE), cy0 = Math.floor(c.y / TILE);
+      const spot = room.isSolid(cx0, cy0) ? room.randomFloorInRect(rm.rect) : c;
+      game.skeletons.push(new Boss(spot.x, spot.y, {
         hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
         faction: cfg.bossFaction || cfg.faction, frozen: true, roomId: rm.id, scale: cfg.scale,
       }));

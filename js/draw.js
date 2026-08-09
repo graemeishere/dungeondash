@@ -58,7 +58,11 @@ export function update(dt) {
       game.state === "quests" || game.state === "raid-warn") return;
 
   if (game.state === "transition") {
-    game.transitionT += dt * 2.6;
+    // The "out" half is slower than the "in" half: it has to show the hero
+    // walking down the stairwell before the screen covers (game3d.js holds the
+    // fade back over the first third for the same reason). Fading out in the
+    // old 0.38s hid the descent completely.
+    game.transitionT += dt * (game.transitionPhase === "out" ? 1.1 : 2.6);
     if (game.transitionT >= 1) {
       if (game.transitionPhase === "out") {
         advanceFloor();

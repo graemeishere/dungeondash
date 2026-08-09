@@ -34,6 +34,16 @@ const PLAYER_DEATH_T = 2.0;
 // states — lowHp is false in all of them.
 export const LOW_HP_FRAC = 0.35;
 
+// Enemies that fight from a distance and hold a firing ring around the player
+// instead of closing to melee (see the chase case in Skeleton.update).
+const RANGED_KINDS = {
+  archer: 1, goblinArcher: 1, goblinShaman: 1, warlock: 1, necromancer: 1,
+};
+// The ring they try to hold: back off inside RANGED_MIN, walk the ring
+// between the two, close the gap beyond RANGED_MAX. Both sit inside the
+// 340px firing range so they can always shoot from the ring.
+const RANGED_MIN = 150, RANGED_MAX = 250;
+
 export const CLASSES = {
   warrior: {
     name: "Warrior", color: "#aeb9cd",
@@ -758,6 +768,9 @@ export class Skeleton {
     this.kby = 0;
     this.dead = false;
     this.wanderA = rand(0, Math.PI * 2);
+    this.orbitDir = Math.random() < 0.5 ? -1 : 1; // which way ranged kinds circle
+    this.stuckT = 0;      // time spent with movement blocked on both axes
+    this.faceA = null;    // explicit facing angle; null = face where you move
   }
 
   // Not yet a threat and not targetable/damageable: rising, dormant, or waking.
@@ -844,14 +857,21 @@ export class Skeleton {
       case "chase": {
         if (!pl) break;
         const d = dist(this.x, this.y, pl.x, pl.y);
+        const toPlayer = angleTo(this.x, this.y, pl.x, pl.y);
+        const isRanged = RANGED_KINDS[this.kind];
         let a;
-        if (d < 380) {
-          a = angleTo(this.x, this.y, pl.x, pl.y);
-          const isRanged = this.kind === "archer" || this.kind === "goblinArcher" ||
-            this.kind === "goblinShaman" || this.kind === "warlock" || this.kind === "necromancer";
+        if (d < 380 || this.relentless) {
+          a = toPlayer;
           if (isRanged) {
-            if (d < 150) a += Math.PI;
-            else if (d < 240) a += Math.PI / 2;
+            // Hold a firing ring rather than fleeing in a straight line. Too
+            // close backs off on a diagonal, inside the ring they walk it
+            // sideways, and past it they close back in. A straight retreat
+            // (the old `a += PI`) drove them into a corner where both axes
+            // block, and they'd stand there facing the wall for the rest of
+            // the fight. orbitDir flips whenever a move comes up blocked, so
+            // hitting a wall sends them back the other way around the ring.
+            if (d < RANGED_MIN) a = toPlayer + Math.PI + this.orbitDir * 0.7;
+            else if (d < RANGED_MAX) a = toPlayer + this.orbitDir * (Math.PI / 2);
             if (this.shootCd <= 0 && d < 340) {
               const aimAngle = angleTo(this.x, this.y, pl.x, pl.y - 8);
               this.atkAnimAt = game.time; // play the ranged cast/draw animation
@@ -917,13 +937,46 @@ export class Skeleton {
             my += ((this.y - other.y) / od) * 40;
           }
         }
-        this.flip = mx < 0;
+        // Ranged kinds face their target, not their travel direction: they
+        // spend most of the fight moving sideways or backing off, and facing
+        // by movement had them shooting over their own shoulder. Melee keep
+        // movement facing — they run at what they're hitting anyway.
+        if (isRanged && pl) {
+          this.flip = Math.cos(toPlayer) < 0;
+          this.faceA = toPlayer;
+        } else {
+          this.flip = mx < 0;
+          this.faceA = null;
+        }
         // shades phase through walls; others use room collision
+        const px = this.x, py = this.y;
         if (this.kind === "shade") {
           this.x = clamp(this.x + mx * dt, TILE, WIDTH - TILE);
           this.y = clamp(this.y + my * dt, TILE, HEIGHT - TILE);
         } else {
           room.moveEntity(this, mx * dt, my * dt);
+        }
+        // Blocked-move recovery. A wall slide is normal (moveEntity resolves
+        // each axis separately), but going nowhere on both axes means a
+        // corner. Ranged kinds reverse around their ring immediately; anything
+        // still pinned after a moment gets nudged toward its room's middle,
+        // which is the safety net for wide entities like the boss.
+        const want = Math.hypot(mx, my) * dt;
+        if (want > 0.01 && Math.hypot(this.x - px, this.y - py) < want * 0.25) {
+          this.stuckT += dt;
+          if (isRanged) this.orbitDir = -this.orbitDir;
+          if (this.stuckT > 0.5) {
+            this.stuckT = 0;
+            const home = room.roomAt(this.x, this.y);
+            if (home) {
+              const hx = (home.rect.x + home.rect.w / 2) * TILE;
+              const hy = (home.rect.y + home.rect.h / 2) * TILE;
+              const ha = angleTo(this.x, this.y, hx, hy);
+              room.moveEntity(this, Math.cos(ha) * 16, Math.sin(ha) * 16);
+            }
+          }
+        } else {
+          this.stuckT = 0;
         }
 
         const isMelee = this.kind === "melee" || this.kind === "shade" ||
@@ -1132,6 +1185,8 @@ export class Boss extends Skeleton {
     this.label = this.bossName;
     this.summonKind = opts.summonKind || "melee";
     this.r = 18;
+    this.collR = 14;    // move through single-tile gaps; see room.moveEntity
+    this.relentless = true; // never wanders: always closes on the player
     this.drawSize = 96;
     this.modelScale = 1.7; // towers over normal skeletons in 3D
     this.slamCd = 4.5;

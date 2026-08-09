@@ -159,7 +159,9 @@ for (const dungeon of ["catacombs", "goblinMines", "crypt"]) {
     const plan = m.planRoomDecor({ tiles: d.tiles.split(",").map(Number), w: d.w, h: d.h, seed: d.seed,
       theme: d.theme, roomType: d.roomType, isFloor: true, rooms: d.rooms, floorDoors: d.floorDoors,
       floorWalls: d.floorWalls, stairs: d.floorStairs });
-    const hasStairsProp = plan.props.some((pr) => pr.piece === "stairs_wide" && st && pr.gx === st.x && pr.gy === st.y);
+    // any staircase piece, not one specific model — the exit switched from
+    // stairs_wide to stairs_walled when it was rebuilt to descend
+    const hasStairsProp = plan.props.some((pr) => pr.piece.startsWith("stairs") && st && pr.gx === st.x && pr.gy === st.y);
     const pre = {
       rooms: rooms.length, doors: DD.room.floorDoors.length, walls: DD.room.floorWalls.length,
       edges: DD.room.edges.length, stairsRoomId: DD.room.stairsRoomId, stairs: JSON.stringify(st),
