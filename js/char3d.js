@@ -348,7 +348,9 @@ export class CharacterManager {
         this.chars.set(it.entity, ch);
       }
       ch.root.scale.setScalar(ch._baseScale * this.scaleMul * (it.scale || 1));
-      ch.root.position.set(it.x, 0, it.z);
+      // y is normally 0 (feet on the floor); the stairs descent drives it
+      // negative so the hero sinks into the stairwell (game3d.js descendY).
+      ch.root.position.set(it.x, it.y || 0, it.z);
       ch.root.rotation.y = it.rotationY;
       if (it.opacity != null && it.opacity < 1) ch.setOpacity(it.opacity);
       ch.play(it.clip, { once: it.once, timeScale: it.timeScale || 1, restart: it.restart });

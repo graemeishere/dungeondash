@@ -4,18 +4,18 @@
 // classic single-room generator/`?classic`; raids and the finale route
 // through here too now).
 
-import { audio } from "./audio.js?v=ec23b270";
-import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=ec23b270";
-import { generateFloor } from "./floor.js?v=ec23b270";
-import { input } from "./input.js?v=ec23b270";
-import { net } from "./net.js?v=ec23b270";
-import { particles } from "./particles.js?v=ec23b270";
-import { profile } from "./profile.js?v=ec23b270";
-import { room } from "./room.js?v=ec23b270";
-import { TILE, choice, clamp, updateView } from "./util.js?v=ec23b270";
-import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=ec23b270";
-import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=ec23b270";
-import { sendRoomToGuest } from "./coop.js?v=ec23b270";
+import { audio } from "./audio.js?v=d34ef17e";
+import { Boss, CLASSES, Chest, KIND_FACTION, Pickup, Player, Skeleton, rollGrade } from "./entities.js?v=d34ef17e";
+import { generateFloor, bossSpawnPos } from "./floor.js?v=d34ef17e";
+import { input } from "./input.js?v=d34ef17e";
+import { net } from "./net.js?v=d34ef17e";
+import { particles } from "./particles.js?v=d34ef17e";
+import { profile } from "./profile.js?v=d34ef17e";
+import { room } from "./room.js?v=d34ef17e";
+import { TILE, choice, clamp, updateView } from "./util.js?v=d34ef17e";
+import { canvas, resultEl, resultTitle, resultStats } from "./dom.js?v=d34ef17e";
+import { game, DUNGEONS, ELITE_NAMES, isChampion, writeSave, clearSave, freshGameState } from "./state.js?v=d34ef17e";
+import { sendRoomToGuest } from "./coop.js?v=d34ef17e";
 
 // Connected-floor run: explore a floor of small rooms joined by
 // corridors; combat rooms lock their doors on entry (Isaac-style) and unlock
@@ -121,8 +121,14 @@ export function spawnFloorEntities(floor) {
       }
       combatIdx++;
     } else if (rm.type === "boss") {
-      const cx = (rm.rect.x + rm.rect.w / 2) * TILE, cy = (rm.rect.y + rm.rect.h / 2) * TILE;
-      game.skeletons.push(new Boss(cx, cy, {
+      // Tile-centred, and on a cell the generator reserves as the boss arena
+      // (floor.js bossArenaCells) — the old raw rect-centre could land on a
+      // tile boundary inside an obstacle cluster, wedging the boss for the
+      // whole fight. Fall back to any open floor cell if that ever fails.
+      const c = bossSpawnPos(rm);
+      const cx0 = Math.floor(c.x / TILE), cy0 = Math.floor(c.y / TILE);
+      const spot = room.isSolid(cx0, cy0) ? room.randomFloorInRect(rm.rect) : c;
+      game.skeletons.push(new Boss(spot.x, spot.y, {
         hp: cfg.bossHp, dmg: cfg.bossDmg, name: cfg.boss, summonKind: cfg.summonKind,
         faction: cfg.bossFaction || cfg.faction, frozen: true, roomId: rm.id, scale: cfg.scale,
       }));

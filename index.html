@@ -252,11 +252,11 @@
        module, so net.js can rely on window.Peer existing. -->
   <script src="js/lib/peerjs.min.js"></script>
 
-  <!-- ?v=ec23b270 is stamped with the commit SHA at deploy time (pages.yml) so
+  <!-- ?v=d34ef17e is stamped with the commit SHA at deploy time (pages.yml) so
        each release busts the browser cache; lib/ scripts are pinned + unchanged
        so they stay cacheable across deploys and are deliberately unstamped.
        Load order now lives in the modules' own import graph, not in tag order. -->
-  <script type="module" src="js/boot.js?v=ec23b270"></script>
-  <script type="module" src="js/boot3d.js?v=ec23b270"></script>
+  <script type="module" src="js/boot.js?v=d34ef17e"></script>
+  <script type="module" src="js/boot3d.js?v=d34ef17e"></script>
 </body>
 </html>

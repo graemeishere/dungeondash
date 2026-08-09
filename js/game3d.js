@@ -5,13 +5,13 @@
 // js/render3d.js; the character rigs/clips in js/char3d.js. game.js calls
 // game3d.active()/draw()/resize() and stays 3D-agnostic otherwise.
 
-import { TILE, clamp } from "./util.js?v=ec23b270";
-import { rt } from "./runtime.js?v=ec23b270";
-import { room } from "./room.js?v=ec23b270";
-import { input } from "./input.js?v=ec23b270";
-import { particles } from "./particles.js?v=ec23b270";
-import { hud } from "./hud.js?v=ec23b270";
-import { Boss } from "./entities.js?v=ec23b270";
+import { TILE, clamp } from "./util.js?v=d34ef17e";
+import { rt } from "./runtime.js?v=d34ef17e";
+import { room } from "./room.js?v=d34ef17e";
+import { input } from "./input.js?v=d34ef17e";
+import { particles } from "./particles.js?v=d34ef17e";
+import { hud } from "./hud.js?v=d34ef17e";
+import { Boss } from "./entities.js?v=d34ef17e";
 
 // Loaded before game.js, so parse the URL ourselves.
 const params = new URLSearchParams(location.search);
@@ -54,7 +54,10 @@ function faceFromMove(e) {
   const dx = e.x - (e.__px == null ? e.x : e.__px);
   const dy = e.y - (e.__py == null ? e.y : e.__py);
   e.__px = e.x; e.__py = e.y;
-  if (dx * dx + dy * dy > 0.02) e.__face = Math.atan2(dx, dy);
+  // faceA overrides travel direction: ranged enemies strafe and back off, so
+  // facing by movement had them firing over their shoulder (entities.js).
+  if (e.faceA != null) e.__face = Math.atan2(Math.cos(e.faceA), Math.sin(e.faceA));
+  else if (dx * dx + dy * dy > 0.02) e.__face = Math.atan2(dx, dy);
   return e.__face == null ? Math.PI : e.__face;
 }
 const ATK_WIN = 0.5, ATK_WIN_SEQ = 0.85; // attack-animation hold windows (s)
@@ -186,12 +189,22 @@ function drawCombat3D(game, dt) {
   const projs = [];
   const orbs = [];
   const worldOf = (e) => dr.cellToWorld(e.x / TILE, e.y / TILE);
-  const asChar = (e, modelKey, rotationY, anim, opacity) => {
+  const asChar = (e, modelKey, rotationY, anim, opacity, y) => {
     const w = worldOf(e);
     // faction (goblin/undead/skeleton/...) selects a texture-variant reskin
     // in char3d.js's CharacterFactory.spawn(); undefined for players (heroes
     // aren't faction-tagged, decor3d/char3d Task 1 scope).
-    chars.push({ entity: e, modelKey, x: w.x, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity, scale: e.modelScale || 1, faction: e.faction });
+    chars.push({ entity: e, modelKey, x: w.x, y: y || 0, z: w.z, rotationY, clip: anim.clip, once: anim.once, timeScale: anim.timeScale, restart: anim.restart, opacity: opacity == null ? 1 : opacity, scale: e.modelScale || 1, faction: e.faction });
+  };
+
+  // Descending the stairs: while the floor-transition fade plays out, sink the
+  // hero into the stairwell so they visibly walk down out of sight instead of
+  // standing on the top step until the screen wipes. Only the "out" half of
+  // the transition, and only when it was the stairs that started it.
+  const descendY = () => {
+    if (game.state !== "transition" || game.transitionPhase !== "out" || !game._stairsTaken) return 0;
+    // fully out of sight by 0.8, i.e. before the fade finishes covering
+    return -clamp(game.transitionT / 0.8, 0, 1) * dr.wallH * 1.5;
   };
 
   // Players + skeletons render as 3D characters once the models have loaded;
@@ -215,7 +228,7 @@ function drawCombat3D(game, dt) {
     }
     // dying heroes fade out over the tail of the death animation
     const pOpacity = p.dying ? Math.min(1, p.deathT / 0.7) : 1;
-    if (mgr && mk && mgr.factory.spawnable(mk)) asChar(p, mk, face, playerClip(p, game), pOpacity);
+    if (mgr && mk && mgr.factory.spawnable(mk)) asChar(p, mk, face, playerClip(p, game), pOpacity, descendY());
     else billboards.push(captureEntity(p));
   }
   // town NPCs stand as billboards (they carry a draw() sprite shim)
@@ -301,7 +314,12 @@ function drawCombat3D(game, dt) {
   if (game.state === "play" || game.state === "transition") hud.draw(ctx, game);
   // room-transition fade (the 3D scene swaps rooms behind this)
   if (game.state === "transition") {
-    const a = game.transitionPhase === "out" ? game.transitionT : 1 - game.transitionT;
+    // Fading out holds off over the first third so the descent down the
+    // stairwell is actually visible before the screen covers; fading back in
+    // is unchanged.
+    const a = game.transitionPhase === "out"
+      ? Math.max(0, (game.transitionT - 0.35) / 0.65)
+      : 1 - game.transitionT;
     ctx.fillStyle = `rgba(10, 8, 18, ${clamp(a, 0, 1)})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }

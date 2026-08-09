@@ -14,8 +14,8 @@
 // resolves the bare "three" specifier to js/lib/three/three.module.js.
 import * as THREE from "three";
 import { GLTFLoader } from "./lib/three/GLTFLoader.js";
-import { planRoomDecor, PIECE_DIR } from "./decor3d.js?v=ec23b270";
-import { TILE } from "./util.js?v=ec23b270";
+import { planRoomDecor, PIECE_DIR } from "./decor3d.js?v=d34ef17e";
+import { TILE } from "./util.js?v=d34ef17e";
 
 const FLOOR = 0, WALL = 1, DOOR = 2;
 
@@ -42,9 +42,13 @@ const ITEMS = {
   coin:  { url: ITEM_DIR + "coin.gltf",           scale: 4.0, spin: true, bob: true },
   heart: { url: ITEM_DIR + "bottle_A_green.gltf", scale: 1.6, bob: true },
   chest: { url: ITEM_DIR + "chest.gltf",          scale: 1.3 },
-  // weapon/gear drops (KayKit Adventurers assets); keyed by item.icon
+  // Gear drops, keyed by item.icon — js/items.js uses exactly four icons
+  // (sword, axe, armor, ring) and every one of them needs an entry here or
+  // the pickup silently falls back to its flat 2D billboard (see game3d.js).
   sword: { url: "KayKit Adventurers/Assets/gltf/sword_1handed.gltf", scale: 1.3, spin: true, bob: true },
   axe:   { url: "KayKit Adventurers/Assets/gltf/axe_1handed.gltf",   scale: 1.3, spin: true, bob: true },
+  armor: { url: "KayKit Adventurers/Assets/gltf/shield_round.gltf",  scale: 1.3, spin: true, bob: true },
+  ring:  { url: ITEM_DIR + "keyring.gltf",                           scale: 2.2, spin: true, bob: true },
 };
 
 // Flying projectiles rendered as 3D models oriented along their velocity (the
@@ -472,13 +476,22 @@ export class DungeonRenderer {
 
   // Uniform scale that makes a piece's footprint fill `fit` of a cell (used
   // for obstacle props of very different natural sizes).
+  //
+  // The ceiling is 1: this may shrink an oversized piece, never inflate one.
+  // The scale is uniform but derived from the piece's *footprint*, so widening
+  // a slim, tall piece to fill the cell stretched its height by the same
+  // factor. At the old 3x ceiling that left columns towering over the walls,
+  // which are placed at the kit's native scale with no fit scaling at all.
+  // Measured: `pillar` and `pillar_decorated` are authored exactly wallH tall
+  // (4.0u), so any upscale at all pokes them through the ceiling — hence 1,
+  // not merely "close to 1". The 0.5 floor still lets a too-big piece shrink.
   _fitScale(proto, fit) {
     if (!proto.mesh.geometry.boundingBox) proto.mesh.geometry.computeBoundingBox();
     const bb = proto.mesh.geometry.boundingBox;
     const s = proto.base.getMaxScaleOnAxis() || 1;
     const span = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * s;
     if (!span) return 1;
-    return Math.min(3, Math.max(0.5, (fit * this.CELL) / span));
+    return Math.min(1, Math.max(0.5, (fit * this.CELL) / span));
   }
 
   // Instance a (sub)mesh over planner placements

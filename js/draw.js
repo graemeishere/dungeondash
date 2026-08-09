@@ -1,23 +1,23 @@
 "use strict";
 // The frame: simulation update, the draw dispatch, and the rAF loop.
 
-import { audio } from "./audio.js?v=ec23b270";
-import { Skeleton, rollGrade } from "./entities.js?v=ec23b270";
-import { game3d } from "./game3d.js?v=ec23b270";
-import { input } from "./input.js?v=ec23b270";
-import { net, netSync } from "./net.js?v=ec23b270";
-import { particles } from "./particles.js?v=ec23b270";
-import { room } from "./room.js?v=ec23b270";
-import { generateFloor } from "./floor.js?v=ec23b270";
-import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView } from "./util.js?v=ec23b270";
-import { canvas, ctx, resultEl } from "./dom.js?v=ec23b270";
-import { safeMode } from "./env.js?v=ec23b270";
-import { game, uiFlags } from "./state.js?v=ec23b270";
-import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=ec23b270";
-import { openInventory, openLevelUp, showHub } from "./overlays.js?v=ec23b270";
-import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=ec23b270";
-import { showMap, drawMap } from "./worldmap.js?v=ec23b270";
-import { sendGuestInput } from "./coop.js?v=ec23b270";
+import { audio } from "./audio.js?v=d34ef17e";
+import { Skeleton, rollGrade } from "./entities.js?v=d34ef17e";
+import { game3d } from "./game3d.js?v=d34ef17e";
+import { input } from "./input.js?v=d34ef17e";
+import { net, netSync } from "./net.js?v=d34ef17e";
+import { particles } from "./particles.js?v=d34ef17e";
+import { room } from "./room.js?v=d34ef17e";
+import { generateFloor } from "./floor.js?v=d34ef17e";
+import { WIDTH, dist, roomSizeForCanvas, setRoomSize, updateView } from "./util.js?v=d34ef17e";
+import { canvas, ctx, resultEl } from "./dom.js?v=d34ef17e";
+import { safeMode } from "./env.js?v=d34ef17e";
+import { game, uiFlags } from "./state.js?v=d34ef17e";
+import { advanceFloor, endRun, reachStairs, showResult, updateFloorGating } from "./run.js?v=d34ef17e";
+import { openInventory, openLevelUp, showHub } from "./overlays.js?v=d34ef17e";
+import { enterTierDoor, townToast, showTownRoom, showDungeonLobby } from "./town.js?v=d34ef17e";
+import { showMap, drawMap } from "./worldmap.js?v=d34ef17e";
+import { sendGuestInput } from "./coop.js?v=d34ef17e";
 
 export function fitCanvas() {
   canvas.width = Math.max(320, window.innerWidth);
@@ -58,7 +58,11 @@ export function update(dt) {
       game.state === "quests" || game.state === "raid-warn") return;
 
   if (game.state === "transition") {
-    game.transitionT += dt * 2.6;
+    // The "out" half is slower than the "in" half: it has to show the hero
+    // walking down the stairwell before the screen covers (game3d.js holds the
+    // fade back over the first third for the same reason). Fading out in the
+    // old 0.38s hid the descent completely.
+    game.transitionT += dt * (game.transitionPhase === "out" ? 1.1 : 2.6);
     if (game.transitionT >= 1) {
       if (game.transitionPhase === "out") {
         advanceFloor();

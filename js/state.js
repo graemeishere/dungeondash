@@ -5,10 +5,10 @@
 // object rather than a set of exported bindings because importers assign to its
 // fields constantly, and an imported binding is read-only.
 
-import { CLASSES } from "./entities.js?v=ec23b270";
-import { profile } from "./profile.js?v=ec23b270";
-import { dist } from "./util.js?v=ec23b270";
-import { menuEl, resultEl, levelupEl, hubEl } from "./dom.js?v=ec23b270";
+import { CLASSES } from "./entities.js?v=d34ef17e";
+import { profile } from "./profile.js?v=d34ef17e";
+import { dist } from "./util.js?v=d34ef17e";
+import { menuEl, resultEl, levelupEl, hubEl } from "./dom.js?v=d34ef17e";
 
 const SAVE_KEY = "dungeondash_save_v1";
 

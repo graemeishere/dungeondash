@@ -1,4 +1,4 @@
-import { audio } from "./audio.js?v=ec23b270";
+import { audio } from "./audio.js?v=d34ef17e";
 
 const PROFILE_KEY = "dungeondash_profile_v2";
 const PROFILE_VERSION = 3;

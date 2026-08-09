@@ -11,34 +11,34 @@
 // wiring and the boot sequence - is what guarantees that: by the time this file
 // body runs, every import has finished evaluating.
 
-import { rt } from "./runtime.js?v=ec23b270";
-import { devFlagsAllowed, safeMode } from "./env.js?v=ec23b270";
-import { params, devBoot, floorsBoot } from "./env.js?v=ec23b270";
-import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=ec23b270";
-import { sprites } from "./sprites.js?v=ec23b270";
-import { audio } from "./audio.js?v=ec23b270";
-import { input } from "./input.js?v=ec23b270";
-import { net } from "./net.js?v=ec23b270";
-import { room } from "./room.js?v=ec23b270";
-import { particles } from "./particles.js?v=ec23b270";
-import { profile } from "./profile.js?v=ec23b270";
-import { game3d } from "./game3d.js?v=ec23b270";
-import { CLASSES, Boss } from "./entities.js?v=ec23b270";
-import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=ec23b270";
-import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=ec23b270";
-import { startFloorRun, resumeRun } from "./run.js?v=ec23b270";
+import { rt } from "./runtime.js?v=d34ef17e";
+import { devFlagsAllowed, safeMode } from "./env.js?v=d34ef17e";
+import { params, devBoot, floorsBoot } from "./env.js?v=d34ef17e";
+import { canvas, continueBtn, hubEl, menuEl, resultEl } from "./dom.js?v=d34ef17e";
+import { sprites } from "./sprites.js?v=d34ef17e";
+import { audio } from "./audio.js?v=d34ef17e";
+import { input } from "./input.js?v=d34ef17e";
+import { net } from "./net.js?v=d34ef17e";
+import { room } from "./room.js?v=d34ef17e";
+import { particles } from "./particles.js?v=d34ef17e";
+import { profile } from "./profile.js?v=d34ef17e";
+import { game3d } from "./game3d.js?v=d34ef17e";
+import { CLASSES, Boss } from "./entities.js?v=d34ef17e";
+import { TILE, WIDTH, HEIGHT, view } from "./util.js?v=d34ef17e";
+import { game, uiFlags, DUNGEONS, usableSave } from "./state.js?v=d34ef17e";
+import { startFloorRun, resumeRun } from "./run.js?v=d34ef17e";
 import {
   backToMenu, buildClassCards, closeInventory, openInventory, playAgain,
   refreshContinueButton, setMenuMode, showHub,
-} from "./overlays.js?v=ec23b270";
+} from "./overlays.js?v=d34ef17e";
 import {
   closeQuestGiverOverlay, closeStatsOverlay, closeTraderOverlay, handleTownTap,
   showTownRoom, startRaid,
-} from "./town.js?v=ec23b270";
-import { handleMapTap, showMap } from "./worldmap.js?v=ec23b270";
-import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=ec23b270";
-import { codeIn } from "./overlays.js?v=ec23b270";
-import { fitCanvas, onResize, startLoop } from "./draw.js?v=ec23b270";
+} from "./town.js?v=d34ef17e";
+import { handleMapTap, showMap } from "./worldmap.js?v=d34ef17e";
+import { hostWithClass, joinWithClass, tryJoin } from "./coop.js?v=d34ef17e";
+import { codeIn } from "./overlays.js?v=d34ef17e";
+import { fitCanvas, onResize, startLoop } from "./draw.js?v=d34ef17e";
 
 document.getElementById("btn-inv-close").addEventListener("click", closeInventory);
 
